@@ -1,0 +1,18 @@
+{
+  "database_name": "Manhwateca",
+  "status": [
+    "Lendo",
+    "Em espera",
+    "Finalizado",
+    "Hiato",
+    "Dropado",
+    "Quero ler"
+  ],
+  "nota": [
+    "Topzera",
+    "Legalzin",
+    "Ok",
+    "Meia boca",
+    "Ruim"
+  ]
+}

@@ -1,0 +1,11 @@
+.env
+
+__pycache__/
+*.pyc
+
+data/mangas.json
+data/cache.json
+
+reports/
+
+.DS_Store
