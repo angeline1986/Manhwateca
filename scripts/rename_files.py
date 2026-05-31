@@ -439,10 +439,9 @@ def generate_html(plan, conflicts, duplicates):
         }
 
         .manga summary {
-            display: grid;
-            grid-template-columns: 18px minmax(0, 1fr) auto;
-            gap: 8px;
+            display: flex;
             align-items: center;
+            gap: 8px;
             min-height: 44px;
             padding: 8px 10px;
             border-radius: 8px;
@@ -451,6 +450,7 @@ def generate_html(plan, conflicts, duplicates):
             font-size: 14px;
             font-weight: 700;
             list-style: none;
+            flex-wrap: wrap;
         }
 
         .manga summary::-webkit-details-marker {

@@ -78,8 +78,38 @@ def extract_chapter_numbers(filename: str) -> list[int]:
     return chapters
 
 
+def extract_side_story_numbers(filename: str) -> list[int]:
+    name = filename.lower()
+
+    name = name.replace("side story", "side")
+    name = name.replace("sidestory", "side")
+
+    pattern = r"side\s*(\d+(?:\.\d+)?)(?:\s*(?:-|=|_|ao|a|–|—)\s*(\d+(?:\.\d+)?))?"
+
+    matches = re.findall(pattern, name)
+
+    chapters = []
+
+    for start, end in matches:
+        chapters.append(int(float(start)))
+
+        if end:
+            chapters.append(int(float(end)))
+
+    return chapters
+
+
 def extract_highest_chapter(filename: str) -> int:
     chapters = extract_chapter_numbers(filename)
+
+    if not chapters:
+        return 0
+
+    return max(chapters)
+
+
+def extract_highest_side_story(filename: str) -> int:
+    chapters = extract_side_story_numbers(filename)
 
     if not chapters:
         return 0
@@ -100,17 +130,16 @@ def scan_chapters(manga_path: Path) -> dict:
         if file.suffix.lower() not in CHAPTER_EXTENSIONS:
             continue
 
-        chapter = extract_highest_chapter(file.name)
-
-        if chapter == 0:
-            continue
-
         if is_side_story(file.name):
-            side_files += 1
-            side_caps = max(side_caps, chapter)
+            side_chapter = extract_highest_side_story(file.name)
+            if side_chapter > 0:
+                side_files += 1
+                side_caps = max(side_caps, side_chapter)
         else:
-            chapter_files += 1
-            main_caps = max(main_caps, chapter)
+            chapter = extract_highest_chapter(file.name)
+            if chapter > 0:
+                chapter_files += 1
+                main_caps = max(main_caps, chapter)
 
     return {
         "main_caps": main_caps,
