@@ -1,6 +1,7 @@
 import os
 import re
 import html
+import unicodedata
 from pathlib import Path
 from collections import defaultdict
 
@@ -83,6 +84,73 @@ def normalize_chapter_name(filename):
     return f"{new_stem}{suffix}"
 
 
+def detect_conflicts(plan):
+    conflicts = []
+
+    for group, mangas in plan.items():
+        for manga_name, files in mangas.items():
+            new_names = {}
+
+            for item in files:
+                new_name = item["new_name"]
+                if new_name in new_names:
+                    conflicts.append({
+                        "group": group,
+                        "manga": manga_name,
+                        "files": [new_names[new_name], item],
+                        "conflict_name": new_name,
+                    })
+                else:
+                    new_names[new_name] = item
+
+    return conflicts
+
+
+def normalize_for_duplicate_detection(name):
+    name = name.strip()
+
+    articles = ["a ", "o ", "os ", "as ", "the "]
+    name_lower = name.lower()
+
+    for article in articles:
+        if name_lower.startswith(article):
+            name = name[len(article):].strip()
+            name_lower = name.lower()
+            break
+
+    name = unicodedata.normalize("NFD", name)
+    name = name.encode("ascii", "ignore").decode("utf-8")
+
+    name = re.sub(r"\s+", " ", name).strip().lower()
+
+    return name
+
+
+def detect_duplicates(plan):
+    duplicates = []
+    name_map = defaultdict(list)
+
+    for group, mangas in plan.items():
+        for manga_name, files in mangas.items():
+            normalized = normalize_for_duplicate_detection(manga_name)
+            name_map[normalized].append({
+                "original": manga_name,
+                "group": group,
+                "files": files,
+            })
+
+    for normalized, entries in name_map.items():
+        if len(entries) > 1:
+            originals = [e["original"] for e in entries]
+            if len(set(originals)) > 1:
+                duplicates.append({
+                    "normalized": normalized,
+                    "entries": entries,
+                })
+
+    return duplicates
+
+
 def build_plan():
     plan = defaultdict(lambda: defaultdict(list))
 
@@ -112,7 +180,7 @@ def build_plan():
     return plan
 
 
-def generate_html(plan):
+def generate_html(plan, conflicts, duplicates):
     total_files = sum(
         len(files)
         for mangas in plan.values()
@@ -120,6 +188,8 @@ def generate_html(plan):
     )
     total_mangas = sum(len(mangas) for mangas in plan.values())
     total_groups = sum(1 for mangas in plan.values() if mangas)
+    total_conflicts = len(conflicts)
+    total_duplicates = len(duplicates)
     dry_run_label = "ON" if DRY_RUN else "OFF"
 
     html_parts = [
@@ -207,7 +277,7 @@ def generate_html(plan):
 
         .summary-grid {
             display: grid;
-            grid-template-columns: repeat(4, minmax(128px, 1fr));
+            grid-template-columns: repeat(6, minmax(110px, 1fr));
             gap: 12px;
             flex: 1;
         }
@@ -298,13 +368,15 @@ def generate_html(plan):
         }
 
         .groups-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 20px;
+            column-count: 2;
+            column-gap: 20px;
         }
 
         .group-card {
-            min-width: 0;
+            break-inside: avoid;
+            display: inline-block;
+            width: 100%;
+            margin-bottom: 20px;
             overflow: hidden;
             border: 1px solid var(--border);
             border-radius: 8px;
@@ -470,6 +542,59 @@ def generate_html(plan):
             font-weight: 700;
         }
 
+        .duplicates-section {
+            margin-bottom: 24px;
+            padding: 20px;
+            border: 2px solid #f59e0b;
+            border-radius: 8px;
+            background: #fffbeb;
+        }
+
+        .duplicates-title {
+            margin: 0 0 16px 0;
+            font-size: 18px;
+            font-weight: 700;
+            color: #b45309;
+        }
+
+        .duplicate-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            border: 1px solid #fcd34d;
+            border-radius: 6px;
+            background: #fff;
+        }
+
+        .duplicate-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .duplicate-name {
+            font-weight: 600;
+            color: #92400e;
+        }
+
+        .duplicate-entries {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #78350f;
+        }
+
+        .conflict-row {
+            background: #fef2f2;
+        }
+
+        .conflict-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            margin-left: 8px;
+            border-radius: 4px;
+            background: #dc2626;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
         @media (max-width: 1100px) {
             .brand-row {
                 display: block;
@@ -484,7 +609,7 @@ def generate_html(plan):
             }
 
             .groups-grid {
-                grid-template-columns: 1fr;
+                column-count: 1;
             }
         }
 
@@ -536,12 +661,16 @@ def generate_html(plan):
         "<div class='subtitle'>Preview de Renomeação</div>",
         "</div>",
         "<div class='summary-grid' aria-label='Resumo'>",
+        "<div class='summary-card'><div class='summary-label'>Grupos</div>"
+        f"<div class='summary-value'>{total_groups}</div></div>",
         "<div class='summary-card'><div class='summary-label'>Obras</div>"
         f"<div class='summary-value'>{total_mangas}</div></div>",
         "<div class='summary-card'><div class='summary-label'>Arquivos</div>"
         f"<div class='summary-value'>{total_files}</div></div>",
-        "<div class='summary-card'><div class='summary-label'>Grupos</div>"
-        f"<div class='summary-value'>{total_groups}</div></div>",
+        "<div class='summary-card'><div class='summary-label'>Conflitos</div>"
+        f"<div class='summary-value'>{total_conflicts}</div></div>",
+        "<div class='summary-card'><div class='summary-label'>Duplicados</div>"
+        f"<div class='summary-value'>{total_duplicates}</div></div>",
         "<div class='summary-card'><div class='summary-label'>Modo Simulação</div>"
         f"<div class='summary-value'>{dry_run_label}</div></div>",
         "</div>",
@@ -557,12 +686,34 @@ def generate_html(plan):
         "</header>",
         "<main class='page'>",
         f"<div class='live-count' id='liveCount'>{total_mangas} obras • {total_files} alterações</div>",
-        "<div class='groups-grid' id='groupsGrid'>",
     ]
+
+    if duplicates:
+        html_parts.append("<section class='duplicates-section'>")
+        html_parts.append("<h2 class='duplicates-title'>⚠️ Possíveis Duplicados Detectados</h2>")
+
+        for dup in duplicates:
+            html_parts.append("<div class='duplicate-item'>")
+            html_parts.append(f"<div class='duplicate-name'>{html.escape(dup['normalized'])}</div>")
+            html_parts.append("<div class='duplicate-entries'>")
+
+            for entry in dup['entries']:
+                html_parts.append(
+                    f"• {html.escape(entry['original'])} (grupo: {html.escape(entry['group'])})"
+                )
+
+            html_parts.append("</div>")
+            html_parts.append("</div>")
+
+        html_parts.append("</section>")
+
+    html_parts.append("<div class='groups-grid' id='groupsGrid'>")
 
     for group in GROUPS:
         mangas = plan.get(group, {})
         group_file_count = sum(len(files) for files in mangas.values())
+        group_conflicts = sum(1 for c in conflicts if c["group"] == group)
+        group_duplicates = sum(1 for d in duplicates for e in d["entries"] if e["group"] == group)
 
         html_parts.append(
             "<section class='group-card' "
@@ -579,6 +730,14 @@ def generate_html(plan):
         html_parts.append(
             f"<span class='pill'><span class='group-file-count'>{group_file_count}</span> alterações</span>"
         )
+        if group_conflicts > 0:
+            html_parts.append(
+                f"<span class='pill' style='background:#fef2f2;color:#dc2626;border-color:#fecaca;'>{group_conflicts} conflitos</span>"
+            )
+        if group_duplicates > 0:
+            html_parts.append(
+                f"<span class='pill' style='background:#fffbeb;color:#b45309;border-color:#fcd34d;'>{group_duplicates} duplicados</span>"
+            )
         html_parts.append("</div>")
         html_parts.append("</div>")
 
@@ -595,6 +754,8 @@ def generate_html(plan):
                 + [item["new_name"] for item in files]
             ).lower()
 
+            manga_conflicts = [c for c in conflicts if c["manga"] == manga_name]
+
             html_parts.append(
                 "<details class='manga' "
                 f"data-search='{html.escape(search_text, quote=True)}' "
@@ -605,8 +766,10 @@ def generate_html(plan):
                 "<span class='chevron'>▶</span>"
                 f"<span class='manga-title'>{html.escape(manga_name)}</span>"
                 f"<span class='manga-count'>(<span class='manga-file-count'>{len(files)}</span>)</span>"
-                "</summary>"
             )
+            if manga_conflicts:
+                html_parts.append(f"<span class='conflict-badge'>{len(manga_conflicts)} CONFLITO(S)</span>")
+            html_parts.append("</summary>")
 
             html_parts.append("<div class='table-wrap'>")
             html_parts.append("<table>")
@@ -617,8 +780,10 @@ def generate_html(plan):
 
             for item in sorted(files, key=lambda x: x["old_name"].lower()):
                 row_search = f"{manga_name} {item['old_name']} {item['new_name']}".lower()
+                is_conflict = any(c["conflict_name"] == item["new_name"] for c in manga_conflicts)
+                row_class = "conflict-row" if is_conflict else ""
                 html_parts.append(
-                    f"<tr data-search='{html.escape(row_search, quote=True)}'>"
+                    f"<tr class='{row_class}' data-search='{html.escape(row_search, quote=True)}'>"
                 )
                 html_parts.append(f"<td class='old'>{html.escape(item['old_name'])}</td>")
                 html_parts.append(f"<td class='new'>{html.escape(item['new_name'])}</td>")
@@ -715,8 +880,12 @@ def generate_html(plan):
     REPORT_PATH.write_text("\n".join(html_parts), encoding="utf-8")
 
 
-def apply_plan(plan):
+def apply_plan(plan, conflicts):
     if DRY_RUN:
+        return
+
+    if conflicts:
+        print("Conflitos encontrados. Nenhum arquivo foi renomeado.")
         return
 
     for mangas in plan.values():
@@ -736,11 +905,35 @@ def main():
         raise FileNotFoundError(f"Pasta não encontrada: {MANGA_ROOT}")
 
     plan = build_plan()
+    conflicts = detect_conflicts(plan)
+    duplicates = detect_duplicates(plan)
 
-    generate_html(plan)
-    apply_plan(plan)
+    total_files = sum(
+        len(files)
+        for mangas in plan.values()
+        for files in mangas.values()
+    )
+    total_mangas = sum(len(mangas) for mangas in plan.values())
+    total_groups = sum(1 for mangas in plan.values() if mangas)
 
-    print(f"Preview gerado em: {REPORT_PATH}")
+    generate_html(plan, conflicts, duplicates)
+    apply_plan(plan, conflicts)
+
+    print(f"Pasta raiz: {MANGA_ROOT}")
+    print(f"Modo simulação: {DRY_RUN}")
+    print()
+    print(f"Relatório gerado: {REPORT_PATH}")
+    print()
+    print("Resumo:")
+    print(f"Grupos: {total_groups}")
+    print(f"Obras afetadas: {total_mangas}")
+    print(f"Arquivos afetados: {total_files}")
+    print(f"Conflitos: {len(conflicts)}")
+    print(f"Possíveis duplicados: {len(duplicates)}")
+    print()
+
+    if conflicts:
+        print("Atenção: existem conflitos. Revise o HTML antes de aplicar alterações.")
 
 
 if __name__ == "__main__":
