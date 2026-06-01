@@ -108,10 +108,32 @@ def detect_conflicts(plan):
         destination_map[dest_str].append(item)
 
     for dest_str, items in destination_map.items():
-        if len(items) > 1:
+        dest_path = Path(dest_str)
+
+        # Check if destination exists on disk and at least one source is different
+        exists_conflicting_items = [it for it in items if dest_path.resolve() != Path(it["source"]).resolve() and dest_path.exists()]
+
+        is_duplicate_in_plan = len(items) > 1
+
+        if exists_conflicting_items and is_duplicate_in_plan:
             conflicts.append({
                 "destination": dest_str,
                 "items": items,
+                "reason": "both",
+            })
+        elif exists_conflicting_items:
+            # Destination already exists on disk (and is not the same as the source)
+            conflicts.append({
+                "destination": dest_str,
+                "items": exists_conflicting_items,
+                "reason": "destino_existente",
+            })
+        elif is_duplicate_in_plan:
+            # Multiple items from plan target the same destination
+            conflicts.append({
+                "destination": dest_str,
+                "items": items,
+                "reason": "destino_duplicado",
             })
 
     return conflicts
@@ -520,8 +542,19 @@ def generate_html(plan, conflicts, duplicates):
         html_parts.append("<h2 class='duplicates-title'>🚨 Conflitos Detectados</h2>")
 
         for conflict in conflicts:
+            reason = conflict.get('reason', 'destino_duplicado')
+            if reason == 'destino_existente':
+                reason_label = 'Destino já existe'
+            elif reason == 'destino_duplicado':
+                reason_label = 'Destino duplicado no plano'
+            elif reason == 'both':
+                reason_label = 'Destino já existe + Destino duplicado'
+            else:
+                reason_label = reason
+
             html_parts.append("<div class='duplicate-item'>")
             html_parts.append(f"<div class='duplicate-name'>Destino: {html.escape(conflict['destination'])}</div>")
+            html_parts.append(f"<div class='duplicate-name' style='font-weight:600;color:#b91c1c;'>Motivo: {html.escape(reason_label)}</div>")
             html_parts.append("<div class='duplicate-entries'>")
             for item in conflict['items']:
                 html_parts.append(
@@ -817,11 +850,28 @@ def organize():
     if conflicts:
         print("Atenção: existem conflitos. Revise o HTML antes de aplicar alterações.")
         print("\nConflitos detectados:")
+
+        # Print "Destino já existe" conflicts first
         for conflict in conflicts:
-            print(f"- destino: {conflict['destination']}")
-            for item in conflict['items']:
-                print(f"  origem: {item['source']}")
-            print()
+            if conflict.get('reason') == 'destino_existente' or conflict.get('reason') == 'both':
+                print("[Destino já existe]")
+                print("Destino:")
+                print(conflict['destination'])
+                print("\nOrigem:")
+                for item in conflict['items']:
+                    print(item['source'])
+                print("\n" + "-"*40 + "\n")
+
+        # Print "Destino duplicado" conflicts
+        for conflict in conflicts:
+            if conflict.get('reason') == 'destino_duplicado' or conflict.get('reason') == 'both':
+                print("[Destino duplicado]")
+                print("Destino:")
+                print(conflict['destination'])
+                print("\nOrigem 1:")
+                for i, item in enumerate(conflict['items'], start=1):
+                    print(f"Origem {i}: {item['source']}")
+                print("\n" + "-"*40 + "\n")
 
     if duplicates:
         print("Duplicados detectados:")
