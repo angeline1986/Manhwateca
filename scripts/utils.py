@@ -1,5 +1,6 @@
 import re
 import unicodedata
+from collections import defaultdict
 from pathlib import Path
 
 
@@ -170,3 +171,46 @@ def get_cover_file(manga_path: Path):
             return str(file)
 
     return None
+
+
+def normalize_for_duplicate_detection(name):
+    name = name.strip()
+
+    articles = ["a ", "o ", "os ", "as ", "the "]
+    name_lower = name.lower()
+
+    for article in articles:
+        if name_lower.startswith(article):
+            name = name[len(article):].strip()
+            name_lower = name.lower()
+            break
+
+    name = unicodedata.normalize("NFD", name)
+    name = name.encode("ascii", "ignore").decode("utf-8")
+
+    name = re.sub(r"\s+", " ", name).strip().lower()
+
+    return name
+
+
+def detect_duplicates_organize(plan):
+    duplicates = []
+    name_map = defaultdict(list)
+
+    for item in plan:
+        normalized = normalize_for_duplicate_detection(item["name"])
+        name_map[normalized].append({
+            "original": item["name"],
+            "source": str(item["source"]),
+            "destination": str(item["destination"]),
+            "group": item["group"],
+        })
+
+    for normalized, entries in name_map.items():
+        if len(entries) > 1:
+            duplicates.append({
+                "normalized": normalized,
+                "entries": entries,
+            })
+
+    return duplicates
