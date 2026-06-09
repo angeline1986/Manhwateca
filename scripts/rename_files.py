@@ -1,17 +1,22 @@
-import os
+import argparse
 import re
 import html
 import unicodedata
+import uuid
 from pathlib import Path
 from collections import defaultdict
 
 from dotenv import load_dotenv
-from utils import clean_manga_name, normalize_first_letter
+from utils import (
+    get_canonical_manga_name,
+    get_required_path_env,
+    normalize_first_letter,
+)
 
 
 load_dotenv()
 
-MANGA_ROOT = Path(os.getenv("MANGA_ROOT", "")).expanduser()
+MANGA_ROOT = get_required_path_env("MANGA_ROOT")
 
 DRY_RUN = True
 
@@ -37,6 +42,12 @@ CHAPTER_EXTENSIONS = {
     ".cbz",
 }
 
+IMAGE_EXTENSIONS = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+}
+
 
 def get_group(name):
     first = normalize_first_letter(name)
@@ -48,13 +59,37 @@ def get_group(name):
     return "0-9"
 
 
-def normalize_chapter_name(filename):
+def normalize_chapter_name(filename, manga_name=None):
     path = Path(filename)
-    stem = path.stem
+    stem = unicodedata.normalize("NFC", path.stem)
     suffix = path.suffix
 
     new_stem = stem
 
+    new_stem = re.sub(
+        r"(?i)(?:^|[_\s-]+)cap(?:[_\s-]+)(?=\d)",
+        " cap ",
+        new_stem,
+    )
+    new_stem = re.sub(r"_+", " ", new_stem)
+    new_stem = re.sub(
+        r"\bside\s*stoy\b",
+        "side story",
+        new_stem,
+        flags=re.IGNORECASE,
+    )
+    new_stem = re.sub(
+        r"\bside\s+(?=\d)",
+        "side story ",
+        new_stem,
+        flags=re.IGNORECASE,
+    )
+    new_stem = re.sub(
+        r"\bside\s*story\b",
+        "side story",
+        new_stem,
+        flags=re.IGNORECASE,
+    )
     new_stem = re.sub(r"cap[ií]tulo", "cap", new_stem, flags=re.IGNORECASE)
     new_stem = re.sub(r"\bcaps?\b", "cap", new_stem, flags=re.IGNORECASE)
 
@@ -73,13 +108,77 @@ def normalize_chapter_name(filename):
     )
 
     new_stem = re.sub(
+        r"cap\s*(\d+(?:\.\d+)?)\s*[^\w\s.,_-]+\s*(\d+(?:\.\d+)?)",
+        r"cap \1-\2",
+        new_stem,
+        flags=re.IGNORECASE,
+    )
+
+    new_stem = re.sub(
         r"cap\s*(\d+(?:\.\d+)?)",
         r"cap \1",
         new_stem,
         flags=re.IGNORECASE,
     )
+    new_stem = re.sub(
+        r"\bcap\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)(?=\s|$)",
+        r"cap \1-\2",
+        new_stem,
+        flags=re.IGNORECASE,
+    )
+
+    new_stem = re.sub(
+        r"(\d+(?:\.\d+)?)\s*(?:=|_|\bao\b|\ba\b|–|—)\s*(\d+(?:\.\d+)?)",
+        r"\1-\2",
+        new_stem,
+        flags=re.IGNORECASE,
+    )
+    new_stem = re.sub(r"\s*┇\s*", " - ", new_stem)
+    new_stem = re.sub(
+        r"\b2segunda\b",
+        "2ª",
+        new_stem,
+        flags=re.IGNORECASE,
+    )
+
+    if manga_name and not re.search(
+        r"\b(?:cap|side story|sidestory|pr[oó]logo)\b",
+        new_stem,
+        flags=re.IGNORECASE,
+    ):
+        title_pattern = re.escape(manga_name)
+        if re.match(
+            rf"^{title_pattern}\s+\d",
+            new_stem,
+            flags=re.IGNORECASE,
+        ):
+            new_stem = re.sub(
+                rf"^{title_pattern}\s+",
+                f"{manga_name} cap ",
+                new_stem,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+
+    if manga_name:
+        content_match = re.search(
+            r"\b(?:cap\s*\d|side\s*story\b|sidestory\b|pr[oó]logo\b)",
+            new_stem,
+            flags=re.IGNORECASE,
+        )
+        if content_match:
+            content_part = new_stem[content_match.start():]
+            if (
+                manga_name.casefold().endswith(" side")
+                and content_part.casefold().startswith("side story")
+            ):
+                content_part = content_part[5:]
+            new_stem = f"{manga_name} {content_part}"
 
     new_stem = re.sub(r"\s+", " ", new_stem).strip()
+    new_stem = re.sub(r"\s+([,.;])", r"\1", new_stem)
+    new_stem = re.sub(r"[,.;]+$", "", new_stem)
+    new_stem = new_stem.rstrip("_- ")
 
     return f"{new_stem}{suffix}"
 
@@ -93,6 +192,27 @@ def detect_conflicts(plan):
 
             for item in files:
                 new_name = item["new_name"]
+                old_path = Path(item["old_path"])
+                new_path = Path(item["new_path"])
+
+                if item.get("multiple_images"):
+                    conflicts.append({
+                        "group": group,
+                        "manga": manga_name,
+                        "files": [item],
+                        "conflict_name": new_name,
+                        "reason": "multiplas_imagens",
+                    })
+
+                if new_path.exists() and not old_path.samefile(new_path):
+                    conflicts.append({
+                        "group": group,
+                        "manga": manga_name,
+                        "files": [item],
+                        "conflict_name": new_name,
+                        "reason": "destino_existente",
+                    })
+
                 if new_name in new_names:
                     conflicts.append({
                         "group": group,
@@ -153,21 +273,28 @@ def detect_duplicates(plan):
 
 def build_plan():
     plan = defaultdict(lambda: defaultdict(list))
+    images_by_folder = defaultdict(list)
 
     for file in MANGA_ROOT.rglob("*"):
         if not file.is_file():
+            continue
+
+        if file.suffix.lower() in IMAGE_EXTENSIONS:
+            images_by_folder[file.parent].append(file)
             continue
 
         if file.suffix.lower() not in CHAPTER_EXTENSIONS:
             continue
 
         manga_folder = file.parent
-        manga_name = clean_manga_name(manga_folder.name)
+        manga_name = get_canonical_manga_name(manga_folder.name)
         group = get_group(manga_name)
 
-        new_file_name = normalize_chapter_name(file.name)
+        new_file_name = normalize_chapter_name(file.name, manga_name)
 
-        if new_file_name == file.name:
+        if unicodedata.normalize("NFC", new_file_name) == unicodedata.normalize(
+            "NFC", file.name
+        ):
             continue
 
         plan[group][manga_name].append({
@@ -175,7 +302,27 @@ def build_plan():
             "new_name": new_file_name,
             "old_path": str(file),
             "new_path": str(file.with_name(new_file_name)),
+            "kind": "chapter",
         })
+
+    for manga_folder, images in images_by_folder.items():
+        manga_name = get_canonical_manga_name(manga_folder.name)
+        group = get_group(manga_name)
+
+        for image in images:
+            new_file_name = f"cover{image.suffix.lower()}"
+
+            if image.name.casefold() == new_file_name.casefold():
+                continue
+
+            plan[group][manga_name].append({
+                "old_name": image.name,
+                "new_name": new_file_name,
+                "old_path": str(image),
+                "new_path": str(image.with_name(new_file_name)),
+                "kind": "cover",
+                "multiple_images": len(images) > 1,
+            })
 
     return plan
 
@@ -725,10 +872,10 @@ def generate_html(plan, conflicts, duplicates):
         html_parts.append(f"<div class='group-title'>{html.escape(group)}</div>")
         html_parts.append("<div class='group-stats'>")
         html_parts.append(
-            f"<span class='pill'><span class='group-manga-count'>{len(mangas)}</span> obras</span>"
+            f"<span class='pill'><span class='group-manga-count'>{len(mangas)}</span>&nbsp;obras</span>"
         )
         html_parts.append(
-            f"<span class='pill'><span class='group-file-count'>{group_file_count}</span> alterações</span>"
+            f"<span class='pill'><span class='group-file-count'>{group_file_count}</span>&nbsp;alterações</span>"
         )
         if group_conflicts > 0:
             html_parts.append(
@@ -882,11 +1029,18 @@ def generate_html(plan, conflicts, duplicates):
 
 def apply_plan(plan, conflicts):
     if DRY_RUN:
-        return
+        return True
+
+    conflicted_paths = {
+        item["old_path"]
+        for conflict in conflicts
+        for item in conflict["files"]
+    }
 
     if conflicts:
-        print("Conflitos encontrados. Nenhum arquivo foi renomeado.")
-        return
+        print("Conflitos encontrados. Os arquivos envolvidos serão ignorados.")
+
+    errors = []
 
     for mangas in plan.values():
         for files in mangas.values():
@@ -894,13 +1048,51 @@ def apply_plan(plan, conflicts):
                 old_path = Path(item["old_path"])
                 new_path = Path(item["new_path"])
 
-                if new_path.exists():
+                if item["old_path"] in conflicted_paths:
+                    print(f"[PULAR] Conflito: {old_path}")
                     continue
 
-                old_path.rename(new_path)
+                if not old_path.exists():
+                    continue
+
+                try:
+                    old_equivalent = unicodedata.normalize(
+                        "NFC", old_path.name
+                    ).casefold()
+                    new_equivalent = unicodedata.normalize(
+                        "NFC", new_path.name
+                    ).casefold()
+
+                    if old_equivalent == new_equivalent:
+                        temporary_path = old_path.with_name(
+                            f"manhwateca-temp-{uuid.uuid4().hex}{old_path.suffix}"
+                        )
+                        old_path.rename(temporary_path)
+                        temporary_path.rename(new_path)
+                        continue
+
+                    if new_path.exists():
+                        continue
+
+                    old_path.rename(new_path)
+                except OSError as error:
+                    errors.append((old_path, error))
+                    print(f"[ERRO] Não foi possível renomear: {old_path}")
+                    print(f"       {error}")
+
+    if errors or conflicts:
+        print()
+        print(f"Arquivos pendentes por conflito: {len(conflicted_paths)}")
+        print(f"Arquivos pendentes por erro: {len(errors)}")
+        return False
+
+    return True
 
 
-def main():
+def main(apply=False):
+    global DRY_RUN
+    DRY_RUN = not apply
+
     if not MANGA_ROOT.exists():
         raise FileNotFoundError(f"Pasta não encontrada: {MANGA_ROOT}")
 
@@ -917,7 +1109,7 @@ def main():
     total_groups = sum(1 for mangas in plan.values() if mangas)
 
     generate_html(plan, conflicts, duplicates)
-    apply_plan(plan, conflicts)
+    applied = apply_plan(plan, conflicts)
 
     print(f"Pasta raiz: {MANGA_ROOT}")
     print(f"Modo simulação: {DRY_RUN}")
@@ -935,6 +1127,22 @@ def main():
     if conflicts:
         print("Atenção: existem conflitos. Revise o HTML antes de aplicar alterações.")
 
+    return applied
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Gera a prévia ou aplica a padronização dos capítulos."
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Renomeia os arquivos conforme o relatório, se não houver conflitos.",
+    )
+    return parser.parse_args()
+
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    if not main(apply=args.apply):
+        raise SystemExit(1)

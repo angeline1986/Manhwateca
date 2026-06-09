@@ -1,22 +1,34 @@
-import os
+import argparse
+import json
 import re
 import shutil
 import html
 import unicodedata
+import uuid
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
-from utils import clean_manga_name, normalize_first_letter, scan_chapters, detect_duplicates_organize
+from utils import (
+    MEDIA_EXTENSIONS,
+    clean_manga_name,
+    detect_duplicates_organize,
+    get_canonical_manga_name,
+    get_required_path_env,
+    normalize_first_letter,
+    scan_chapters,
+)
 
 
 load_dotenv()
 
-MANGA_ROOT = Path(os.getenv("MANGA_ROOT", "")).expanduser()
+MANGA_ROOT = get_required_path_env("MANGA_ROOT")
 
 DRY_RUN = True
 
 REPORT_PATH = Path("reports/organize_preview.html")
+HISTORY_PATH = Path("reports/organize_history.jsonl")
 
 
 GROUPS = {
@@ -51,9 +63,51 @@ def is_group_folder(folder_name):
     return folder_name in GROUPS
 
 
+def is_legacy_container(path):
+    return bool(re.match(r"^\d{2}(?:[_-].*)?$", path.name))
+
+
 def is_manga_folder(path):
+    if is_group_folder(path.name) or is_legacy_container(path):
+        return False
+
     chapter_data = scan_chapters(path)
-    return chapter_data["chapter_files"] > 0 or chapter_data["side_files"] > 0
+    if chapter_data["chapter_files"] > 0 or chapter_data["side_files"] > 0:
+        return True
+
+    entries = [
+        entry
+        for entry in path.iterdir()
+        if entry.name not in {".DS_Store", "Thumbs.db"}
+    ]
+    media_files = [
+        entry
+        for entry in entries
+        if entry.is_file() and entry.suffix.lower() in MEDIA_EXTENSIONS
+    ]
+    child_folders = [entry for entry in entries if entry.is_dir()]
+
+    # Covers works whose PDFs do not contain "cap" and cover-only works.
+    # Empty folders are ambiguous and must not be moved automatically.
+    return bool(media_files)
+
+
+def find_empty_legacy_folders(root):
+    empty_folders = []
+
+    for path in root.rglob("*"):
+        if not path.is_dir() or not is_legacy_container(path.parent):
+            continue
+
+        entries = [
+            entry
+            for entry in path.iterdir()
+            if entry.name not in {".DS_Store", "Thumbs.db"}
+        ]
+        if not entries:
+            empty_folders.append(path)
+
+    return empty_folders
 
 
 def find_manga_folders(root):
@@ -76,7 +130,7 @@ def build_plan(manga_folders):
     plan = []
 
     for manga_folder in manga_folders:
-        clean_name = clean_manga_name(manga_folder.name)
+        clean_name = get_canonical_manga_name(manga_folder.name)
         group = get_group(clean_name)
         destination = MANGA_ROOT / group / clean_name
         chapter_data = scan_chapters(manga_folder)
@@ -111,7 +165,17 @@ def detect_conflicts(plan):
         dest_path = Path(dest_str)
 
         # Check if destination exists on disk and at least one source is different
-        exists_conflicting_items = [it for it in items if dest_path.resolve() != Path(it["source"]).resolve() and dest_path.exists()]
+        exists_conflicting_items = []
+        for item in items:
+            source_path = Path(item["source"])
+            if not dest_path.exists():
+                continue
+            try:
+                same_location = source_path.samefile(dest_path)
+            except FileNotFoundError:
+                same_location = False
+            if not same_location:
+                exists_conflicting_items.append(item)
 
         is_duplicate_in_plan = len(items) > 1
 
@@ -171,7 +235,8 @@ def get_current_group(path):
     return candidate or path.parent.name or "Desconhecido"
 
 
-def generate_html(plan, conflicts, duplicates):
+def generate_html(plan, conflicts, duplicates, empty_legacy_folders=None):
+    empty_legacy_folders = empty_legacy_folders or []
     total_detected = len(plan)
     total_correct = sum(1 for item in plan if item["is_correct"])
     total_to_move = total_detected - total_correct
@@ -566,6 +631,22 @@ def generate_html(plan, conflicts, duplicates):
 
         html_parts.append("</section>")
 
+    if empty_legacy_folders:
+        html_parts.append(
+            "<section class='duplicates-section' "
+            "style='border-color:#fcd34d;background:#fffbeb;'>"
+        )
+        html_parts.append(
+            "<h2 class='duplicates-title'>Pastas vazias para revisão manual</h2>"
+        )
+        html_parts.append(
+            "<div class='duplicate-item'><div class='duplicate-entries'>"
+            "Estas pastas não são tratadas como obras nem movidas automaticamente:<br><br>"
+        )
+        for path in empty_legacy_folders:
+            html_parts.append(f"• {html.escape(str(path))}<br>")
+        html_parts.append("</div></div></section>")
+
     html_parts.append("<div class='groups-grid' id='groupsGrid'>")
 
     for group in GROUPS:
@@ -795,33 +876,128 @@ def create_group_folders():
             target.mkdir(parents=True, exist_ok=True)
 
 
-def apply_plan(plan, conflicts):
+def write_history(source, destination, status, error=None):
+    HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    entry = {
+        "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "source": str(source),
+        "destination": str(destination),
+        "status": status,
+    }
+    if error:
+        entry["error"] = str(error)
+
+    with HISTORY_PATH.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def apply_plan(plan, conflicts, duplicates):
     if DRY_RUN:
-        return
+        return True
 
-    if conflicts:
-        print("Conflitos encontrados. Nenhuma pasta foi movida.")
-        return
+    if conflicts or duplicates:
+        print("Conflitos ou duplicados encontrados. Nenhuma pasta foi movida.")
+        return False
 
-    for item in plan:
+    pending = [
+        item
+        for item in plan
+        if not item["is_correct"] and not item["exists"]
+    ]
+    missing_sources = [
+        item for item in pending if not item["source"].exists()
+    ]
+
+    if missing_sources:
+        print("Origens ausentes. Nenhuma nova pasta foi movida:")
+        for item in missing_sources:
+            print(f"- {item['source']}")
+        print("Gere uma nova prévia antes de tentar novamente.")
+        return False
+
+    # Move children before their parents so a parent move cannot invalidate
+    # paths that are still pending in the same plan.
+    pending.sort(
+        key=lambda item: len(item["source"].parts),
+        reverse=True,
+    )
+
+    for item in pending:
         if item["exists"]:
             continue
 
         if item["is_correct"]:
             continue
 
+        if not item["source"].exists():
+            print(f"[PULAR] Origem já movimentada: {item['source']}")
+            write_history(
+                item["source"],
+                item["destination"],
+                "origem_ausente",
+            )
+            continue
+
         item["destination"].parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(item["source"]), str(item["destination"]))
+        try:
+            source_equivalent = unicodedata.normalize(
+                "NFC", item["source"].name
+            ).casefold()
+            destination_equivalent = unicodedata.normalize(
+                "NFC", item["destination"].name
+            ).casefold()
+
+            if (
+                item["source"].parent == item["destination"].parent
+                and source_equivalent == destination_equivalent
+            ):
+                temporary = item["source"].with_name(
+                    f"manhwateca-temp-{uuid.uuid4().hex}"
+                )
+                item["source"].rename(temporary)
+                temporary.rename(item["destination"])
+            else:
+                shutil.move(str(item["source"]), str(item["destination"]))
+        except Exception as error:
+            write_history(
+                item["source"],
+                item["destination"],
+                "erro",
+                error,
+            )
+            raise
+        else:
+            write_history(
+                item["source"],
+                item["destination"],
+                "movido",
+            )
+
+    return True
 
 
-def organize():
-    if not MANGA_ROOT:
-        raise ValueError("MANGA_ROOT não foi definido no .env")
+def organize(apply=False):
+    global DRY_RUN
+    DRY_RUN = not apply
 
     if not MANGA_ROOT.exists():
         raise FileNotFoundError(f"Pasta não encontrada: {MANGA_ROOT}")
 
     manga_folders = find_manga_folders(MANGA_ROOT)
+    empty_legacy_folders = find_empty_legacy_folders(MANGA_ROOT)
+
+    if not manga_folders:
+        media_files = sum(
+            1
+            for path in MANGA_ROOT.rglob("*")
+            if path.is_file() and path.suffix.lower() in {".pdf", ".cbz"}
+        )
+        raise RuntimeError(
+            "Nenhuma obra foi detectada. "
+            f"Foram encontrados {media_files} arquivos PDF/CBZ em {MANGA_ROOT}. "
+            "Verifique se os nomes contêm 'cap', 'capítulo' ou 'side story'."
+        )
+
     plan = build_plan(manga_folders)
     conflicts = detect_conflicts(plan)
     duplicates = detect_duplicates_organize(plan)
@@ -830,8 +1006,8 @@ def organize():
     total_correct = sum(1 for item in plan if item["is_correct"])
     total_to_move = total_detected - total_correct
 
-    generate_html(plan, conflicts, duplicates)
-    apply_plan(plan, conflicts)
+    generate_html(plan, conflicts, duplicates, empty_legacy_folders)
+    applied = apply_plan(plan, conflicts, duplicates)
 
     print(f"Pasta raiz: {MANGA_ROOT}")
     print(f"Modo simulação: {DRY_RUN}")
@@ -845,6 +1021,7 @@ def organize():
     print(f"Grupos: {len(GROUPS)}")
     print(f"Conflitos: {len(conflicts)}")
     print(f"Possíveis duplicados: {len(duplicates)}")
+    print(f"Pastas vazias para revisão manual: {len(empty_legacy_folders)}")
     print()
 
     if conflicts:
@@ -879,6 +1056,28 @@ def organize():
             print(f"- {dup['normalized']}: {[entry['original'] for entry in dup['entries']]}" )
         print()
 
+    if empty_legacy_folders:
+        print("Pastas vazias ignoradas pela organização automática:")
+        for path in empty_legacy_folders:
+            print(f"- {path}")
+        print()
+
+    return applied
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Gera a prévia ou aplica a organização alfabética das obras."
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Move as pastas conforme o relatório, se não houver bloqueios.",
+    )
+    return parser.parse_args()
+
 
 if __name__ == "__main__":
-    organize()
+    args = parse_args()
+    if not organize(apply=args.apply):
+        raise SystemExit(1)

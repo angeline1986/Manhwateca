@@ -1,6 +1,5 @@
 
 import json
-import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -8,13 +7,14 @@ from dotenv import load_dotenv
 from utils import (
     clean_manga_name,
     get_cover_file,
+    get_canonical_manga_name,
+    get_required_path_env,
     scan_chapters,
 )
 
 
 load_dotenv()
 
-MANGA_ROOT = Path(os.getenv("MANGA_ROOT", "")).expanduser()
 OUTPUT_FILE = Path("data/mangas.json")
 
 GROUP_FOLDERS = {
@@ -89,20 +89,19 @@ def find_manga_folders(root: Path) -> list[Path]:
 
 
 def scan_mangas() -> list[dict]:
-    if not MANGA_ROOT:
-        raise ValueError("MANGA_ROOT não foi definido no .env")
+    manga_root = get_required_path_env("MANGA_ROOT")
 
-    if not MANGA_ROOT.exists():
-        raise FileNotFoundError(f"Pasta não encontrada: {MANGA_ROOT}")
+    if not manga_root.exists():
+        raise FileNotFoundError(f"Pasta não encontrada: {manga_root}")
 
     mangas = []
 
-    manga_folders = find_manga_folders(MANGA_ROOT)
+    manga_folders = find_manga_folders(manga_root)
 
     for manga_folder in manga_folders:
         chapter_data = scan_chapters(manga_folder)
 
-        manga_name = clean_manga_name(manga_folder.name)
+        manga_name = get_canonical_manga_name(manga_folder.name)
 
         mangas.append({
             "nome": manga_name,
@@ -140,6 +139,7 @@ def save_mangas(mangas: list[dict]) -> None:
 
 
 def main() -> None:
+    manga_root = get_required_path_env("MANGA_ROOT")
     mangas = scan_mangas()
     save_mangas(mangas)
 
@@ -147,7 +147,7 @@ def main() -> None:
     total_side_caps = sum(m["side_caps"] for m in mangas)
     total_chapter_files = sum(m["chapter_files"] for m in mangas)
 
-    print(f"Pasta raiz: {MANGA_ROOT}")
+    print(f"Pasta raiz: {manga_root}")
     print()
     print(f"Total de obras encontradas: {len(mangas)}")
     print(f"Total de capítulos principais: {total_main_caps}")

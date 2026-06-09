@@ -1,5 +1,7 @@
+import json
 import re
 import unicodedata
+import os
 from collections import defaultdict
 from pathlib import Path
 
@@ -25,8 +27,20 @@ SIDE_STORY_KEYWORDS = [
     "sidestory",
 ]
 
+TITLE_ALIASES_FILE = Path("config/titles.json")
+
+
+def get_required_path_env(name: str) -> Path:
+    value = os.getenv(name, "").strip()
+
+    if not value:
+        raise ValueError(f"{name} não foi definido no .env")
+
+    return Path(value).expanduser()
+
 
 def normalize_name(name: str) -> str:
+    name = unicodedata.normalize("NFC", name)
     return " ".join(name.strip().split())
 
 
@@ -37,6 +51,28 @@ def clean_manga_name(name: str) -> str:
     name = re.sub(r"\s+\d+$", "", name)
 
     return normalize_name(name)
+
+
+def load_title_aliases(path=TITLE_ALIASES_FILE) -> dict[str, str]:
+    if not path.exists():
+        return {}
+
+    with path.open("r", encoding="utf-8") as file:
+        aliases = json.load(file)
+
+    if not isinstance(aliases, dict):
+        raise ValueError(f"Formato inválido em {path}: era esperado um objeto.")
+
+    return {
+        normalize_name(source).casefold(): normalize_name(destination)
+        for source, destination in aliases.items()
+    }
+
+
+def get_canonical_manga_name(name: str, aliases=None) -> str:
+    clean_name = clean_manga_name(name)
+    aliases = load_title_aliases() if aliases is None else aliases
+    return aliases.get(clean_name.casefold(), clean_name)
 
 
 def normalize_first_letter(text: str) -> str:
@@ -53,13 +89,13 @@ def normalize_first_letter(text: str) -> str:
 
 
 def is_side_story(filename: str) -> bool:
-    filename = filename.lower()
+    filename = unicodedata.normalize("NFC", filename).lower()
 
     return any(keyword in filename for keyword in SIDE_STORY_KEYWORDS)
 
 
 def extract_chapter_numbers(filename: str) -> list[int]:
-    name = filename.lower()
+    name = unicodedata.normalize("NFC", filename).lower()
 
     name = name.replace("capítulo", "cap")
     name = name.replace("capitulo", "cap")
@@ -80,7 +116,7 @@ def extract_chapter_numbers(filename: str) -> list[int]:
 
 
 def extract_side_story_numbers(filename: str) -> list[int]:
-    name = filename.lower()
+    name = unicodedata.normalize("NFC", filename).lower()
 
     name = name.replace("side story", "side")
     name = name.replace("sidestory", "side")
