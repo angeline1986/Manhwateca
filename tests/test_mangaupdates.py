@@ -126,6 +126,97 @@ class MangaUpdatesTests(unittest.TestCase):
             mangaupdates.truncate_text("Uma\n descrição   curta."),
         )
 
+    def test_fill_ids_removes_candidates_from_confirmed_items(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "busca_ids.json"
+            path.write_text(
+                json.dumps([{
+                    "Nome": "Alpha",
+                    "IDs": [{"id": 1, "titulo": "Alpha"}],
+                    "Status": "Confirmado automaticamente",
+                    "ID": 1,
+                    "Nome encontrado": "Alpha",
+                }]),
+                encoding="utf-8",
+            )
+
+            items, processed = mangaupdates.fill_ids_file(path, limit=0)
+
+            self.assertEqual(0, processed)
+            self.assertNotIn("IDs", items[0])
+            persisted = json.loads(path.read_text(encoding="utf-8"))
+            self.assertNotIn("IDs", persisted[0])
+
+    def test_update_csv_from_confirmed_ids_preserves_editorial_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ids_path = directory / "busca_ids.json"
+            csv_path = directory / "catalog.csv"
+            cache_path = directory / "cache.json"
+            ids_path.write_text(
+                json.dumps([{
+                    "Nome": "Dear Romantic Captain",
+                    "Status": "Confirmado automaticamente",
+                    "ID": 21459838347,
+                    "Nome encontrado": "Romantic Captain Darling",
+                }]),
+                encoding="utf-8",
+            )
+            cache_path.write_text(
+                json.dumps({
+                    "21459838347": {
+                        "series_id": 21459838347,
+                        "latest_chapter": "66",
+                        "url": "https://example.test/captain",
+                        "genres": ["Drama", "Yaoi"],
+                        "format": "Manhwa",
+                        "universe": [],
+                    },
+                }),
+                encoding="utf-8",
+            )
+            with csv_path.open("w", encoding="utf-8-sig", newline="") as file:
+                writer = csv.DictWriter(
+                    file,
+                    fieldnames=mangaupdates.CSV_COLUMNS,
+                )
+                writer.writeheader()
+                writer.writerow({
+                    "Nome": "Dear Romantic Captain",
+                    "Alias": "Querido Capitão Romântico",
+                    "Interesse": "Fila de Espera",
+                    "Status": "Quero ler",
+                    "Nota": "Ok",
+                })
+
+            updated, pending, missing = (
+                mangaupdates.update_csv_from_confirmed_ids(
+                    ids_path,
+                    csv_path=csv_path,
+                    cache_path=cache_path,
+                    delay=0,
+                )
+            )
+
+            with csv_path.open(
+                "r",
+                encoding="utf-8-sig",
+                newline="",
+            ) as file:
+                row = next(csv.DictReader(file))
+            self.assertEqual(1, updated)
+            self.assertEqual(0, pending)
+            self.assertEqual([], missing)
+            self.assertEqual("Fila de Espera", row["Interesse"])
+            self.assertEqual("Quero ler", row["Status"])
+            self.assertEqual("Ok", row["Nota"])
+            self.assertEqual("21459838347", row["ID da obra"])
+            self.assertEqual("66", row["Capítulo MangaUpdates"])
+            self.assertEqual(
+                "ID confirmado automaticamente",
+                row["Correspondência API"],
+            )
+
     def test_write_csv_uses_notion_columns_and_id(self):
         manga = {
             "nome": "Alpha",

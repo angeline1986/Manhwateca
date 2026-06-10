@@ -23,9 +23,12 @@ MANGAUPDATES_ID_COMMAND = [
 
 MANGAUPDATES_CSV_COMMAND = [
     "scripts/mangaupdates.py",
-    "--generate-csv",
+    "--update-csv-from-ids",
+    "reports/integrations/buscaIds.json",
     "--delay",
     "3",
+    "--limit",
+    "10",
 ]
 
 BANNER = """
@@ -52,11 +55,11 @@ MENU = f"""
   {TITLE_COLOR}3. 🔄 Sincronização com Notion{RESET_COLOR}
      Cataloga a biblioteca, simula ou aplica a sincronização.
 
-  {TITLE_COLOR}4. 🔎 MangaUpdates - API busca ID{RESET_COLOR}
-     Busca IDs no arquivo de integração, em lotes com delay e revisão.
+  {TITLE_COLOR}4. 🔎 MangaUpdates - API busca ID e popula buscaIds.json{RESET_COLOR}
+     Busca possíveis IDs das obras para confirmação.
 
   {TITLE_COLOR}5. 🌐 MangaUpdates - API busca dados e gera CSV{RESET_COLOR}
-     Busca detalhes, usa cache e gera o CSV de integração.
+     Usa os IDs confirmados para atualizar o CSV em lotes com delay.
 
   {TITLE_COLOR}6. 📥 Atualizar Notion com dados do CSV{RESET_COLOR}
      Atualiza páginas existentes após simulação e confirmação.

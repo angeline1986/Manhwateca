@@ -223,6 +223,15 @@ def fill_ids_file(
     retry_review=False,
 ):
     items = load_id_searches(path)
+    cleaned = False
+    for item in items:
+        if item.get("Status") == "Confirmado automaticamente" and item.pop(
+            "IDs", None
+        ) is not None:
+            cleaned = True
+    if cleaned:
+        save_json(path, items)
+
     processed = 0
     for item in items:
         if item.get("ID"):
@@ -237,9 +246,9 @@ def fill_ids_file(
         response = search_series(name, per_page=per_page)
         candidates = rank_search_results(name, response)
         selected, status = select_ranked_candidate(candidates)
-        item["IDs"] = candidates
         item["Status"] = status
         if selected:
+            item.pop("IDs", None)
             item["ID"] = selected["id"]
             item["Nome encontrado"] = selected["titulo"]
             print(
@@ -247,6 +256,9 @@ def fill_ids_file(
                 f"{selected['titulo']} | {selected['pontuacao']:.2f}"
             )
         else:
+            item["IDs"] = candidates
+            item.pop("ID", None)
+            item.pop("Nome encontrado", None)
             print(f"[REVISAR] {name}: {len(candidates)} candidato(s)")
 
         save_json(path, items)
@@ -461,6 +473,81 @@ def write_csv(
     temporary.replace(path)
 
 
+def update_csv_from_confirmed_ids(
+    ids_path,
+    csv_path=CSV_FILE,
+    delay=3.0,
+    limit=None,
+    cache_path=CACHE_FILE,
+):
+    items = load_id_searches(ids_path)
+    confirmed = [
+        item
+        for item in items
+        if item.get("Status") == "Confirmado automaticamente"
+        and item.get("ID")
+    ]
+    if not csv_path.exists():
+        raise FileNotFoundError(
+            f"CSV não encontrado: {csv_path}. Gere o CSV antes de atualizá-lo."
+        )
+
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as file:
+        reader = csv.DictReader(file)
+        rows = list(reader)
+        fieldnames = reader.fieldnames or CSV_COLUMNS
+
+    row_index = {}
+    for position, row in enumerate(rows):
+        for value in (row.get("Nome"), row.get("Alias")):
+            if not value:
+                continue
+            for title in value.split("|"):
+                row_index.setdefault(normalize_title(title.strip()), position)
+
+    cache = load_json_object(cache_path)
+    processed = 0
+    updated = 0
+    missing = []
+    for item in confirmed:
+        if limit is not None and processed >= limit:
+            break
+        name = item["Nome"].strip()
+        position = row_index.get(normalize_title(name))
+        if position is None:
+            missing.append(name)
+            continue
+
+        series_id = item["ID"]
+        cache_key = str(series_id)
+        summary = cache.get(cache_key)
+        if not summary:
+            print(f"[DETALHAR] {name} ({series_id})")
+            summary = summarize_series(get_series(series_id))
+            cache[cache_key] = summary
+            save_json(cache_path, cache)
+            wait_between_requests(delay)
+
+        row = rows[position]
+        row["ID da obra"] = summary.get("series_id", series_id)
+        row["Capítulo MangaUpdates"] = summary.get("latest_chapter") or ""
+        row["MangaUpdates"] = summary.get("url") or ""
+        row["Temática"] = join_values(summary.get("genres", []))
+        row["Formato"] = summary.get("format") or row.get("Formato", "")
+        row["Universo"] = join_values(summary.get("universe", []))
+        row["Correspondência API"] = "ID confirmado automaticamente"
+        processed += 1
+        updated += 1
+
+    temporary = csv_path.with_suffix(f"{csv_path.suffix}.tmp")
+    with temporary.open("w", encoding="utf-8-sig", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    temporary.replace(csv_path)
+    return updated, len(confirmed) - processed, missing
+
+
 def refresh_cache(mappings_path=MAPPINGS_FILE, cache_path=CACHE_FILE):
     mappings = load_json_object(mappings_path)
     cache = load_json_object(cache_path)
@@ -484,6 +571,11 @@ def main():
         "--generate-csv",
         action="store_true",
         help="Executa busca e detalhe para gerar o CSV de importação.",
+    )
+    parser.add_argument(
+        "--update-csv-from-ids",
+        type=Path,
+        help="Atualiza o CSV usando os IDs confirmados no JSON informado.",
     )
     parser.add_argument(
         "--delay",
@@ -545,6 +637,22 @@ def main():
             print(f"IDs confirmados: {confirmed}")
             print(f"Para revisão: {review}")
             print(f"Pendentes: {pending}")
+            return
+        if args.update_csv_from_ids:
+            if args.delay < 0:
+                raise SystemExit("--delay não pode ser negativo.")
+            updated, pending, missing = update_csv_from_confirmed_ids(
+                args.update_csv_from_ids,
+                delay=args.delay,
+                limit=args.limit,
+            )
+            print()
+            print(f"CSV atualizado: {CSV_FILE}")
+            print(f"Obras atualizadas: {updated}")
+            print(f"Confirmadas pendentes para outro lote: {pending}")
+            print(f"Obras não encontradas no CSV: {len(missing)}")
+            for name in missing:
+                print(f"- {name}")
             return
         if args.generate_csv:
             if args.delay < 0:

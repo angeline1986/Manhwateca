@@ -2,6 +2,14 @@
 
 Sistema pessoal para organização e tracking de manhwas.
 
+## Navegação
+
+- [Início rápido](#início-rápido)
+- [Fluxo recomendado](#fluxo-recomendado)
+- [Campos do Notion](#campos-do-notion)
+- [MangaUpdates e CSV](#mangaupdates-e-csv)
+- [Organização dos relatórios](#organização-dos-relatórios)
+
 ## Objetivo
 
 Centralizar:
@@ -14,9 +22,7 @@ Centralizar:
 
 Os arquivos físicos permanecem fora do projeto.
 
----
-
-# Estrutura
+## Estrutura do projeto
 
 ```text
 Manhwateca/
@@ -28,15 +34,11 @@ Manhwateca/
 └── requirements.txt
 ```
 
----
-
 ## Dependências
 
 ```bash
 pip install -r requirements.txt
 ```
-
----
 
 ## Configuração
 
@@ -48,7 +50,12 @@ NOTION_DATABASE_ID=
 MANGA_ROOT=
 ```
 
----
+## Início rápido
+
+```bash
+pip install -r requirements.txt
+python scripts/menu.py
+```
 
 ## Fluxo recomendado
 
@@ -67,13 +74,16 @@ alfabética e a padronização dos arquivos, catalogar as obras e sincronizar co
 o Notion. Toda ação que altera a biblioteca ou o Notion apresenta as opções
 numéricas `1. Aplicar` e `2. Cancelar`.
 
-| Opção | Ação |
-|---|---|
-| 1 | Abre o submenu para verificar, aplicar ou registrar ajustes da padronização. |
-| 2 | Move as pastas para os grupos alfabéticos após confirmação numérica. |
-| 3 | Abre o submenu para catalogar, simular ou aplicar a sincronização com o Notion. |
-| 4 | Gera os relatórios, atualiza o catálogo e simula o sync com o Notion. |
-| 5 | Executa os testes automatizados do projeto. |
+| Opção | Função                                                    |
+| :---: | --------------------------------------------------------- |
+|   1   | Verifica e aplica a padronização dos arquivos.             |
+|   2   | Organiza as pastas alfabeticamente ou executa os testes.   |
+|   3   | Cataloga e sincroniza a biblioteca com o Notion.           |
+|   4   | Busca IDs no MangaUpdates e atualiza `buscaIds.json`.      |
+|   5   | Consulta os IDs confirmados e atualiza o CSV.              |
+|   6   | Atualiza páginas existentes do Notion usando o CSV.        |
+|   7   | Executa o fluxo completo.                                  |
+|   0   | Encerra o programa.                                        |
 
 ### Ordem recomendada
 
@@ -184,26 +194,26 @@ Mangas/
 
 ## Campos do Notion
 
-| Campo | Tipo |
-|---|---|
-| Nome | Title |
-| ID da obra | Number |
-| Alias | Text |
-| Status | Select |
-| Nota | Select |
-| Último lido | Number |
-| Último capítulo disponível | Number |
-| Capítulos encontrados | Number |
-| Side stories | Number |
-| Lacunas | Text |
-| Status da contagem | Select |
-| Capítulo MangaUpdates | Number |
-| MangaUpdates | URL |
-| Temática | Multi-select |
-| Formato | Select |
-| Universo | Multi-select |
-| Picância | Select |
-| Interesse | Select |
+| Campo                       | Tipo         |
+| --------------------------- | ------------ |
+| Nome                        | Title        |
+| ID da obra                  | Number       |
+| Alias                       | Text         |
+| Status                      | Select       |
+| Nota                        | Select       |
+| Último lido                 | Number       |
+| Último capítulo disponível  | Number       |
+| Capítulos encontrados       | Number       |
+| Side stories                | Number       |
+| Lacunas                     | Text         |
+| Status da contagem          | Select       |
+| Capítulo MangaUpdates       | Number       |
+| MangaUpdates                | URL          |
+| Temática                    | Multi-select |
+| Formato                     | Select       |
+| Universo                    | Multi-select |
+| Picância                    | Select       |
+| Interesse                   | Select       |
 
 ### Formato
 
@@ -246,49 +256,26 @@ python scripts/scan.py
 A identificação não aceita automaticamente o primeiro resultado da busca,
 evitando confundir versões Manhwa, Novel e obras com nomes semelhantes.
 
-## CSV do MangaUpdates
+## MangaUpdates e CSV
 
-A opção 4 do menu busca IDs para as obras de
-`reports/integrations/buscaIds.json` em lotes de 10.
-A opção 5 executa a busca de dados e, quando a correspondência é segura, o
-detalhe da obra. Há um intervalo padrão de 3 segundos entre chamadas,
-tratamento de HTTP 429 com espera progressiva, cache e retomada automática.
+O processo funciona assim:
 
-O resultado fica em `reports/integrations/manhwateca_import.csv`, com as mesmas colunas da
-base do Notion, a coluna `ID da obra` e a coluna auxiliar
-`Correspondência API`. O progresso fica em
-`data/mangaupdates_progress.json`.
+1. **Opção 4:** busca os IDs e atualiza
+   `reports/integrations/buscaIds.json`.
+2. Revise no JSON os itens com `Status: Revisar`.
+3. **Opção 5:** consulta os IDs confirmados e atualiza
+   `reports/integrations/manhwateca_import.csv`.
 
-Casos ambíguos ou não encontrados permanecem no CSV para revisão, sem escolher
-um ID automaticamente. Para executar uma quantidade menor pelo terminal:
+As consultas são feitas em lotes de 10, com intervalo de 3 segundos. O
+processo pode ser retomado sem repetir as obras já concluídas.
 
-```bash
-python scripts/mangaupdates.py --generate-csv --delay 3 --limit 10
-```
+A opção 5 preserva os campos preenchidos manualmente no CSV, como `Interesse`,
+`Status` e `Nota`.
 
-Para preencher os IDs pelo terminal:
+A opção 6 simula a atualização do Notion antes de pedir confirmação. Ela
+atualiza somente páginas existentes.
 
-```bash
-python scripts/mangaupdates.py \
-  --fill-ids reports/integrations/buscaIds.json \
-  --delay 3 \
-  --limit 10
-```
-
-Cada obra recebe uma lista `IDs` com os candidatos, título, tipo, ano, URL,
-descrição de até 734 caracteres e pontuação. O campo `ID` só é preenchido quando o melhor resultado supera o
-limite de confiança e está suficientemente distante do segundo colocado.
-Variações de título são comparadas por palavras e similaridade textual.
-Resultados duvidosos recebem `Status: Revisar`. O arquivo é salvo depois de
-cada busca e pode ser retomado executando o mesmo comando novamente.
-Para atualizar candidatos já marcados para revisão, use também
-`--retry-review`.
-
-A opção 6 primeiro simula a atualização do Notion e pede uma segunda
-confirmação antes de aplicar. Ela atualiza somente páginas já existentes e
-nunca cria obras a partir do CSV.
-
-## Organização de relatórios
+## Organização dos relatórios
 
 ```text
 reports/
@@ -315,8 +302,6 @@ reports/
 - Hiato
 - Dropado
 - Quero ler
-
----
 
 ## Nota
 
