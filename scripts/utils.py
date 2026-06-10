@@ -154,11 +154,49 @@ def extract_highest_side_story(filename: str) -> int:
     return max(chapters)
 
 
+def extract_chapter_range(filename: str, side_story=False) -> set[int]:
+    extractor = (
+        extract_side_story_numbers
+        if side_story
+        else extract_chapter_numbers
+    )
+    numbers = extractor(filename)
+    if not numbers:
+        return set()
+    if len(numbers) == 1:
+        return {numbers[0]}
+
+    start, end = numbers[0], numbers[1]
+    if end < start:
+        start, end = end, start
+    return set(range(start, end + 1))
+
+
+def compact_number_ranges(numbers: set[int]) -> list[str]:
+    if not numbers:
+        return []
+
+    ordered = sorted(numbers)
+    ranges = []
+    start = previous = ordered[0]
+    for number in ordered[1:]:
+        if number == previous + 1:
+            previous = number
+            continue
+        ranges.append(str(start) if start == previous else f"{start}-{previous}")
+        start = previous = number
+    ranges.append(str(start) if start == previous else f"{start}-{previous}")
+    return ranges
+
+
 def scan_chapters(manga_path: Path) -> dict:
-    main_caps = 0
-    side_caps = 0
+    main_numbers = set()
+    side_numbers = set()
+    main_occurrences = defaultdict(list)
+    side_occurrences = defaultdict(list)
     chapter_files = 0
     side_files = 0
+    unparsed_files = []
 
     for file in manga_path.iterdir():
         if not file.is_file():
@@ -168,20 +206,65 @@ def scan_chapters(manga_path: Path) -> dict:
             continue
 
         if is_side_story(file.name):
-            side_chapter = extract_highest_side_story(file.name)
-            if side_chapter > 0:
+            numbers = extract_chapter_range(file.name, side_story=True)
+            if numbers:
                 side_files += 1
-                side_caps = max(side_caps, side_chapter)
+                side_numbers.update(numbers)
+                for number in numbers:
+                    side_occurrences[number].append(file.name)
+            else:
+                unparsed_files.append(file.name)
         else:
-            chapter = extract_highest_chapter(file.name)
-            if chapter > 0:
+            numbers = extract_chapter_range(file.name)
+            if numbers:
                 chapter_files += 1
-                main_caps = max(main_caps, chapter)
+                main_numbers.update(numbers)
+                for number in numbers:
+                    main_occurrences[number].append(file.name)
+            else:
+                unparsed_files.append(file.name)
+
+    main_caps = max(main_numbers, default=0)
+    side_caps = max(side_numbers, default=0)
+    missing_main = (
+        set(range(1, main_caps + 1)) - main_numbers
+        if main_caps
+        else set()
+    )
+    duplicate_main = {
+        number: files
+        for number, files in main_occurrences.items()
+        if len(files) > 1
+    }
+    duplicate_side = {
+        number: files
+        for number, files in side_occurrences.items()
+        if len(files) > 1
+    }
+
+    issues = []
+    if missing_main:
+        issues.append("lacunas")
+    if duplicate_main or duplicate_side:
+        issues.append("sobreposições")
+    if unparsed_files:
+        issues.append("arquivos não interpretados")
+    if not main_numbers and side_numbers:
+        issues.append("somente side stories")
 
     return {
         "main_caps": main_caps,
         "side_caps": side_caps,
         "total_caps": main_caps,
+        "chapters_found": len(main_numbers),
+        "side_stories_found": len(side_numbers),
+        "missing_chapters": sorted(missing_main),
+        "missing_ranges": compact_number_ranges(missing_main),
+        "duplicate_chapters": duplicate_main,
+        "duplicate_side_stories": duplicate_side,
+        "unparsed_files": sorted(unparsed_files),
+        "count_status": "Revisar" if issues else "OK",
+        "count_issues": issues,
         "chapter_files": chapter_files,
         "side_files": side_files,
     }

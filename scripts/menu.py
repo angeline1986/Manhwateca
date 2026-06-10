@@ -29,20 +29,20 @@ MENU = f"""
   {TITLE_COLOR}1. 📄 Padronização dos arquivos{RESET_COLOR}
      Verifica ou aplica a padronização das pastas e capítulos.
 
-  {TITLE_COLOR}2. 📝 Registrar ajustes da revisão{RESET_COLOR}
-     Salva críticas e correções pendentes em reports/review_notes.md.
+  {TITLE_COLOR}2. 📚 Organização alfabética{RESET_COLOR}
+     Aplica a organização das pastas ou executa os testes do projeto.
 
-  {TITLE_COLOR}3. 📚 Aplicar organização alfabética{RESET_COLOR}
-     Move as pastas para os grupos alfabéticos após confirmação.
-
-  {TITLE_COLOR}4. 🔄 Sincronização com Notion{RESET_COLOR}
+  {TITLE_COLOR}3. 🔄 Sincronização com Notion{RESET_COLOR}
      Cataloga a biblioteca, simula ou aplica a sincronização.
 
-  {TITLE_COLOR}5. 🚀 Executar fluxo completo{RESET_COLOR}
-     Gera os relatórios, atualiza o catálogo e simula o sync.
+  {TITLE_COLOR}4. 🌐 Executar APIs MangaUpdates e gerar CSV{RESET_COLOR}
+     Busca e detalha as obras com delay, cache e retomada automática.
 
-  {TITLE_COLOR}6. 🧹 Executar testes{RESET_COLOR}
-     Verifica automaticamente as principais regras do projeto.
+  {TITLE_COLOR}5. 📥 Atualizar Notion com dados do CSV{RESET_COLOR}
+     Atualiza páginas existentes após simulação e confirmação.
+
+  {TITLE_COLOR}6. 🚀 Executar fluxo completo{RESET_COLOR}
+     Gera os relatórios, atualiza o catálogo e simula o sync.
 
   {EXIT_COLOR}0. ❌ Sair{RESET_COLOR}
 """
@@ -64,7 +64,8 @@ def run_command(arguments):
 def generate_reports():
     organize_ok = run_command(["scripts/organize.py"])
     rename_ok = run_command(["scripts/rename_files.py"])
-    return organize_ok and rename_ok
+    audit_ok = run_command(["scripts/chapter_audit.py"])
+    return organize_ok and rename_ok and audit_ok
 
 
 def standardization_menu():
@@ -78,6 +79,9 @@ def standardization_menu():
         print(f"  {TITLE_COLOR}2. ✏️ Aplicar padronização dos arquivos{RESET_COLOR}")
         print("     Renomeia os capítulos conforme a prévia após confirmação.")
         print()
+        print(f"  {TITLE_COLOR}3. 📝 Registrar ajustes da revisão{RESET_COLOR}")
+        print("     Salva críticas e correções pendentes para revisão manual.")
+        print()
         print(f"  {EXIT_COLOR}0. ↩ Voltar{RESET_COLOR}")
         option = input("\nEscolha uma opção: ").strip()
 
@@ -85,10 +89,12 @@ def standardization_menu():
             return generate_reports()
         if option == "2":
             return apply_file_names()
+        if option == "3":
+            return register_review_note()
         if option == "0":
             return True
 
-        print("\nOpção inválida. Escolha 0, 1 ou 2.")
+        print("\nOpção inválida. Escolha 0, 1, 2 ou 3.")
 
 
 def run_full_flow():
@@ -96,7 +102,10 @@ def run_full_flow():
         ("Preview de organização", ["scripts/organize.py"]),
         ("Preview de renomeação", ["scripts/rename_files.py"]),
         ("Catálogo da biblioteca", ["scripts/scan.py"]),
-        ("Simulação do Notion", ["scripts/sync.py"]),
+        (
+            "Simulação do próximo lote do Notion",
+            ["scripts/sync.py", "--simulate-batch", "--batch-size", "25"],
+        ),
     ]
 
     for label, command in steps:
@@ -108,9 +117,10 @@ def run_full_flow():
     return True
 
 
-def confirm_sync():
-    print("\nEsta opção altera páginas no Notion.")
-    print("  1. Aplicar sincronização")
+def confirm_sync_batch():
+    print("\nEsta opção importa até 25 obras novas.")
+    print("As próximas obras são escolhidas em ordem alfabética.")
+    print("  1. Importar próximo lote de 25 obras")
     print("  2. Cancelar")
     confirmation = input("Escolha uma opção: ").strip()
 
@@ -118,7 +128,7 @@ def confirm_sync():
         print("\nOperação cancelada.")
         return False
 
-    return run_command(["scripts/sync.py", "--apply"])
+    return run_command(["scripts/sync.py", "--apply-batch", "--batch-size", "25"])
 
 
 def notion_menu():
@@ -128,11 +138,17 @@ def notion_menu():
         print(f"  {TITLE_COLOR}1. 🔍 Catalogar biblioteca{RESET_COLOR}")
         print("     Lê as obras e capítulos e atualiza data/mangas.json.")
         print()
-        print(f"  {TITLE_COLOR}2. 🔄 Simular sincronização com Notion{RESET_COLOR}")
-        print("     Mostra quais páginas seriam criadas ou atualizadas.")
+        print(f"  {TITLE_COLOR}2. 🔄 Simular próximo lote no Notion{RESET_COLOR}")
+        print("     Mostra as próximas 25 obras e quantas ainda ficarão pendentes.")
         print()
-        print(f"  {TITLE_COLOR}3. ✅ Aplicar sincronização com Notion{RESET_COLOR}")
-        print("     Cria e atualiza páginas após confirmação.")
+        print(f"  {TITLE_COLOR}3. ✅ Importar próximo lote no Notion{RESET_COLOR}")
+        print("     Cria até 25 obras ausentes sem duplicar as já importadas.")
+        print()
+        print(f"  {TITLE_COLOR}4. 🌐 Atualizar dados do MangaUpdates{RESET_COLOR}")
+        print("     Consulta somente as obras com ID confirmado na configuração.")
+        print()
+        print(f"  {TITLE_COLOR}5. ♻️ Atualizar páginas já importadas{RESET_COLOR}")
+        print("     Atualiza campos e contagens sem criar novas páginas.")
         print()
         print(f"  {EXIT_COLOR}0. ↩ Voltar{RESET_COLOR}")
         option = input("\nEscolha uma opção: ").strip()
@@ -140,13 +156,21 @@ def notion_menu():
         if option == "1":
             return run_command(["scripts/scan.py"])
         if option == "2":
-            return run_command(["scripts/sync.py"])
+            return run_command(
+                ["scripts/sync.py", "--simulate-batch", "--batch-size", "25"]
+            )
         if option == "3":
-            return confirm_sync()
+            return confirm_sync_batch()
+        if option == "4":
+            if not run_command(["scripts/mangaupdates.py"]):
+                return False
+            return run_command(["scripts/scan.py"])
+        if option == "5":
+            return run_command(["scripts/sync.py", "--update-existing"])
         if option == "0":
             return True
 
-        print("\nOpção inválida. Escolha 0, 1, 2 ou 3.")
+        print("\nOpção inválida. Escolha 0, 1, 2, 3, 4 ou 5.")
 
 
 def confirm_library_change(label, action_label, command):
@@ -168,6 +192,36 @@ def apply_organization():
         "Aplicar organização alfabética",
         ["scripts/organize.py", "--apply"],
     )
+
+
+def organization_menu():
+    while True:
+        print("\nORGANIZAÇÃO ALFABÉTICA")
+        print()
+        print(f"  {TITLE_COLOR}1. 📚 Aplicar organização alfabética{RESET_COLOR}")
+        print("     Move as pastas para os grupos alfabéticos após confirmação.")
+        print()
+        print(f"  {TITLE_COLOR}2. 🧹 Executar testes{RESET_COLOR}")
+        print("     Verifica automaticamente as principais regras do projeto.")
+        print()
+        print(f"  {EXIT_COLOR}0. ↩ Voltar{RESET_COLOR}")
+        option = input("\nEscolha uma opção: ").strip()
+
+        if option == "1":
+            return apply_organization()
+        if option == "2":
+            return run_command([
+                "-m",
+                "unittest",
+                "discover",
+                "-s",
+                "tests",
+                "-v",
+            ])
+        if option == "0":
+            return True
+
+        print("\nOpção inválida. Escolha 0, 1 ou 2.")
 
 
 def apply_file_names():
@@ -205,6 +259,29 @@ def register_review_note():
     return True
 
 
+def confirm_csv_notion_update():
+    print("\nEsta opção atualiza páginas existentes usando o CSV.")
+    print("Nenhuma página nova será criada.")
+    print("  1. Atualizar Notion com reports/manhwateca_import.csv")
+    print("  2. Cancelar")
+    confirmation = input("Escolha uma opção: ").strip()
+    if confirmation != "1":
+        print("\nOperação cancelada.")
+        return False
+
+    if not run_command(["scripts/notion_csv.py"]):
+        return False
+
+    print("\nA simulação foi concluída.")
+    print("  1. Aplicar as atualizações")
+    print("  2. Cancelar")
+    confirmation = input("Escolha uma opção: ").strip()
+    if confirmation != "1":
+        print("\nAplicação cancelada.")
+        return False
+    return run_command(["scripts/notion_csv.py", "--apply"])
+
+
 def pause():
     input("\nPressione Enter para voltar ao menu...")
 
@@ -212,13 +289,16 @@ def pause():
 def main():
     actions = {
         "1": standardization_menu,
-        "2": register_review_note,
-        "3": apply_organization,
-        "4": notion_menu,
-        "5": run_full_flow,
-        "6": lambda: run_command(
-            ["-m", "unittest", "discover", "-s", "tests", "-v"]
-        ),
+        "2": organization_menu,
+        "3": notion_menu,
+        "4": lambda: run_command([
+            "scripts/mangaupdates.py",
+            "--generate-csv",
+            "--delay",
+            "3",
+        ]),
+        "5": confirm_csv_notion_update,
+        "6": run_full_flow,
     }
 
     while True:

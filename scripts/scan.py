@@ -16,6 +16,7 @@ from utils import (
 load_dotenv()
 
 OUTPUT_FILE = Path("data/mangas.json")
+MANGAUPDATES_CACHE = Path("data/mangaupdates.json")
 
 GROUP_FOLDERS = {
     "0-9",
@@ -88,6 +89,17 @@ def find_manga_folders(root: Path) -> list[Path]:
     return manga_folders
 
 
+def load_mangaupdates_cache(path=MANGAUPDATES_CACHE):
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8") as file:
+        data = json.load(file)
+    return {
+        get_canonical_manga_name(title).casefold(): metadata
+        for title, metadata in data.items()
+    }
+
+
 def scan_mangas() -> list[dict]:
     manga_root = get_required_path_env("MANGA_ROOT")
 
@@ -95,6 +107,7 @@ def scan_mangas() -> list[dict]:
         raise FileNotFoundError(f"Pasta não encontrada: {manga_root}")
 
     mangas = []
+    external_cache = load_mangaupdates_cache()
 
     manga_folders = find_manga_folders(manga_root)
 
@@ -103,7 +116,7 @@ def scan_mangas() -> list[dict]:
 
         manga_name = get_canonical_manga_name(manga_folder.name)
 
-        mangas.append({
+        manga = {
             "nome": manga_name,
             "alias": [],
             "status": "Quero ler",
@@ -113,13 +126,44 @@ def scan_mangas() -> list[dict]:
             "main_caps": chapter_data["main_caps"],
             "side_caps": chapter_data["side_caps"],
             "total_caps": chapter_data["total_caps"],
+            "chapters_found": chapter_data["chapters_found"],
+            "side_stories_found": chapter_data["side_stories_found"],
+            "missing_chapters": chapter_data["missing_chapters"],
+            "missing_ranges": chapter_data["missing_ranges"],
+            "count_status": chapter_data["count_status"],
+            "count_issues": chapter_data["count_issues"],
+            "unparsed_files": chapter_data["unparsed_files"],
 
             "chapter_files": chapter_data["chapter_files"],
             "side_files": chapter_data["side_files"],
 
             "cover": get_cover_file(manga_folder),
             "path": str(manga_folder),
-        })
+        }
+        external = external_cache.get(manga_name.casefold())
+        if external:
+            manga.update({
+                "formato": external.get("format"),
+                "universo": external.get("universe", []),
+                "mangaupdates_id": external.get("series_id"),
+                "mangaupdates_url": external.get("url"),
+                "mangaupdates_latest_chapter": external.get("latest_chapter"),
+                "mangaupdates_status": external.get("status"),
+                "mangaupdates_completed": external.get("completed"),
+                "mangaupdates_genres": external.get("genres", []),
+                "mangaupdates_categories": external.get("categories", []),
+            })
+            external_chapter = external.get("latest_chapter")
+            if (
+                external_chapter is not None
+                and external_chapter != manga["main_caps"]
+            ):
+                manga["count_status"] = "Divergência externa"
+                manga["count_issues"] = [
+                    *manga["count_issues"],
+                    "MangaUpdates divergente",
+                ]
+        mangas.append(manga)
 
     mangas = sorted(mangas, key=lambda item: item["nome"].lower())
 

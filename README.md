@@ -69,21 +69,20 @@ numéricas `1. Aplicar` e `2. Cancelar`.
 
 | Opção | Ação |
 |---|---|
-| 1 | Abre o submenu para verificar ou aplicar a padronização dos arquivos. |
-| 2 | Registra críticas e correções pendentes em `reports/review_notes.md`. |
-| 3 | Move as pastas para os grupos alfabéticos após confirmação numérica. |
-| 4 | Abre o submenu para catalogar, simular ou aplicar a sincronização com o Notion. |
-| 5 | Gera os relatórios, atualiza o catálogo e simula o sync com o Notion. |
-| 6 | Executa os testes automatizados do projeto. |
+| 1 | Abre o submenu para verificar, aplicar ou registrar ajustes da padronização. |
+| 2 | Move as pastas para os grupos alfabéticos após confirmação numérica. |
+| 3 | Abre o submenu para catalogar, simular ou aplicar a sincronização com o Notion. |
+| 4 | Gera os relatórios, atualiza o catálogo e simula o sync com o Notion. |
+| 5 | Executa os testes automatizados do projeto. |
 
 ### Ordem recomendada
 
 1. Abra a opção 1, gere os relatórios e revise `reports/organize_preview.html` e
    `reports/rename_preview.html`.
-2. Registre problemas encontrados pela opção 2.
+2. No mesmo submenu, registre problemas encontrados para revisão manual.
 3. Resolva as observações pendentes.
-4. Use a opção 3 para organizar as pastas e o submenu 1 para renomear arquivos.
-5. Abra a opção 4 e gere o catálogo já padronizado.
+4. Use a opção 2 para organizar as pastas e o submenu 1 para renomear arquivos.
+5. Abra a opção 3 e gere o catálogo já padronizado.
 6. No mesmo submenu, simule e aplique o sync.
 
 ### 1. Escanear a biblioteca
@@ -133,20 +132,44 @@ Cada movimentação aplicada é registrada em
 ### 3. Simular o sync com Notion
 
 ```bash
-python scripts/sync.py
+python scripts/sync.py --simulate-batch
 ```
 
-O sync consulta as páginas existentes pelo campo `Nome`: obras novas são
-marcadas para criação e obras existentes para atualização. Páginas duplicadas
-no Notion são bloqueadas.
+Essa opção mostra somente as próximas 25 obras que formam o lote seguinte e
+quantas continuarão pendentes. O sync consulta as páginas existentes pelo
+campo `Nome`; páginas duplicadas no Notion são bloqueadas. A comparação ignora diferenças de acentuação,
+maiúsculas, pontuação e sublinhados, e também considera aliases e nomes
+anteriores configurados.
 
 ### 4. Aplicar o sync
 
-Depois de revisar a simulação:
+Depois de revisar a simulação, importe o próximo lote de 25 obras:
 
 ```bash
-python scripts/sync.py --apply
+python scripts/sync.py --apply-batch
 ```
+
+Em cada execução, o programa consulta o Notion e ordena alfabeticamente as
+obras ainda ausentes. Ele cria somente as próximas 25 e informa quantas
+restaram. As páginas que já existem são reconhecidas pelo título e não são
+criadas nem alteradas novamente. Se uma execução for interrompida, basta repetir a opção:
+as páginas concluídas serão detectadas e o lote continuará das próximas.
+
+O estado reconciliado com o Notion é salvo em
+`reports/notion_import_status.json`. O arquivo informa as obras importadas,
+as importadas no lote atual, as que ainda estão pendentes e eventuais
+duplicidades. Ele é atualizado também durante a simulação.
+
+O tamanho pode ser alterado no terminal, por exemplo:
+
+```bash
+python scripts/sync.py --apply-batch --batch-size 10
+```
+
+A aplicação integral continua disponível com `--apply`, mas é bloqueada
+quando mais de 25% do catálogo seria criado. A exceção
+`--apply --allow-mass-create` deve ser usada somente para uma importação
+integral intencional.
 
 ## Estrutura esperada da biblioteca
 
@@ -163,12 +186,85 @@ Mangas/
 | Campo | Tipo |
 |---|---|
 | Nome | Title |
+| ID da obra | Number |
 | Alias | Text |
 | Status | Select |
 | Nota | Select |
 | Último lido | Number |
-| Total caps | Number |
-| Path | URL |
+| Último capítulo disponível | Number |
+| Capítulos encontrados | Number |
+| Side stories | Number |
+| Lacunas | Text |
+| Status da contagem | Select |
+| Capítulo MangaUpdates | Number |
+| MangaUpdates | URL |
+| Temática | Multi-select |
+| Formato | Select |
+| Universo | Multi-select |
+| Picância | Select |
+
+### Formato
+
+- Manhwa
+- Novel
+- Manhwa e Novel
+
+### Picância
+
+- 💕 Baixa
+- 💫 Média
+- 🔥 Alta
+- 🔥🔥🔥 Intenso
+
+`Temática` reúne assuntos da obra, como regressão, poder, sobrevivência,
+mistério, sobrenatural e drama psicológico. `Universo` classifica ambientações
+e subgêneros, como fantasia, omegaverse e xianxia.
+
+## Auditoria de capítulos
+
+O catálogo diferencia o maior capítulo disponível da quantidade efetivamente
+encontrada nos arquivos. A opção de relatórios gera
+`reports/chapter_audit.html`, contendo lacunas, intervalos sobrepostos,
+arquivos não interpretados, side stories e divergências com o MangaUpdates.
+
+IDs confirmados do MangaUpdates ficam em `config/mangaupdates.json`. A busca
+pode ser usada para localizar candidatos:
+
+```bash
+python scripts/mangaupdates.py --search "Nome da obra"
+```
+
+Depois de confirmar o ID e adicioná-lo à configuração, atualize o cache:
+
+```bash
+python scripts/mangaupdates.py
+python scripts/scan.py
+```
+
+A identificação não aceita automaticamente o primeiro resultado da busca,
+evitando confundir versões Manhwa, Novel e obras com nomes semelhantes.
+
+## CSV do MangaUpdates
+
+A opção 4 do menu executa a busca e, quando a correspondência é segura, o
+detalhe da obra. Há um intervalo padrão de 3 segundos entre chamadas,
+tratamento de HTTP 429 com espera progressiva, cache e retomada automática.
+
+O resultado fica em `reports/manhwateca_import.csv`, com as mesmas colunas da
+base do Notion, a coluna `ID da obra` e a coluna auxiliar
+`Correspondência API`. O progresso fica em
+`data/mangaupdates_progress.json`.
+
+Casos ambíguos ou não encontrados permanecem no CSV para revisão, sem escolher
+um ID automaticamente. Para executar uma quantidade menor pelo terminal:
+
+```bash
+python scripts/mangaupdates.py --generate-csv --delay 3 --limit 10
+```
+
+A opção 5 primeiro simula a atualização do Notion e pede uma segunda
+confirmação antes de aplicar. Ela atualiza somente páginas já existentes e
+nunca cria obras a partir do CSV.
 
 ## Status
 

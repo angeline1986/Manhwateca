@@ -192,6 +192,25 @@ class RenameFilesTests(unittest.TestCase):
 
         self.assertEqual("My Jumbo Babe cap 40.pdf", result)
 
+    def test_removes_leading_zeros_from_side_story_range(self):
+        result = normalize_chapter_name(
+            "A Seducao da Serpente side story 04-07.pdf",
+            "A Seducao da Serpente",
+        )
+
+        self.assertEqual(
+            "A Seducao da Serpente side story 4-7.pdf",
+            result,
+        )
+
+    def test_removes_redundant_capitulo_cap(self):
+        result = normalize_chapter_name(
+            "My Perfect Omega capitulo cap 1-7.pdf",
+            "My Perfect Omega",
+        )
+
+        self.assertEqual("My Perfect Omega cap 1-7.pdf", result)
+
     def test_apply_handles_case_only_rename(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

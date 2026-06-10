@@ -27,20 +27,22 @@ class MenuTests(unittest.TestCase):
     @patch("menu.run_command")
     @patch("builtins.input", return_value="cancelar")
     def test_sync_requires_exact_confirmation(self, _input, run_command):
-        result = menu.confirm_sync()
+        result = menu.confirm_sync_batch()
 
         self.assertFalse(result)
         run_command.assert_not_called()
 
     @patch("menu.run_command")
     @patch("builtins.input", return_value="1")
-    def test_confirmed_sync_uses_apply(self, _input, run_command):
+    def test_confirmed_sync_uses_batch(self, _input, run_command):
         run_command.return_value = True
 
-        result = menu.confirm_sync()
+        result = menu.confirm_sync_batch()
 
         self.assertTrue(result)
-        run_command.assert_called_once_with(["scripts/sync.py", "--apply"])
+        run_command.assert_called_once_with(
+            ["scripts/sync.py", "--apply-batch", "--batch-size", "25"]
+        )
 
     @patch("menu.run_command")
     @patch("builtins.input", return_value="1")
@@ -60,17 +62,19 @@ class MenuTests(unittest.TestCase):
         result = menu.notion_menu()
 
         self.assertTrue(result)
-        run_command.assert_called_once_with(["scripts/sync.py"])
+        run_command.assert_called_once_with(
+            ["scripts/sync.py", "--simulate-batch", "--batch-size", "25"]
+        )
 
-    @patch("menu.confirm_sync")
+    @patch("menu.confirm_sync_batch")
     @patch("builtins.input", return_value="3")
-    def test_notion_submenu_can_apply(self, _input, confirm_sync):
-        confirm_sync.return_value = True
+    def test_notion_submenu_can_apply(self, _input, confirm_sync_batch):
+        confirm_sync_batch.return_value = True
 
         result = menu.notion_menu()
 
         self.assertTrue(result)
-        confirm_sync.assert_called_once_with()
+        confirm_sync_batch.assert_called_once_with()
 
     @patch("menu.generate_reports")
     @patch("builtins.input", return_value="1")
@@ -96,6 +100,18 @@ class MenuTests(unittest.TestCase):
         self.assertTrue(result)
         apply_file_names.assert_called_once_with()
 
+    @patch("menu.register_review_note")
+    @patch("builtins.input", return_value="3")
+    def test_standardization_submenu_can_register_note(
+        self, _input, register_review_note
+    ):
+        register_review_note.return_value = True
+
+        result = menu.standardization_menu()
+
+        self.assertTrue(result)
+        register_review_note.assert_called_once_with()
+
     @patch("menu.run_command")
     @patch("builtins.input", return_value="1")
     def test_organization_requires_confirmation(self, _input, run_command):
@@ -105,6 +121,35 @@ class MenuTests(unittest.TestCase):
 
         self.assertTrue(result)
         run_command.assert_called_once_with(["scripts/organize.py", "--apply"])
+
+    @patch("menu.apply_organization")
+    @patch("builtins.input", return_value="1")
+    def test_organization_submenu_can_apply(
+        self, _input, apply_organization
+    ):
+        apply_organization.return_value = True
+
+        result = menu.organization_menu()
+
+        self.assertTrue(result)
+        apply_organization.assert_called_once_with()
+
+    @patch("menu.run_command")
+    @patch("builtins.input", return_value="2")
+    def test_organization_submenu_can_run_tests(self, _input, run_command):
+        run_command.return_value = True
+
+        result = menu.organization_menu()
+
+        self.assertTrue(result)
+        run_command.assert_called_once_with([
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-v",
+        ])
 
     @patch("menu.run_command")
     @patch("builtins.input", return_value="1")
@@ -134,6 +179,34 @@ class MenuTests(unittest.TestCase):
             )
 
     @patch("menu.run_command")
+    @patch("builtins.input", side_effect=["1", "1"])
+    def test_csv_notion_update_simulates_before_apply(self, _input, run_command):
+        run_command.return_value = True
+
+        result = menu.confirm_csv_notion_update()
+
+        self.assertTrue(result)
+        self.assertEqual(
+            [
+                unittest.mock.call(["scripts/notion_csv.py"]),
+                unittest.mock.call(["scripts/notion_csv.py", "--apply"]),
+            ],
+            run_command.call_args_list,
+        )
+
+    @patch("menu.run_command")
+    @patch("builtins.input", side_effect=["1", "2"])
+    def test_csv_notion_update_can_cancel_after_simulation(
+        self, _input, run_command
+    ):
+        run_command.return_value = True
+
+        result = menu.confirm_csv_notion_update()
+
+        self.assertFalse(result)
+        run_command.assert_called_once_with(["scripts/notion_csv.py"])
+
+    @patch("menu.run_command")
     def test_full_flow_stops_after_failure(self, run_command):
         run_command.side_effect = [True, False]
 
@@ -152,7 +225,12 @@ class MenuTests(unittest.TestCase):
                 unittest.mock.call(["scripts/organize.py"]),
                 unittest.mock.call(["scripts/rename_files.py"]),
                 unittest.mock.call(["scripts/scan.py"]),
-                unittest.mock.call(["scripts/sync.py"]),
+                unittest.mock.call([
+                    "scripts/sync.py",
+                    "--simulate-batch",
+                    "--batch-size",
+                    "25",
+                ]),
             ],
             run_command.call_args_list,
         )

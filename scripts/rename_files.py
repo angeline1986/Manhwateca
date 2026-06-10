@@ -92,6 +92,12 @@ def normalize_chapter_name(filename, manga_name=None):
     )
     new_stem = re.sub(r"cap[ií]tulo", "cap", new_stem, flags=re.IGNORECASE)
     new_stem = re.sub(r"\bcaps?\b", "cap", new_stem, flags=re.IGNORECASE)
+    new_stem = re.sub(
+        r"\bcap\s+cap\b",
+        "cap",
+        new_stem,
+        flags=re.IGNORECASE,
+    )
 
     new_stem = re.sub(
         r"cap\s*(\d+(?:\.\d+)?)\s*(?:=|_|ao|a|–|—)\s*(\d+(?:\.\d+)?)",
@@ -132,6 +138,17 @@ def normalize_chapter_name(filename, manga_name=None):
         r"\1-\2",
         new_stem,
         flags=re.IGNORECASE,
+    )
+    new_stem = re.sub(
+        r"\b(cap|side story)\s+0+(\d)",
+        r"\1 \2",
+        new_stem,
+        flags=re.IGNORECASE,
+    )
+    new_stem = re.sub(
+        r"(?<=-)\s*0+(\d)",
+        r"\1",
+        new_stem,
     )
     new_stem = re.sub(r"\s*┇\s*", " - ", new_stem)
     new_stem = re.sub(
