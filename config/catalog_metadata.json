@@ -1,0 +1,642 @@
+{
+  "2020": {
+    "nome_oficial": "2020",
+    "alias": "2020",
+    "interesse": "Legalzin"
+  },
+  "A Agenda Alfa": {
+    "nome_oficial": "Alpha Agenda",
+    "alias": "A Agenda Alfa",
+    "interesse": "Fila de Espera"
+  },
+  "A Gansa Dourada do Alfa": {
+    "nome_oficial": "The Golden Goose Dressed as Alpha Boss",
+    "alias": "A Gansa Dourada do Alfa",
+    "interesse": "Fila de Espera"
+  },
+  "A Seducao da Serpente": {
+    "nome_oficial": "Sacred Serpent's Seduction",
+    "alias": "A Sedução da Serpente Sagrada",
+    "interesse": "Legalzin"
+  },
+  "Accidental_Baby": {
+    "nome_oficial": "Accidental Baby",
+    "alias": "Bebê Acidental",
+    "interesse": "Fila de Espera"
+  },
+  "Alfa Incomum": {
+    "nome_oficial": "Uncommon Alpha",
+    "alias": "O Alfa Incomum",
+    "interesse": "Fila de Espera"
+  },
+  "Alphega": {
+    "nome_oficial": "Alphega",
+    "alias": "Alphega",
+    "interesse": "Lendo"
+  },
+  "Além das memórias": {
+    "nome_oficial": "Beyond Memories",
+    "alias": "Além das Memórias",
+    "interesse": "Despriorizado"
+  },
+  "Amor em órbita": {
+    "nome_oficial": "Love in Orbit",
+    "alias": "Amor em Órbita",
+    "interesse": "Fila de Espera"
+  },
+  "An Abyss": {
+    "nome_oficial": "An Abyss",
+    "alias": "Um Abismo",
+    "interesse": "Fila de Espera"
+  },
+  "Antidote": {
+    "nome_oficial": "Antidote",
+    "alias": "Antídoto",
+    "interesse": "Fila de Espera"
+  },
+  "Aposentadoria, não amor": {
+    "nome_oficial": "Retirement? No, Love",
+    "alias": "Aposentadoria? Não, Amor",
+    "interesse": "Fila de Espera"
+  },
+  "Apostando em você": {
+    "nome_oficial": "Betting on You",
+    "alias": "Apostando em Você",
+    "interesse": "Aguardando"
+  },
+  "Areia molhada": {
+    "nome_oficial": "Wet Sand",
+    "alias": "Areia Molhada",
+    "interesse": "Despriorizado"
+  },
+  "Até logo rei": {
+    "nome_oficial": "See You Later, King",
+    "alias": "Até Logo, Rei",
+    "interesse": "Fila de Espera"
+  },
+  "Bad Apple": {
+    "nome_oficial": "Bad Apple",
+    "alias": "Maçã Podre / Bad Apple",
+    "interesse": "Topzera"
+  },
+  "Biscuit": {
+    "nome_oficial": "Biscuit",
+    "alias": "Biscoito",
+    "interesse": "Fila de Espera"
+  },
+  "Bittersour": {
+    "nome_oficial": "Bittersour",
+    "alias": "Agridoce / Bittersour",
+    "interesse": "Fila de Espera"
+  },
+  "Blaze Out": {
+    "nome_oficial": "Blaze Out",
+    "alias": "Blaze Out",
+    "interesse": "Fila de Espera"
+  },
+  "Blood_link": {
+    "nome_oficial": "Blood Link",
+    "alias": "Elo de Sangue",
+    "interesse": "Finalizado"
+  },
+  "BloodBound": {
+    "nome_oficial": "BloodBound",
+    "alias": "Um Guia Mais Espesso que Sangue",
+    "interesse": "Aguardando"
+  },
+  "Blossoms of the White Night": {
+    "nome_oficial": "Blossoms of the White Night",
+    "alias": "Flores da Noite Branca",
+    "interesse": "Topzera"
+  },
+  "Capitão romântico querido": {
+    "nome_oficial": "Dear Romantic Captain",
+    "alias": "Querido Capitão Romântico",
+    "interesse": "Fila de Espera"
+  },
+  "Cativeiro de Ian": {
+    "nome_oficial": "Ian's Cage",
+    "alias": "A Gaiola de Ian",
+    "interesse": "Lendo"
+  },
+  "Codename Anastasia": {
+    "nome_oficial": "Codename Anastasia",
+    "alias": "Codinome Anastasia",
+    "interesse": "Lendo"
+  },
+  "Cogumelo pequeno": {
+    "nome_oficial": "Little Mushroom",
+    "alias": "Pequeno Cogumelo",
+    "interesse": "Lendo"
+  },
+  "Companheiro do destino": {
+    "nome_oficial": "Fated Mate",
+    "alias": "Comperinho do Destino",
+    "interesse": "Fila de Espera"
+  },
+  "Coracao Racer": {
+    "nome_oficial": "Heart Racer",
+    "alias": "Heart Racer / Coração Veloz",
+    "interesse": "Despriorizado"
+  },
+  "Cry me a river - Afogado pelo desespero": {
+    "nome_oficial": "Cry Me a River",
+    "alias": "Afogado Pelo Desespero",
+    "interesse": "Legalzin"
+  },
+  "Dark Fall Side": {
+    "nome_oficial": "Dark Fall",
+    "alias": "Queda Sombria / Dark Fall",
+    "interesse": "Aguardando"
+  },
+  "Dash": {
+    "nome_oficial": "Dash",
+    "alias": "Dash",
+    "interesse": "Fila de Espera"
+  },
+  "Day and Night": {
+    "nome_oficial": "Day and Night",
+    "alias": "Dia e Noite",
+    "interesse": "Fila de Espera"
+  },
+  "Dazzling Breath": {
+    "nome_oficial": "Dazzling Breath",
+    "alias": "Sopro Ofuscante",
+    "interesse": "Fila de Espera"
+  },
+  "Deep Pivot": {
+    "nome_oficial": "Deep Pivot",
+    "alias": "Pivô Profundo",
+    "interesse": "Lendo"
+  },
+  "Desire if you can": {
+    "nome_oficial": "Desire if You Can",
+    "alias": "Deseje se Puder",
+    "interesse": "Fila de Espera"
+  },
+  "Devoured_The Serpent": {
+    "nome_oficial": "Devoured by the Serpent",
+    "alias": "Devorado pela Serpente",
+    "interesse": "Lendo"
+  },
+  "Dias De Juventude": {
+    "nome_oficial": "Salad Days",
+    "alias": "Dias de Juventude",
+    "interesse": "Aguardando"
+  },
+  "Do you still like me": {
+    "nome_oficial": "Do You Still Like Me",
+    "alias": "Você Ainda Gosta de Mim?",
+    "interesse": "Fila de Espera"
+  },
+  "Dog and bird": {
+    "nome_oficial": "Dog and Bird",
+    "alias": "Cão e Pássaro",
+    "interesse": "Topzera"
+  },
+  "Don’t Touch me": {
+    "nome_oficial": "Don’t Touch Me",
+    "alias": "Não Me Toque",
+    "interesse": "Fila de Espera"
+  },
+  "Drive's high": {
+    "nome_oficial": "Drive's High",
+    "alias": "Drive's High",
+    "interesse": "Fila de Espera"
+  },
+  "Eighteen's bed": {
+    "nome_oficial": "Eighteen's Bed",
+    "alias": "A Cama dos Dezoito",
+    "interesse": "Aguardando"
+  },
+  "Escândalo Privado": {
+    "nome_oficial": "Private Scandal",
+    "alias": "Escândalo Privado",
+    "interesse": "Fila de Espera"
+  },
+  "Eye of the Storm": {
+    "nome_oficial": "Eye of the Storm",
+    "alias": "O Olho da Tempestade",
+    "interesse": "Fila de Espera"
+  },
+  "Fated but Flawed": {
+    "nome_oficial": "Fated but Flawed",
+    "alias": "Destinados, mas Imperfeitos",
+    "interesse": "Lendo"
+  },
+  "Flashlight": {
+    "nome_oficial": "Flashlight",
+    "alias": "Flash de Luz",
+    "interesse": "Topzera"
+  },
+  "Fora da pista": {
+    "nome_oficial": "Off Track",
+    "alias": "Fora da Pista",
+    "interesse": "Fila de Espera"
+  },
+  "Forest Sea": {
+    "nome_oficial": "Forest Sea",
+    "alias": "Mar de Floresta",
+    "interesse": "Fila de Espera"
+  },
+  "Fouls Start": {
+    "nome_oficial": "Fouls Start",
+    "alias": "Início Falho / Foul Start",
+    "interesse": "Topzera"
+  },
+  "Good night_Liang Xiao": {
+    "nome_oficial": "Good Night, Liang Xiao",
+    "alias": "Boa Noite, Liang Xiao",
+    "interesse": "Fila de Espera"
+  },
+  "Hit Me Hard": {
+    "nome_oficial": "Hit Me Hard",
+    "alias": "Bata com Força",
+    "interesse": "Fila de Espera"
+  },
+  "Honey_Bear": {
+    "nome_oficial": "Honey Bear",
+    "alias": "Ursinho de Mel",
+    "interesse": "Despriorizado"
+  },
+  "How to Win Over Your Crush": {
+    "nome_oficial": "How to Win Over Your Crush",
+    "alias": "Como Conquistar Seu Crush",
+    "interesse": "Fila de Espera"
+  },
+  "I Can See Your Stats": {
+    "nome_oficial": "I Can See Your Stats",
+    "alias": "Eu Consigo Ver Seus Status",
+    "interesse": "Fila de Espera"
+  },
+  "I want to be Cupid": {
+    "nome_oficial": "I Want to be Cupid",
+    "alias": "Quero Ser o Cupido",
+    "interesse": "Fila de Espera"
+  },
+  "Illusion": {
+    "nome_oficial": "Illusion",
+    "alias": "Ilusão",
+    "interesse": "Fila de Espera"
+  },
+  "Inverta o roteiro": {
+    "nome_oficial": "Reverse the Script",
+    "alias": "Inverta o Roteiro",
+    "interesse": "Aguardando"
+  },
+  "June Noir": {
+    "nome_oficial": "June Noir",
+    "alias": "Junho Negro",
+    "interesse": "Fila de Espera"
+  },
+  "Kiss Me If You Can": {
+    "nome_oficial": "Kiss Me If You Can",
+    "alias": "Beije-me se Puder",
+    "interesse": "Topzera"
+  },
+  "Loja de Conveniência Perigosa": {
+    "nome_oficial": "Dangerous Convenience Store",
+    "alias": "Loja de Conveniência Perigosa",
+    "interesse": "Fila de Espera"
+  },
+  "Love Gym": {
+    "nome_oficial": "Love Gym",
+    "alias": "Academia do Amor",
+    "interesse": "Fila de Espera"
+  },
+  "Love Under the Influence": {
+    "nome_oficial": "Love Under the Influence",
+    "alias": "Amor sob Influência",
+    "interesse": "Fila de Espera"
+  },
+  "Low tide - Mare Baixa no crepusculo": {
+    "nome_oficial": "Low Tide in Twilight",
+    "alias": "Maré Baixa no Crepúsculo",
+    "interesse": "Lendo"
+  },
+  "Mad Dog": {
+    "nome_oficial": "Mad Dog",
+    "alias": "Cão Raivoso / Mad Dog",
+    "interesse": "Lendo"
+  },
+  "Mais estranhos que amigo": {
+    "nome_oficial": "Stranger Than Friends",
+    "alias": "Mais Estranhos que Amigos",
+    "interesse": "Fila de Espera"
+  },
+  "Men’s Wear Store and “Her Royal Highness": {
+    "nome_oficial": "Men’s Wear Store and “Her Royal Highness”",
+    "alias": "Loja de Roupas Masc. e Sua Alteza Real",
+    "interesse": "Fila de Espera"
+  },
+  "Miss you before and after divorce": {
+    "nome_oficial": "Miss You Before and After Divorce",
+    "alias": "Sinto sua Falta Antes e Depois do Divórcio",
+    "interesse": "Despriorizado"
+  },
+  "Mo Dao Zu Shi": {
+    "nome_oficial": "Mo Dao Zu Shi",
+    "alias": "O Fundador da Cultivação Demoníaca",
+    "interesse": "Topzera"
+  },
+  "Mordidas de Amor": {
+    "nome_oficial": "Love Bites",
+    "alias": "Mordidas de Amor",
+    "interesse": "Fila de Espera"
+  },
+  "Mousetrap": {
+    "nome_oficial": "Mousetrap",
+    "alias": "Ratoeira / Mousetrap",
+    "interesse": "Lendo"
+  },
+  "Muhyeok e Naui": {
+    "nome_oficial": "Muhyeok and Naui",
+    "alias": "Meu Vizinho Irresistível",
+    "interesse": "Legalzin"
+  },
+  "Muito tempo sem te ver, idiota": {
+    "nome_oficial": "Long Time No See, Idiot",
+    "alias": "Muito Tempo Sem te Ver, Idiota",
+    "interesse": "Fila de Espera"
+  },
+  "My Bad Boss": {
+    "nome_oficial": "My Bad Boss",
+    "alias": "Meu Chefe Malvado",
+    "interesse": "Fila de Espera"
+  },
+  "My Jumbo Babe": {
+    "nome_oficial": "My Jumbo Babe",
+    "alias": "Meu Bebê Gigante",
+    "interesse": "Fila de Espera"
+  },
+  "My little poplar": {
+    "nome_oficial": "Little White Poplar",
+    "alias": "Pequeno Álamo Branco (My Little Poplar)",
+    "interesse": "Fila de Espera"
+  },
+  "My Perfect Omega": {
+    "nome_oficial": "My Perfect Omega",
+    "alias": "Meu Ômega Perfeito",
+    "interesse": "Aguardando"
+  },
+  "Nerd_Project": {
+    "nome_oficial": "Nerd Project",
+    "alias": "Projeto Nerd",
+    "interesse": "Despriorizado"
+  },
+  "Noite de Londres": {
+    "nome_oficial": "London Night",
+    "alias": "Noite de Londres",
+    "interesse": "Fila de Espera"
+  },
+  "O Amor Chega em uma Noite de Lua": {
+    "nome_oficial": "Love Comes in a Moonlight",
+    "alias": "O Amor Chega ao Luar",
+    "interesse": "Fila de Espera"
+  },
+  "O caçador quer viver em silencio": {
+    "nome_oficial": "The Hunter Wants to Live in Silence",
+    "alias": "O Caçador Quer Viver em Silêncio",
+    "interesse": "Legalzin"
+  },
+  "O diretor que me paga o jantar": {
+    "nome_oficial": "The Director Who Buys Me Dinner",
+    "alias": "O Diretor que me Paga o Jantar",
+    "interesse": "Fila de Espera"
+  },
+  "O Sacerdote Sonhando com o Dragão": {
+    "nome_oficial": "The Priest Dreaming of a Dragon",
+    "alias": "O Sacerdote que Sonha com um Dragão",
+    "interesse": "Fila de Espera"
+  },
+  "O Tritão Preso no Meu Lago": {
+    "nome_oficial": "The Merman Trapped in My Lake",
+    "alias": "O Tritão Preso no Meu Lago",
+    "interesse": "Fila de Espera"
+  },
+  "Omertà": {
+    "nome_oficial": "Omertà",
+    "alias": "Omertà",
+    "interesse": "Fila de Espera"
+  },
+  "Our Sunny Days": {
+    "nome_oficial": "Our Sunny Days",
+    "alias": "Nossos Dias Ensolarados",
+    "interesse": "Topzera"
+  },
+  "Passion": {
+    "nome_oficial": "Passion",
+    "alias": "Paixão / Passion",
+    "interesse": "Legalzin"
+  },
+  "Perigo Orientador": {
+    "nome_oficial": "Guiding Hazard",
+    "alias": "Perigo de Guia",
+    "interesse": "Fila de Espera"
+  },
+  "Permission Of Bite": {
+    "nome_oficial": "Permission of Bite",
+    "alias": "Permissão para Morder",
+    "interesse": "Fila de Espera"
+  },
+  "Pinóquio no armário": {
+    "nome_oficial": "Pinocchio in the Closet",
+    "alias": "Pinóquio no Armário",
+    "interesse": "Aguardando"
+  },
+  "Pizza_Delivery": {
+    "nome_oficial": "Pizza Delivery Guy and the Gold Palace",
+    "alias": "O Entregador de Pizza e o Palácio de Ouro",
+    "interesse": "Legalzin"
+  },
+  "Plaything The Grand Duke's": {
+    "nome_oficial": "Plaything: The Grand Duke’s",
+    "alias": "O Brinquedo do Grão-Duque",
+    "interesse": "Fila de Espera"
+  },
+  "Raga": {
+    "nome_oficial": "Passion: Raga",
+    "alias": "Paixão: Raga",
+    "interesse": "Legalzin"
+  },
+  "Red Thread Quest": {
+    "nome_oficial": "Red Thread Quest",
+    "alias": "A Busca pelo Fio Vermelho",
+    "interesse": "Fila de Espera"
+  },
+  "Reluctant Encounters": {
+    "nome_oficial": "Reluctant Encounters",
+    "alias": "Encontros Relutantes / Negative Love",
+    "interesse": "Despriorizado"
+  },
+  "Rose Garden": {
+    "nome_oficial": "Rose Garden",
+    "alias": "Jardim de Rosas",
+    "interesse": "Aguardando"
+  },
+  "Roses and Champagne": {
+    "nome_oficial": "Roses and Champagne",
+    "alias": "Rosas e Champanhe",
+    "interesse": "Fila de Espera"
+  },
+  "Run to Red": {
+    "nome_oficial": "Run to Red",
+    "alias": "Corra para o Vermelho",
+    "interesse": "Fila de Espera"
+  },
+  "Salt Society": {
+    "nome_oficial": "Salt Society",
+    "alias": "Sociedade do Sal",
+    "interesse": "Fila de Espera"
+  },
+  "Second Half": {
+    "nome_oficial": "Second Half",
+    "alias": "Segundo Tempo",
+    "interesse": "Fila de Espera"
+  },
+  "See You Never": {
+    "nome_oficial": "See You Never",
+    "alias": "Até Nunca Mais",
+    "interesse": "Despriorizado"
+  },
+  "Segredo para Conquistar o Amor Não Correspondido": {
+    "nome_oficial": "The Secret to Capturing Unrequited Love",
+    "alias": "Segredo para Conquistar um Amor Não Corresp.",
+    "interesse": "Fila de Espera"
+  },
+  "Segunda-feira Salvador": {
+    "nome_oficial": "Monday's Savior",
+    "alias": "O Salvador de Segunda-feira",
+    "interesse": "Fila de Espera"
+  },
+  "Semantic Error": {
+    "nome_oficial": "Semantic Error",
+    "alias": "Erro Semântico",
+    "interesse": "Despriorizado"
+  },
+  "Shutline": {
+    "nome_oficial": "Shutline",
+    "alias": "Linha de Corte / Shutline",
+    "interesse": "Fila de Espera"
+  },
+  "Sign": {
+    "nome_oficial": "Sign",
+    "alias": "Sinal / Sign",
+    "interesse": "Despriorizado"
+  },
+  "Sketch": {
+    "nome_oficial": "Sketch",
+    "alias": "Esboço / Sketch",
+    "interesse": "Despriorizado"
+  },
+  "Snake Hole": {
+    "nome_oficial": "Snake Hole",
+    "alias": "Covil da Serpente",
+    "interesse": "Despriorizado"
+  },
+  "Substituto": {
+    "nome_oficial": "Substitute",
+    "alias": "Substituto",
+    "interesse": "Fila de Espera"
+  },
+  "Sujo Alto": {
+    "nome_oficial": "Dirty High",
+    "alias": "Sujo Alto",
+    "interesse": "Aguardando"
+  },
+  "Ternura do Inverno": {
+    "nome_oficial": "Winter's Tenderness",
+    "alias": "Ternura do Inverno",
+    "interesse": "Fila de Espera"
+  },
+  "The Dokkaebi’s Soul Qi Bride": {
+    "nome_oficial": "Dokkaebi’s Soul Qi Bride",
+    "alias": "A Noiva da Alma Qi do Dokkaebi",
+    "interesse": "Fila de Espera"
+  },
+  "The Pawn's Revenge": {
+    "nome_oficial": "The Pawn's Revenge",
+    "alias": "A Vingança do Peão",
+    "interesse": "Fila de Espera"
+  },
+  "The Positions": {
+    "nome_oficial": "The Positions",
+    "alias": "As Posições",
+    "interesse": "Fila de Espera"
+  },
+  "The Search For Alosha": {
+    "nome_oficial": "The Search for Alosha",
+    "alias": "A Busca por Alosha",
+    "interesse": "Aguardando"
+  },
+  "The Taming": {
+    "nome_oficial": "The Taming",
+    "alias": "A Domesticação",
+    "interesse": "Lendo"
+  },
+  "The Thread Never Burned": {
+    "nome_oficial": "The Thread Never Burned",
+    "alias": "O Fio que Nunca Queimou",
+    "interesse": "Despriorizado"
+  },
+  "Touch Up": {
+    "nome_oficial": "Touch Up",
+    "alias": "Retoque / Touch Up",
+    "interesse": "Despriorizado"
+  },
+  "Turning": {
+    "nome_oficial": "Turning",
+    "alias": "Turning",
+    "interesse": "Fila de Espera"
+  },
+  "Um homem casado": {
+    "nome_oficial": "A Married Man",
+    "alias": "Um Homem Casado",
+    "interesse": "Fila de Espera"
+  },
+  "Uma rosa negra floresce": {
+    "nome_oficial": "A Black Rose Blooms",
+    "alias": "Uma Rosa Negra Floresce",
+    "interesse": "Despriorizado"
+  },
+  "Undercover Darling": {
+    "nome_oficial": "Undercover Darling",
+    "alias": "Querido Disfarçado",
+    "interesse": "Despriorizado"
+  },
+  "Vivarium": {
+    "nome_oficial": "Vivarium",
+    "alias": "Vivário",
+    "interesse": "Fila de Espera"
+  },
+  "When life gives you tomatoes": {
+    "nome_oficial": "Life Gives You Tomatoes",
+    "alias": "Quando a Vida te Dá Tomates",
+    "interesse": "Fila de Espera"
+  },
+  "WinterField": {
+    "nome_oficial": "WinterField",
+    "alias": "WinterField",
+    "interesse": "Legalzin"
+  },
+  "XX Cheio de Segredos": {
+    "nome_oficial": "Full of Secrets",
+    "alias": "XX Cheio de Segredos",
+    "interesse": "Finalizado"
+  },
+  "Yang Ilwoo": {
+    "nome_oficial": "Yang Ilwoo",
+    "alias": "Yang Ilwoo",
+    "interesse": "Fila de Espera"
+  },
+  "You are so lovely": {
+    "nome_oficial": "You Are So Lovely",
+    "alias": "Você é Tão Adorável",
+    "interesse": "Fila de Espera"
+  },
+  "Ônibus do amor_love shuttle": {
+    "nome_oficial": "Love Shuttle",
+    "alias": "Ônibus do Amor",
+    "interesse": "Aguardando"
+  }
+}

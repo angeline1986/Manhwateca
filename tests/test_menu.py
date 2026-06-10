@@ -11,6 +11,26 @@ import menu
 
 
 class MenuTests(unittest.TestCase):
+    def test_main_menu_has_separate_mangaupdates_options(self):
+        self.assertIn("4. 🔎 MangaUpdates - API busca ID", menu.MENU)
+        self.assertIn(
+            "5. 🌐 MangaUpdates - API busca dados e gera CSV",
+            menu.MENU,
+        )
+        self.assertIn("7. 🚀 Executar fluxo completo", menu.MENU)
+        self.assertEqual(
+            menu.MANGAUPDATES_ID_COMMAND,
+            [
+                "scripts/mangaupdates.py",
+                "--fill-ids",
+                "reports/integrations/buscaIds.json",
+                "--delay",
+                "3",
+                "--limit",
+                "10",
+            ],
+        )
+
     @patch("menu.subprocess.run")
     def test_run_command_uses_project_root(self, run):
         run.return_value.returncode = 0

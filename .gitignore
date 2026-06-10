@@ -6,6 +6,9 @@ __pycache__/
 data/mangas.json
 data/cache.json
 
-reports/
+reports/*
+!reports/integrations/
+reports/integrations/*
+!reports/integrations/buscaIds.json
 
 .DS_Store

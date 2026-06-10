@@ -203,6 +203,7 @@ Mangas/
 | Formato | Select |
 | Universo | Multi-select |
 | Picância | Select |
+| Interesse | Select |
 
 ### Formato
 
@@ -247,7 +248,9 @@ evitando confundir versões Manhwa, Novel e obras com nomes semelhantes.
 
 ## CSV do MangaUpdates
 
-A opção 4 do menu executa a busca e, quando a correspondência é segura, o
+A opção 4 do menu busca IDs para as obras de
+`reports/integrations/buscaIds.json` em lotes de 10.
+A opção 5 executa a busca de dados e, quando a correspondência é segura, o
 detalhe da obra. Há um intervalo padrão de 3 segundos entre chamadas,
 tratamento de HTTP 429 com espera progressiva, cache e retomada automática.
 
@@ -263,7 +266,25 @@ um ID automaticamente. Para executar uma quantidade menor pelo terminal:
 python scripts/mangaupdates.py --generate-csv --delay 3 --limit 10
 ```
 
-A opção 5 primeiro simula a atualização do Notion e pede uma segunda
+Para preencher os IDs pelo terminal:
+
+```bash
+python scripts/mangaupdates.py \
+  --fill-ids reports/integrations/buscaIds.json \
+  --delay 3 \
+  --limit 10
+```
+
+Cada obra recebe uma lista `IDs` com os candidatos, título, tipo, ano, URL,
+descrição de até 734 caracteres e pontuação. O campo `ID` só é preenchido quando o melhor resultado supera o
+limite de confiança e está suficientemente distante do segundo colocado.
+Variações de título são comparadas por palavras e similaridade textual.
+Resultados duvidosos recebem `Status: Revisar`. O arquivo é salvo depois de
+cada busca e pode ser retomado executando o mesmo comando novamente.
+Para atualizar candidatos já marcados para revisão, use também
+`--retry-review`.
+
+A opção 6 primeiro simula a atualização do Notion e pede uma segunda
 confirmação antes de aplicar. Ela atualiza somente páginas já existentes e
 nunca cria obras a partir do CSV.
 
@@ -276,6 +297,7 @@ reports/
 │   ├── organize_preview.html
 │   └── rename_preview.html
 ├── integrations/
+│   ├── buscaIds.json
 │   ├── manhwateca_import.csv
 │   └── notion_import_status.json
 ├── logs/

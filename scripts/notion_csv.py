@@ -91,6 +91,8 @@ def build_properties(row):
         }
     if row.get("Picância"):
         properties["Picância"] = {"select": {"name": row["Picância"]}}
+    if row.get("Interesse"):
+        properties["Interesse"] = {"select": {"name": row["Interesse"]}}
     return properties
 
 
@@ -125,7 +127,16 @@ def update_from_csv(notion, database_id, rows, apply=False):
     summary = {"updated": 0, "missing": [], "duplicates": []}
     for row in rows:
         name = row.get("Nome", "").strip()
-        matches = existing.get(normalize_title(name), [])
+        candidates = {normalize_title(name)}
+        candidates.update(
+            normalize_title(alias)
+            for alias in split_values(row.get("Alias"))
+        )
+        matches_by_id = {}
+        for candidate in candidates:
+            for page in existing.get(candidate, []):
+                matches_by_id[page["id"]] = page
+        matches = list(matches_by_id.values())
         if not matches:
             summary["missing"].append(name)
             print(f"[AUSENTE NO NOTION] {name}")

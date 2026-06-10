@@ -52,6 +52,7 @@ class NotionCsvTests(unittest.TestCase):
         self.assertNotIn("Formato", properties)
         self.assertNotIn("Universo", properties)
         self.assertNotIn("Picância", properties)
+        self.assertNotIn("Interesse", properties)
 
     def test_update_from_csv_never_creates_missing_pages(self):
         pages = FakePages()
@@ -71,3 +72,27 @@ class NotionCsvTests(unittest.TestCase):
         self.assertEqual(1, summary["updated"])
         self.assertEqual(["Beta"], summary["missing"])
         self.assertFalse(pages.updated)
+
+    def test_update_matches_existing_page_by_portuguese_alias(self):
+        pages = FakePages()
+        notion = SimpleNamespace(databases=FakeDatabases(), pages=pages)
+
+        summary = notion_csv.update_from_csv(
+            notion,
+            "database",
+            [{"Nome": "Official Alpha", "Alias": "Alpha"}],
+            apply=False,
+        )
+
+        self.assertEqual(1, summary["updated"])
+        self.assertEqual([], summary["missing"])
+
+    def test_interesse_is_mapped_when_present(self):
+        properties = notion_csv.build_properties({
+            "Interesse": "Muito alto",
+        })
+
+        self.assertEqual(
+            {"name": "Muito alto"},
+            properties["Interesse"]["select"],
+        )

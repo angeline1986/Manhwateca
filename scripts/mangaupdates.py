@@ -7,6 +7,7 @@ import time
 import unicodedata
 import urllib.error
 import urllib.request
+from difflib import SequenceMatcher
 from pathlib import Path
 
 
@@ -16,10 +17,12 @@ CACHE_FILE = Path("data/mangaupdates.json")
 CATALOG_FILE = Path("data/mangas.json")
 CSV_FILE = Path("reports/integrations/manhwateca_import.csv")
 PROGRESS_FILE = Path("data/mangaupdates_progress.json")
+METADATA_FILE = Path("config/catalog_metadata.json")
 CSV_COLUMNS = [
-    "Nome",
     "ID da obra",
+    "Nome",
     "Alias",
+    "Interesse",
     "Status",
     "Nota",
     "Último lido",
@@ -109,6 +112,148 @@ def choose_search_result(title, response):
     if not exact:
         return None, "Não encontrada"
     return None, "Ambígua"
+
+
+def title_tokens(value):
+    ignored = {
+        "a", "an", "as", "at", "by", "for", "from", "in", "into",
+        "of", "on", "the", "to", "with",
+    }
+    return {
+        token
+        for token in normalize_title(value).split()
+        if token not in ignored
+    }
+
+
+def title_similarity(source, candidate):
+    normalized_source = normalize_title(source)
+    normalized_candidate = normalize_title(candidate)
+    sequence_score = SequenceMatcher(
+        None,
+        normalized_source,
+        normalized_candidate,
+    ).ratio()
+    source_tokens = title_tokens(source)
+    candidate_tokens = title_tokens(candidate)
+    union = source_tokens | candidate_tokens
+    token_score = (
+        len(source_tokens & candidate_tokens) / len(union)
+        if union
+        else 0
+    )
+    containment = (
+        len(source_tokens & candidate_tokens) / len(source_tokens)
+        if source_tokens
+        else 0
+    )
+    return round(
+        max(sequence_score, token_score, containment * 0.9),
+        4,
+    )
+
+
+def truncate_text(value, limit=734):
+    value = " ".join((value or "").split())
+    if len(value) <= limit:
+        return value
+    return value[:limit - 1].rstrip() + "…"
+
+
+def rank_search_results(title, response):
+    candidates = []
+    seen_ids = set()
+    for position, result in enumerate(response.get("results", []), start=1):
+        record = result.get("record", {})
+        series_id = record.get("series_id")
+        if not series_id or series_id in seen_ids:
+            continue
+        seen_ids.add(series_id)
+        candidate_title = record.get("title") or result.get("hit_title") or ""
+        score = title_similarity(title, candidate_title)
+        if record.get("type") == "Manhwa":
+            score = min(1.0, score + 0.05)
+        candidates.append({
+            "id": series_id,
+            "titulo": candidate_title,
+            "tipo": record.get("type"),
+            "ano": record.get("year"),
+            "url": record.get("url"),
+            "descricao": truncate_text(record.get("description")),
+            "pontuacao": round(score, 4),
+            "posicao": position,
+        })
+    return sorted(
+        candidates,
+        key=lambda item: (-item["pontuacao"], item["posicao"]),
+    )
+
+
+def select_ranked_candidate(candidates, threshold=0.72, margin=0.08):
+    if not candidates:
+        return None, "Não encontrada"
+    best = candidates[0]
+    second_score = candidates[1]["pontuacao"] if len(candidates) > 1 else 0
+    if second_score >= 0.65:
+        return None, "Revisar"
+    if (
+        best["pontuacao"] >= threshold
+        and best["pontuacao"] - second_score >= margin
+    ):
+        return best, "Confirmado automaticamente"
+    return None, "Revisar"
+
+
+def load_id_searches(path):
+    with path.open("r", encoding="utf-8") as file:
+        data = json.load(file)
+    if not isinstance(data, list):
+        raise ValueError(f"Formato inválido em {path}: era esperada uma lista.")
+    for item in data:
+        if not isinstance(item, dict) or not item.get("Nome"):
+            raise ValueError("Cada item deve possuir o campo Nome.")
+    return data
+
+
+def fill_ids_file(
+    path,
+    delay=3.0,
+    limit=None,
+    per_page=10,
+    retry_review=False,
+):
+    items = load_id_searches(path)
+    processed = 0
+    for item in items:
+        if item.get("ID"):
+            continue
+        if item.get("Status") == "Revisar" and not retry_review:
+            continue
+        if limit is not None and processed >= limit:
+            break
+
+        name = item["Nome"].strip()
+        print(f"[BUSCAR ID] {name}")
+        response = search_series(name, per_page=per_page)
+        candidates = rank_search_results(name, response)
+        selected, status = select_ranked_candidate(candidates)
+        item["IDs"] = candidates
+        item["Status"] = status
+        if selected:
+            item["ID"] = selected["id"]
+            item["Nome encontrado"] = selected["titulo"]
+            print(
+                f"[CONFIRMADO] {selected['id']} | "
+                f"{selected['titulo']} | {selected['pontuacao']:.2f}"
+            )
+        else:
+            print(f"[REVISAR] {name}: {len(candidates)} candidato(s)")
+
+        save_json(path, items)
+        processed += 1
+        wait_between_requests(delay)
+
+    return items, processed
 
 
 def infer_format(details):
@@ -255,18 +400,23 @@ def join_values(values):
     return " | ".join(str(value) for value in values if value not in (None, ""))
 
 
-def build_csv_row(manga, external=None, progress=None):
+def build_csv_row(manga, external=None, progress=None, metadata=None):
     external = external or {}
     progress = progress or {}
-    aliases = list(manga.get("alias", []))
-    aliases.extend(external.get("associated_titles", []))
+    metadata = metadata or {}
+    if metadata.get("alias"):
+        aliases = [metadata["alias"]]
+    else:
+        aliases = list(manga.get("alias", []))
+        aliases.extend(external.get("associated_titles", []))
     aliases = list(dict.fromkeys(aliases))
     themes = manga.get("tematica") or external.get("genres", [])
     universe = manga.get("universo") or external.get("universe", [])
     return {
-        "Nome": manga["nome"],
+        "Nome": metadata.get("nome_oficial") or manga["nome"],
         "ID da obra": external.get("series_id", ""),
         "Alias": join_values(aliases),
+        "Interesse": metadata.get("interesse") or manga.get("interesse", ""),
         "Status": manga.get("status", ""),
         "Nota": manga.get("nota", ""),
         "Último lido": manga.get("ultimo_lido", ""),
@@ -285,7 +435,14 @@ def build_csv_row(manga, external=None, progress=None):
     }
 
 
-def write_csv(mangas, cache, progress, path=CSV_FILE):
+def write_csv(
+    mangas,
+    cache,
+    progress,
+    path=CSV_FILE,
+    metadata_path=METADATA_FILE,
+):
+    metadata = load_json_object(metadata_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(f"{path.suffix}.tmp")
     with temporary.open("w", encoding="utf-8-sig", newline="") as file:
@@ -298,6 +455,7 @@ def write_csv(mangas, cache, progress, path=CSV_FILE):
                     manga,
                     external=cache.get(title),
                     progress=progress.get(title),
+                    metadata=metadata.get(title),
                 )
             )
     temporary.replace(path)
@@ -338,6 +496,22 @@ def main():
         type=int,
         help="Limita a quantidade de obras processadas nesta execução.",
     )
+    parser.add_argument(
+        "--fill-ids",
+        type=Path,
+        help="Lê um JSON de obras e preenche IDs/candidatos da busca.",
+    )
+    parser.add_argument(
+        "--per-page",
+        type=int,
+        default=10,
+        help="Quantidade de candidatos por busca de ID (padrão: 10).",
+    )
+    parser.add_argument(
+        "--retry-review",
+        action="store_true",
+        help="Reprocessa itens marcados como Revisar.",
+    )
     args = parser.parse_args()
 
     try:
@@ -349,6 +523,28 @@ def main():
                     f"{record.get('series_id')} | {record.get('title')} | "
                     f"{record.get('type')} | {record.get('year')}"
                 )
+            return
+        if args.fill_ids:
+            if args.delay < 0:
+                raise SystemExit("--delay não pode ser negativo.")
+            if args.per_page < 1:
+                raise SystemExit("--per-page deve ser maior que zero.")
+            items, processed = fill_ids_file(
+                args.fill_ids,
+                delay=args.delay,
+                limit=args.limit,
+                per_page=args.per_page,
+                retry_review=args.retry_review,
+            )
+            confirmed = sum(bool(item.get("ID")) for item in items)
+            review = sum(item.get("Status") == "Revisar" for item in items)
+            pending = len(items) - confirmed - review
+            print()
+            print(f"Arquivo atualizado: {args.fill_ids}")
+            print(f"Processadas nesta execução: {processed}")
+            print(f"IDs confirmados: {confirmed}")
+            print(f"Para revisão: {review}")
+            print(f"Pendentes: {pending}")
             return
         if args.generate_csv:
             if args.delay < 0:

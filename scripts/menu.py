@@ -11,6 +11,23 @@ TITLE_COLOR = "\033[1;36m" if USE_COLOR else ""
 EXIT_COLOR = "\033[1;31m" if USE_COLOR else ""
 RESET_COLOR = "\033[0m" if USE_COLOR else ""
 
+MANGAUPDATES_ID_COMMAND = [
+    "scripts/mangaupdates.py",
+    "--fill-ids",
+    "reports/integrations/buscaIds.json",
+    "--delay",
+    "3",
+    "--limit",
+    "10",
+]
+
+MANGAUPDATES_CSV_COMMAND = [
+    "scripts/mangaupdates.py",
+    "--generate-csv",
+    "--delay",
+    "3",
+]
+
 BANNER = """
 ╔════════════════════════════════════════════════════════════════╗
 ║                         MANHWATECA                             ║
@@ -35,13 +52,16 @@ MENU = f"""
   {TITLE_COLOR}3. 🔄 Sincronização com Notion{RESET_COLOR}
      Cataloga a biblioteca, simula ou aplica a sincronização.
 
-  {TITLE_COLOR}4. 🌐 Executar APIs MangaUpdates e gerar CSV{RESET_COLOR}
-     Busca e detalha as obras com delay, cache e retomada automática.
+  {TITLE_COLOR}4. 🔎 MangaUpdates - API busca ID{RESET_COLOR}
+     Busca IDs no arquivo de integração, em lotes com delay e revisão.
 
-  {TITLE_COLOR}5. 📥 Atualizar Notion com dados do CSV{RESET_COLOR}
+  {TITLE_COLOR}5. 🌐 MangaUpdates - API busca dados e gera CSV{RESET_COLOR}
+     Busca detalhes, usa cache e gera o CSV de integração.
+
+  {TITLE_COLOR}6. 📥 Atualizar Notion com dados do CSV{RESET_COLOR}
      Atualiza páginas existentes após simulação e confirmação.
 
-  {TITLE_COLOR}6. 🚀 Executar fluxo completo{RESET_COLOR}
+  {TITLE_COLOR}7. 🚀 Executar fluxo completo{RESET_COLOR}
      Gera os relatórios, atualiza o catálogo e simula o sync.
 
   {EXIT_COLOR}0. ❌ Sair{RESET_COLOR}
@@ -291,14 +311,10 @@ def main():
         "1": standardization_menu,
         "2": organization_menu,
         "3": notion_menu,
-        "4": lambda: run_command([
-            "scripts/mangaupdates.py",
-            "--generate-csv",
-            "--delay",
-            "3",
-        ]),
-        "5": confirm_csv_notion_update,
-        "6": run_full_flow,
+        "4": lambda: run_command(MANGAUPDATES_ID_COMMAND),
+        "5": lambda: run_command(MANGAUPDATES_CSV_COMMAND),
+        "6": confirm_csv_notion_update,
+        "7": run_full_flow,
     }
 
     while True:
@@ -312,7 +328,7 @@ def main():
 
         action = actions.get(option)
         if action is None:
-            print("\nOpção inválida. Escolha um número de 0 a 6.")
+            print("\nOpção inválida. Escolha um número de 0 a 7.")
             pause()
             continue
 
