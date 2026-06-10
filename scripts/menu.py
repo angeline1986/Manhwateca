@@ -8,6 +8,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REVIEW_NOTES = PROJECT_ROOT / "reports" / "reviews" / "review_notes.md"
 USE_COLOR = sys.stdout.isatty() and "NO_COLOR" not in os.environ
 TITLE_COLOR = "\033[1;36m" if USE_COLOR else ""
+LOCAL_COLOR = "\033[1;36m" if USE_COLOR else ""
+API_COLOR = "\033[1;33m" if USE_COLOR else ""
+NOTION_COLOR = "\033[1;35m" if USE_COLOR else ""
+AUTOMATION_COLOR = "\033[1;32m" if USE_COLOR else ""
 EXIT_COLOR = "\033[1;31m" if USE_COLOR else ""
 RESET_COLOR = "\033[0m" if USE_COLOR else ""
 
@@ -32,40 +36,42 @@ MANGAUPDATES_CSV_COMMAND = [
 ]
 
 BANNER = """
-╔════════════════════════════════════════════════════════════════╗
-║                         MANHWATECA                             ║
-║                                                                ║
-║  Cataloga, organiza e sincroniza sua biblioteca de manhwas.    ║
-║                                                                ║
-║  Catálogo principal: data/mangas.json                          ║
-╚════════════════════════════════════════════════════════════════╝
+📖 MANHWATECA | Gestão e Sincronização
+📂 Catálogo: data/mangas.json
+────────────────────────────────────────────────
 """
 
 MENU = f"""
 📋 ESCOLHA UMA OPÇÃO:
 
-  ┌───────────── PRINCIPAL ─────────────┐
+  {LOCAL_COLOR}[ ETAPA 1: ORGANIZAÇÃO LOCAL ]{RESET_COLOR}
 
-  {TITLE_COLOR}1. 📄 Padronização dos arquivos{RESET_COLOR}
-     Verifica ou aplica a padronização das pastas e capítulos.
+  {LOCAL_COLOR}1. 📄 Padronização e Auditoria{RESET_COLOR}
+     Analisa pastas, capítulos e capas.
 
-  {TITLE_COLOR}2. 📚 Organização alfabética{RESET_COLOR}
-     Aplica a organização das pastas ou executa os testes do projeto.
+  {LOCAL_COLOR}2. 🔤 Organização Estrutural{RESET_COLOR}
+     Organiza as obras em grupos alfabéticos.
 
-  {TITLE_COLOR}3. 🔄 Sincronização com Notion{RESET_COLOR}
-     Cataloga a biblioteca, simula ou aplica a sincronização.
+  {API_COLOR}[ ETAPA 2: ENRIQUECIMENTO DE DADOS ]{RESET_COLOR}
 
-  {TITLE_COLOR}4. 🔎 MangaUpdates - API busca ID e popula buscaIds.json{RESET_COLOR}
-     Busca possíveis IDs das obras para confirmação.
+  {API_COLOR}3. 🔎 MangaUpdates: Localizar IDs{RESET_COLOR}
+     Busca IDs e atualiza buscaIds.json.
 
-  {TITLE_COLOR}5. 🌐 MangaUpdates - API busca dados e gera CSV{RESET_COLOR}
-     Usa os IDs confirmados para atualizar o CSV em lotes com delay.
+  {API_COLOR}4. 🌐 MangaUpdates: Atualizar CSV{RESET_COLOR}
+     Consulta os IDs confirmados e atualiza o CSV.
 
-  {TITLE_COLOR}6. 📥 Atualizar Notion com dados do CSV{RESET_COLOR}
-     Atualiza páginas existentes após simulação e confirmação.
+  {NOTION_COLOR}[ ETAPA 3: SINCRONIZAÇÃO COM NOTION ]{RESET_COLOR}
 
-  {TITLE_COLOR}7. 🚀 Executar fluxo completo{RESET_COLOR}
-     Gera os relatórios, atualiza o catálogo e simula o sync.
+  {NOTION_COLOR}5. 🔄 Sincronizar Catálogo{RESET_COLOR}
+     Cataloga os arquivos e cria páginas no Notion.
+
+  {NOTION_COLOR}6. 📥 Atualizar Metadados{RESET_COLOR}
+     Atualiza páginas existentes usando o CSV.
+
+  {AUTOMATION_COLOR}[ AUTOMAÇÃO ]{RESET_COLOR}
+
+  {AUTOMATION_COLOR}7. 🚀 Executar Fluxo Completo{RESET_COLOR}
+     Gera relatórios, cataloga e simula a sincronização.
 
   {EXIT_COLOR}0. ❌ Sair{RESET_COLOR}
 """
@@ -313,9 +319,9 @@ def main():
     actions = {
         "1": standardization_menu,
         "2": organization_menu,
-        "3": notion_menu,
-        "4": lambda: run_command(MANGAUPDATES_ID_COMMAND),
-        "5": lambda: run_command(MANGAUPDATES_CSV_COMMAND),
+        "3": lambda: run_command(MANGAUPDATES_ID_COMMAND),
+        "4": lambda: run_command(MANGAUPDATES_CSV_COMMAND),
+        "5": notion_menu,
         "6": confirm_csv_notion_update,
         "7": run_full_flow,
     }

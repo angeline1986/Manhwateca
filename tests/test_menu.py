@@ -11,15 +11,24 @@ import menu
 
 
 class MenuTests(unittest.TestCase):
+    def test_stage_colors_are_disabled_outside_terminal(self):
+        if not menu.USE_COLOR:
+            self.assertEqual("", menu.LOCAL_COLOR)
+            self.assertEqual("", menu.API_COLOR)
+            self.assertEqual("", menu.NOTION_COLOR)
+            self.assertEqual("", menu.AUTOMATION_COLOR)
+
     def test_main_menu_has_separate_mangaupdates_options(self):
         self.assertIn(
-            "4. 🔎 MangaUpdates - API busca ID e popula buscaIds.json",
+            "3. 🔎 MangaUpdates: Localizar IDs",
             menu.MENU,
         )
         self.assertIn(
-            "5. 🌐 MangaUpdates - API busca dados e gera CSV",
+            "4. 🌐 MangaUpdates: Atualizar CSV",
             menu.MENU,
         )
+        self.assertIn("5. 🔄 Sincronizar Catálogo", menu.MENU)
+        self.assertIn("6. 📥 Atualizar Metadados", menu.MENU)
         self.assertEqual(
             menu.MANGAUPDATES_CSV_COMMAND,
             [
@@ -32,7 +41,7 @@ class MenuTests(unittest.TestCase):
                 "10",
             ],
         )
-        self.assertIn("7. 🚀 Executar fluxo completo", menu.MENU)
+        self.assertIn("7. 🚀 Executar Fluxo Completo", menu.MENU)
         self.assertEqual(
             menu.MANGAUPDATES_ID_COMMAND,
             [

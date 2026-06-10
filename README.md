@@ -74,16 +74,16 @@ alfabética e a padronização dos arquivos, catalogar as obras e sincronizar co
 o Notion. Toda ação que altera a biblioteca ou o Notion apresenta as opções
 numéricas `1. Aplicar` e `2. Cancelar`.
 
-| Opção | Função                                                    |
-| :---: | --------------------------------------------------------- |
-|   1   | Verifica e aplica a padronização dos arquivos.             |
-|   2   | Organiza as pastas alfabeticamente ou executa os testes.   |
-|   3   | Cataloga e sincroniza a biblioteca com o Notion.           |
-|   4   | Busca IDs no MangaUpdates e atualiza `buscaIds.json`.      |
-|   5   | Consulta os IDs confirmados e atualiza o CSV.              |
-|   6   | Atualiza páginas existentes do Notion usando o CSV.        |
-|   7   | Executa o fluxo completo.                                  |
-|   0   | Encerra o programa.                                        |
+| Etapa | Opção | Função                                               |
+| ----- | :---: | ---------------------------------------------------- |
+| Local |   1   | Padroniza e audita pastas, capítulos e capas.        |
+| Local |   2   | Organiza as obras em grupos alfabéticos.             |
+| API   |   3   | Busca IDs e atualiza `buscaIds.json`.                |
+| API   |   4   | Consulta os IDs confirmados e atualiza o CSV.        |
+| Notion |   5   | Cataloga os arquivos e sincroniza com o Notion.     |
+| Notion |   6   | Atualiza páginas existentes usando o CSV.           |
+| Extra |   7   | Gera relatórios, cataloga e simula a sincronização.  |
+|       |   0   | Encerra o programa.                                  |
 
 ### Ordem recomendada
 
@@ -93,8 +93,9 @@ numéricas `1. Aplicar` e `2. Cancelar`.
 2. No mesmo submenu, registre problemas encontrados para revisão manual.
 3. Resolva as observações pendentes.
 4. Use a opção 2 para organizar as pastas e o submenu 1 para renomear arquivos.
-5. Abra a opção 3 e gere o catálogo já padronizado.
-6. No mesmo submenu, simule e aplique o sync.
+5. Use as opções 3 e 4 para localizar IDs e atualizar o CSV.
+6. Abra a opção 5 para catalogar, simular e aplicar a sincronização.
+7. Use a opção 6 para enviar ao Notion os metadados do CSV.
 
 ### 1. Escanear a biblioteca
 
@@ -260,16 +261,16 @@ evitando confundir versões Manhwa, Novel e obras com nomes semelhantes.
 
 O processo funciona assim:
 
-1. **Opção 4:** busca os IDs e atualiza
+1. **Opção 3:** busca os IDs e atualiza
    `reports/integrations/buscaIds.json`.
 2. Revise no JSON os itens com `Status: Revisar`.
-3. **Opção 5:** consulta os IDs confirmados e atualiza
+3. **Opção 4:** consulta os IDs confirmados e atualiza
    `reports/integrations/manhwateca_import.csv`.
 
 As consultas são feitas em lotes de 10, com intervalo de 3 segundos. O
 processo pode ser retomado sem repetir as obras já concluídas.
 
-A opção 5 preserva os campos preenchidos manualmente no CSV, como `Interesse`,
+A opção 4 preserva os campos preenchidos manualmente no CSV, como `Interesse`,
 `Status` e `Nota`.
 
 A opção 6 simula a atualização do Notion antes de pedir confirmação. Ela
