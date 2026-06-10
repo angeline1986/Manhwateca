@@ -14,7 +14,7 @@ API_BASE = "https://api.mangaupdates.com/v1"
 MAPPINGS_FILE = Path("config/mangaupdates.json")
 CACHE_FILE = Path("data/mangaupdates.json")
 CATALOG_FILE = Path("data/mangas.json")
-CSV_FILE = Path("reports/manhwateca_import.csv")
+CSV_FILE = Path("reports/integrations/manhwateca_import.csv")
 PROGRESS_FILE = Path("data/mangaupdates_progress.json")
 CSV_COLUMNS = [
     "Nome",

@@ -27,8 +27,8 @@ MANGA_ROOT = get_required_path_env("MANGA_ROOT")
 
 DRY_RUN = True
 
-REPORT_PATH = Path("reports/organize_preview.html")
-HISTORY_PATH = Path("reports/organize_history.jsonl")
+REPORT_PATH = Path("reports/audits/organize_preview.html")
+HISTORY_PATH = Path("reports/logs/organize_history.jsonl")
 
 
 GROUPS = {

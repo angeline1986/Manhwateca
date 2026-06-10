@@ -77,8 +77,9 @@ numéricas `1. Aplicar` e `2. Cancelar`.
 
 ### Ordem recomendada
 
-1. Abra a opção 1, gere os relatórios e revise `reports/organize_preview.html` e
-   `reports/rename_preview.html`.
+1. Abra a opção 1, gere os relatórios e revise
+   `reports/audits/organize_preview.html` e
+   `reports/audits/rename_preview.html`.
 2. No mesmo submenu, registre problemas encontrados para revisão manual.
 3. Resolva as observações pendentes.
 4. Use a opção 2 para organizar as pastas e o submenu 1 para renomear arquivos.
@@ -127,7 +128,7 @@ Títulos muito longos podem ser abreviados em `config/titles.json`. O nome
 configurado é usado na pasta, nos capítulos e no catálogo enviado ao Notion.
 
 Cada movimentação aplicada é registrada em
-`reports/organize_history.jsonl`, com data, origem, destino e resultado.
+`reports/logs/organize_history.jsonl`, com data, origem, destino e resultado.
 
 ### 3. Simular o sync com Notion
 
@@ -156,7 +157,7 @@ criadas nem alteradas novamente. Se uma execução for interrompida, basta repet
 as páginas concluídas serão detectadas e o lote continuará das próximas.
 
 O estado reconciliado com o Notion é salvo em
-`reports/notion_import_status.json`. O arquivo informa as obras importadas,
+`reports/integrations/notion_import_status.json`. O arquivo informa as obras importadas,
 as importadas no lote atual, as que ainda estão pendentes e eventuais
 duplicidades. Ele é atualizado também durante a simulação.
 
@@ -224,7 +225,7 @@ e subgêneros, como fantasia, omegaverse e xianxia.
 
 O catálogo diferencia o maior capítulo disponível da quantidade efetivamente
 encontrada nos arquivos. A opção de relatórios gera
-`reports/chapter_audit.html`, contendo lacunas, intervalos sobrepostos,
+`reports/audits/chapter_audit.html`, contendo lacunas, intervalos sobrepostos,
 arquivos não interpretados, side stories e divergências com o MangaUpdates.
 
 IDs confirmados do MangaUpdates ficam em `config/mangaupdates.json`. A busca
@@ -250,7 +251,7 @@ A opção 4 do menu executa a busca e, quando a correspondência é segura, o
 detalhe da obra. Há um intervalo padrão de 3 segundos entre chamadas,
 tratamento de HTTP 429 com espera progressiva, cache e retomada automática.
 
-O resultado fica em `reports/manhwateca_import.csv`, com as mesmas colunas da
+O resultado fica em `reports/integrations/manhwateca_import.csv`, com as mesmas colunas da
 base do Notion, a coluna `ID da obra` e a coluna auxiliar
 `Correspondência API`. O progresso fica em
 `data/mangaupdates_progress.json`.
@@ -265,6 +266,24 @@ python scripts/mangaupdates.py --generate-csv --delay 3 --limit 10
 A opção 5 primeiro simula a atualização do Notion e pede uma segunda
 confirmação antes de aplicar. Ela atualiza somente páginas já existentes e
 nunca cria obras a partir do CSV.
+
+## Organização de relatórios
+
+```text
+reports/
+├── audits/
+│   ├── chapter_audit.html
+│   ├── organize_preview.html
+│   └── rename_preview.html
+├── integrations/
+│   ├── manhwateca_import.csv
+│   └── notion_import_status.json
+├── logs/
+│   └── organize_history.jsonl
+└── reviews/
+    ├── review_notes.md
+    └── status_report.md
+```
 
 ## Status
 

@@ -20,7 +20,7 @@ MANGA_ROOT = get_required_path_env("MANGA_ROOT")
 
 DRY_RUN = True
 
-REPORT_PATH = Path("reports/rename_preview.html")
+REPORT_PATH = Path("reports/audits/rename_preview.html")
 
 GROUPS = {
     "0-9": "0123456789",

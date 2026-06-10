@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-REVIEW_NOTES = PROJECT_ROOT / "reports" / "review_notes.md"
+REVIEW_NOTES = PROJECT_ROOT / "reports" / "reviews" / "review_notes.md"
 USE_COLOR = sys.stdout.isatty() and "NO_COLOR" not in os.environ
 TITLE_COLOR = "\033[1;36m" if USE_COLOR else ""
 EXIT_COLOR = "\033[1;31m" if USE_COLOR else ""
@@ -262,7 +262,7 @@ def register_review_note():
 def confirm_csv_notion_update():
     print("\nEsta opção atualiza páginas existentes usando o CSV.")
     print("Nenhuma página nova será criada.")
-    print("  1. Atualizar Notion com reports/manhwateca_import.csv")
+    print("  1. Atualizar Notion com reports/integrations/manhwateca_import.csv")
     print("  2. Cancelar")
     confirmation = input("Escolha uma opção: ").strip()
     if confirmation != "1":

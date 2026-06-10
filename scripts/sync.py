@@ -14,7 +14,7 @@ from utils import load_title_aliases
 load_dotenv()
 
 DATA_FILE = Path("data/mangas.json")
-STATUS_FILE = Path("reports/notion_import_status.json")
+STATUS_FILE = Path("reports/integrations/notion_import_status.json")
 TITLE_PROPERTY = "Nome"
 
 

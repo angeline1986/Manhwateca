@@ -11,7 +11,7 @@ from notion_client import Client
 
 load_dotenv()
 
-CSV_FILE = Path("reports/manhwateca_import.csv")
+CSV_FILE = Path("reports/integrations/manhwateca_import.csv")
 MULTI_VALUE_SEPARATOR = "|"
 
 

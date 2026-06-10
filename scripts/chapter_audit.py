@@ -6,7 +6,7 @@ from report_utils import build_html_page, render_summary_cards, write_report
 
 
 DATA_FILE = Path("data/mangas.json")
-REPORT_FILE = Path("reports/chapter_audit.html")
+REPORT_FILE = Path("reports/audits/chapter_audit.html")
 
 
 def load_mangas(path=DATA_FILE):
