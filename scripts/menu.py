@@ -25,6 +25,16 @@ MANGAUPDATES_ID_COMMAND = [
     "10",
 ]
 
+MANGAUPDATES_REFRESH_CANDIDATES_COMMAND = [
+    "scripts/mangaupdates.py",
+    "--refresh-incomplete-candidates",
+    "reports/integrations/buscaIds.json",
+    "--delay",
+    "3",
+    "--limit",
+    "10",
+]
+
 MANGAUPDATES_CSV_COMMAND = [
     "scripts/mangaupdates.py",
     "--update-csv-from-ids",
@@ -236,6 +246,49 @@ def mangaupdates_csv_menu():
         print("\nOpção inválida. Escolha 0, 1 ou 2.")
 
 
+def mangaupdates_id_menu():
+    while True:
+        print("\nMANGAUPDATES: LOCALIZAR E REVISAR IDS")
+        print()
+        print(f"  {API_COLOR}1. 🔎 Buscar próximo lote de IDs{RESET_COLOR}")
+        print("     Consulta até 10 obras e atualiza buscaIds.json.")
+        print()
+        print(f"  {API_COLOR}2. ♻️ Atualizar candidatos incompletos{RESET_COLOR}")
+        print("     Busca novamente obras sem link ou descrição, em lotes de 10.")
+        print()
+        print(f"  {API_COLOR}3. 📋 Gerar página de revisão dos IDs{RESET_COLOR}")
+        print("     Compara candidatos marcados como Revisar em um relatório HTML.")
+        print()
+        print(f"  {API_COLOR}4. 📥 Importar decisões da revisão{RESET_COLOR}")
+        print("     Valida o JSON exportado e atualiza buscaIds.json com backup.")
+        print()
+        print(f"  {EXIT_COLOR}0. ↩ Voltar{RESET_COLOR}")
+        option = input("\nEscolha uma opção: ").strip()
+
+        if option == "1":
+            return run_command(MANGAUPDATES_ID_COMMAND)
+        if option == "2":
+            return run_command(MANGAUPDATES_REFRESH_CANDIDATES_COMMAND)
+        if option == "3":
+            return run_command(["scripts/id_review.py"])
+        if option == "4":
+            default_path = (
+                "reports/integrations/mangaupdates_id_decisions.json"
+            )
+            print("\nInforme o caminho do JSON exportado pelo relatório.")
+            print(f"Pressione Enter para usar: {default_path}")
+            decisions_path = input("Arquivo: ").strip() or default_path
+            return run_command([
+                "scripts/id_review.py",
+                "--import-decisions",
+                decisions_path,
+            ])
+        if option == "0":
+            return True
+
+        print("\nOpção inválida. Escolha 0, 1, 2, 3 ou 4.")
+
+
 def confirm_library_change(label, action_label, command):
     print(f"\nEsta opção {label}.")
     print(f"  1. {action_label}")
@@ -353,7 +406,7 @@ def main():
         "1": standardization_menu,
         "2": organization_menu,
         "3": lambda: run_command(["scripts/scan.py"]),
-        "4": lambda: run_command(MANGAUPDATES_ID_COMMAND),
+        "4": mangaupdates_id_menu,
         "5": mangaupdates_csv_menu,
         "6": notion_menu,
         "7": confirm_csv_notion_update,

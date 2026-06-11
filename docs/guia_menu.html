@@ -203,13 +203,44 @@
     }
 
     .flows-title {
-      margin: 0 0 13px;
+      margin: 0;
       color: var(--muted);
       font-size: 0.76rem;
       font-weight: 800;
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
+
+    .flow-tabs {
+      display: flex;
+      gap: 5px;
+      margin: 15px 0 14px;
+      padding: 4px;
+      border-radius: 8px;
+      background: #f4f6f8;
+    }
+
+    .flow-tab {
+      flex: 1;
+      padding: 9px 10px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: #697382;
+      cursor: pointer;
+      font: 650 0.77rem/1.2 inherit;
+      transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+    }
+
+    .flow-tab:hover { color: #374151; }
+
+    .flow-tab[aria-selected="true"] {
+      background: #fff;
+      color: #303843;
+      box-shadow: 0 2px 8px rgba(31, 41, 55, 0.08);
+    }
+
+    .flow-panel[hidden] { display: none; }
 
     .flow {
       border-top: 1px solid var(--line);
@@ -282,6 +313,43 @@
       content: "→";
       margin-right: 7px;
       color: #a6adb7;
+    }
+
+    .system-table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+    }
+
+    .system-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.77rem;
+      line-height: 1.45;
+    }
+
+    .system-table th,
+    .system-table td {
+      padding: 10px 11px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .system-table th {
+      color: #697382;
+      background: #f7f8fa;
+      font-size: 0.7rem;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .system-table tr:last-child td { border-bottom: 0; }
+    .system-table code { font-weight: 700; white-space: nowrap; }
+
+    .technical-files {
+      margin-top: 13px;
+      border-top: 1px solid var(--line);
     }
 
     .eyebrow {
@@ -370,6 +438,8 @@
       .catalog { display: none; }
       .layout { grid-template-columns: 1fr; gap: 28px; }
       .detail-column { position: static; }
+      .flow-tabs { flex-direction: column; }
+      .flow-tab { text-align: left; }
     }
   </style>
 </head>
@@ -391,7 +461,29 @@
         <article class="detail" id="detail" aria-live="polite"></article>
         <section class="flows" aria-label="Fluxos recomendados">
           <h2 class="flows-title">Fluxos recomendados</h2>
+          <div class="flow-tabs" role="tablist" aria-label="Conteúdo de apoio">
+            <button class="flow-tab" id="tab-main" role="tab"
+              aria-selected="true" aria-controls="panel-main">
+              Fluxo principal
+            </button>
+            <button class="flow-tab" id="tab-alternatives" role="tab"
+              aria-selected="false" aria-controls="panel-alternatives"
+              tabindex="-1">
+              Alternativos 1
+            </button>
+            <button class="flow-tab" id="tab-alternatives-2" role="tab"
+              aria-selected="false" aria-controls="panel-alternatives-2"
+              tabindex="-1">
+              Alternativos 2
+            </button>
+            <button class="flow-tab" id="tab-files" role="tab"
+              aria-selected="false" aria-controls="panel-files" tabindex="-1">
+              Arquivos do sistema
+            </button>
+          </div>
 
+          <div class="flow-panel" id="panel-main" role="tabpanel"
+            aria-labelledby="tab-main">
           <details class="flow" open>
             <summary>Principal: obra nova completa</summary>
             <div class="flow-body">
@@ -410,7 +502,10 @@
               </div>
             </div>
           </details>
+          </div>
 
+          <div class="flow-panel" id="panel-alternatives" role="tabpanel"
+            aria-labelledby="tab-alternatives" hidden>
           <details class="flow">
             <summary>Alternativo 1: capítulos novos</summary>
             <div class="flow-body">
@@ -430,12 +525,18 @@
             <div class="flow-body">
               <p>
                 Use quando os IDs já estão confirmados e você deseja atualizar
-                os dados externos e as páginas existentes.
+                os dados externos, exportá-los para o CSV e atualizar as
+                páginas existentes.
               </p>
               <div class="flow-steps">
                 <span class="flow-step">5.2 Consultar API</span>
                 <span class="flow-step">5.1 Atualizar CSV</span>
                 <span class="flow-step">7. Atualizar Notion</span>
+              </div>
+              <div class="flow-files">
+                Origem: integrations/buscaIds.json<br>
+                Cache: data/mangaupdates.json<br>
+                Destino: integrations/manhwateca_import.csv
               </div>
             </div>
           </details>
@@ -445,15 +546,25 @@
             <div class="flow-body">
               <p>
                 Use quando a busca marcar obras com
-                <code>Status: Revisar</code> no arquivo de IDs.
+                <code>Status: Revisar</code>. O relatório permite comparar
+                título, tipo, ano, pontuação, sinopse e a ficha externa.
               </p>
               <div class="flow-steps">
                 <span class="flow-step">3. Catalogar</span>
-                <span class="flow-step">4. Localizar IDs</span>
-                <span class="flow-step">Revisar buscaIds.json</span>
+                <span class="flow-step">4.1 Buscar IDs</span>
+                <span class="flow-step">4.2 Atualizar candidatos</span>
+                <span class="flow-step">4.3 Gerar página de revisão</span>
+                <span class="flow-step">Selecionar candidatos</span>
+                <span class="flow-step">Exportar decisões em JSON</span>
+                <span class="flow-step">4.4 Importar decisões</span>
                 <span class="flow-step">5.2 Consultar API</span>
                 <span class="flow-step">5.1 Atualizar CSV</span>
                 <span class="flow-step">7. Atualizar Notion</span>
+              </div>
+              <div class="flow-files">
+                Origem: integrations/buscaIds.json<br>
+                Relatório: audits/mangaupdates_id_review.html<br>
+                Decisões: mangaupdates_id_decisions.json
               </div>
             </div>
           </details>
@@ -471,7 +582,10 @@
               </div>
             </div>
           </details>
+          </div>
 
+          <div class="flow-panel" id="panel-alternatives-2" role="tabpanel"
+            aria-labelledby="tab-alternatives-2" hidden>
           <details class="flow">
             <summary>Alternativo 5: corrigir organização ou nomes</summary>
             <div class="flow-body">
@@ -503,26 +617,63 @@
             </div>
           </details>
 
-          <details class="flow">
-            <summary>Alternativo 7: exportar IDs confirmados para o CSV</summary>
+          </div>
+
+          <div class="flow-panel" id="panel-files" role="tabpanel"
+            aria-labelledby="tab-files" hidden>
             <div class="flow-body">
               <p>
-                Use quando existem IDs confirmados que ainda não aparecem no
-                CSV.
+                Arquivos principais do processo. Os caminhos são relativos à
+                raiz do projeto.
               </p>
-              <div class="flow-steps">
-                <span class="flow-step">5.2 Consultar detalhes na API</span>
-                <span class="flow-step">Salvar no cache</span>
-                <span class="flow-step">5.1 Atualizar CSV</span>
-                <span class="flow-step">Conferir resultado</span>
+              <div class="system-table-wrap">
+                <table class="system-table">
+                  <thead>
+                    <tr><th>Arquivo</th><th>Finalidade</th><th>Etapa</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td><code>data/mangas.json</code></td>
+                      <td>Catálogo local da biblioteca.</td><td>3 e 6</td></tr>
+                    <tr><td><code>integrations/buscaIds.json</code></td>
+                      <td>Candidatos e IDs confirmados.</td><td>4 e 5</td></tr>
+                    <tr><td><code>data/mangaupdates.json</code></td>
+                      <td>Cache de detalhes consultados por ID.</td><td>5</td></tr>
+                    <tr><td><code>integrations/manhwateca_import.csv</code></td>
+                      <td>Base enriquecida enviada ao Notion.</td><td>5 e 7</td></tr>
+                    <tr><td><code>integrations/notion_import_status.json</code></td>
+                      <td>Controle de importados, pendentes e duplicados.</td><td>6</td></tr>
+                    <tr><td><code>config/titles.json</code></td>
+                      <td>Correções, aliases e abreviações de títulos.</td><td>1 a 3</td></tr>
+                    <tr><td><code>config/catalog_metadata.json</code></td>
+                      <td>Nome oficial, alias e interesse preservados no CSV.</td><td>5</td></tr>
+                  </tbody>
+                </table>
               </div>
-              <div class="flow-files">
-                Origem: integrations/buscaIds.json<br>
-                Cache: data/mangaupdates.json<br>
-                Destino: integrations/manhwateca_import.csv
-              </div>
+
+              <details class="flow technical-files">
+                <summary>Arquivos técnicos e temporários</summary>
+                <div class="flow-body">
+                  <div class="system-table-wrap">
+                    <table class="system-table">
+                      <tbody>
+                        <tr><td><code>integrations/mangaupdates_id_decisions.json</code></td>
+                          <td>Decisões exportadas pela revisão; pode ser removido após importar.</td></tr>
+                        <tr><td><code>data/mangaupdates_progress.json</code></td>
+                          <td>Retomada do processamento automático.</td></tr>
+                        <tr><td><code>config/mangaupdates.json</code></td>
+                          <td>Mapeamento manual legado ainda usado pela ação 6.3.</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="note">
+                    <strong>Legados:</strong> <code>data/cache.json</code> não
+                    participa do fluxo atual. <code>config/notion.json</code>
+                    não é lido; as credenciais vêm do arquivo <code>.env</code>.
+                  </div>
+                </div>
+              </details>
             </div>
-          </details>
+          </div>
         </section>
       </div>
     </section>
@@ -650,13 +801,13 @@
             number: "4",
             icon: "🔎",
             title: "MangaUpdates: Localizar IDs",
-            summary: "Busca IDs e atualiza buscaIds.json.",
-            badges: ["Executa ação", "API", "Lote de 10"],
-            lead: "Compara as obras catalogadas com o JSON de IDs e pesquisa somente as pendentes.",
+            summary: "Busca IDs ou gera a página de revisão visual.",
+            badges: ["Abre submenu", "API opcional", "Relatório HTML"],
+            lead: "Localiza candidatos para obras pendentes e oferece uma página para validar correspondências duvidosas.",
             options: [
               {
-                title: "Executar busca de IDs",
-                summary: "Não abre submenu.",
+                title: "1. Buscar próximo lote de IDs",
+                summary: "Consulta até 10 obras pendentes.",
                 command: "python scripts/mangaupdates.py --fill-ids reports/integrations/buscaIds.json --delay 3 --limit 10",
                 steps: [
                   "Lê as obras de data/mangas.json.",
@@ -666,6 +817,47 @@
                 ],
                 files: "integrations/buscaIds.json",
                 note: "Antes de usar, execute a opção 3 para catalogar obras novas do Drive."
+              },
+              {
+                title: "2. Atualizar candidatos incompletos",
+                summary: "Refaz buscas antigas que não possuem link ou descrição.",
+                command: "python scripts/mangaupdates.py --refresh-incomplete-candidates reports/integrations/buscaIds.json --delay 3 --limit 10",
+                steps: [
+                  "Seleciona somente obras em revisão com candidatos no formato antigo.",
+                  "Refaz até 10 buscas com intervalo de 3 segundos.",
+                  "Adiciona URL e descrição retornadas pela API.",
+                  "Preserva o status Revisar para a decisão humana."
+                ],
+                files: "integrations/buscaIds.json",
+                note: "Repita a opção até o contador de obras incompletas chegar a zero."
+              },
+              {
+                title: "3. Gerar página de revisão dos IDs",
+                summary: "Compara visualmente os candidatos marcados como Revisar.",
+                command: "python scripts/id_review.py",
+                steps: [
+                  "Lê as obras com Status: Revisar em integrations/buscaIds.json.",
+                  "Destaca o candidato com maior pontuação.",
+                  "Mostra tipo, ano, sinopse e link para a ficha no MangaUpdates.",
+                  "Permite selecionar candidatos e exportar as decisões em JSON."
+                ],
+                files: "audits/mangaupdates_id_review.html · mangaupdates_id_decisions.json",
+                note: "A página não altera buscaIds.json diretamente. Exporte as decisões e use a opção 4.4 para importá-las."
+              },
+              {
+                title: "4. Importar decisões da revisão",
+                summary: "Valida as escolhas e confirma os IDs manualmente.",
+                command: "python scripts/id_review.py --import-decisions reports/integrations/mangaupdates_id_decisions.json",
+                steps: [
+                  "Depois de exportar, mova mangaupdates_id_decisions.json para reports/integrations/.",
+                  "No menu, pressione Enter para usar o caminho padrão reports/integrations/mangaupdates_id_decisions.json.",
+                  "Se o arquivo continuar em Downloads, informe o caminho completo quando o menu solicitar.",
+                  "Confere se cada obra e ID pertencem aos candidatos exibidos.",
+                  "Cria um backup datado de integrations/buscaIds.json.",
+                  "Define Status: Confirmado manualmente e remove a lista de candidatos."
+                ],
+                files: "Origem recomendada: integrations/mangaupdates_id_decisions.json → Destino: integrations/buscaIds.json",
+                note: "Caminho recomendado no projeto: reports/integrations/mangaupdates_id_decisions.json. O menu também aceita o caminho completo do arquivo em Downloads. Decisões inválidas são rejeitadas sem alterar a obra."
               }
             ]
           },
@@ -966,6 +1158,39 @@
         <div class="note"><strong>Atenção:</strong> ${action.note}</div>
       `;
     }
+
+    const flowTabs = [...document.querySelectorAll(".flow-tab")];
+    const flowPanels = [...document.querySelectorAll(".flow-panel")];
+
+    function activateFlowTab(tab) {
+      flowTabs.forEach(candidate => {
+        const active = candidate === tab;
+        candidate.setAttribute("aria-selected", String(active));
+        candidate.tabIndex = active ? 0 : -1;
+      });
+      flowPanels.forEach(panel => {
+        panel.hidden = panel.id !== tab.getAttribute("aria-controls");
+      });
+    }
+
+    flowTabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => activateFlowTab(tab));
+      tab.addEventListener("keydown", event => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+          return;
+        }
+        event.preventDefault();
+        let nextIndex = index;
+        if (event.key === "ArrowRight") nextIndex = (index + 1) % flowTabs.length;
+        if (event.key === "ArrowLeft") {
+          nextIndex = (index - 1 + flowTabs.length) % flowTabs.length;
+        }
+        if (event.key === "Home") nextIndex = 0;
+        if (event.key === "End") nextIndex = flowTabs.length - 1;
+        flowTabs[nextIndex].focus();
+        activateFlowTab(flowTabs[nextIndex]);
+      });
+    });
 
     selectedItem = stages[0].items[0];
     renderMenu();

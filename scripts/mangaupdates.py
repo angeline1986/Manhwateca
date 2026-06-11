@@ -248,9 +248,10 @@ def fill_ids_file(
 
     cleaned = False
     for item in items:
-        if item.get("Status") == "Confirmado automaticamente" and item.pop(
-            "IDs", None
-        ) is not None:
+        if item.get("Status") in {
+            "Confirmado automaticamente",
+            "Confirmado manualmente",
+        } and item.pop("IDs", None) is not None:
             cleaned = True
     if cleaned:
         save_json(path, items)
@@ -289,6 +290,33 @@ def fill_ids_file(
         wait_between_requests(delay)
 
     return items, processed
+
+
+def refresh_incomplete_candidates(
+    path,
+    delay=3.0,
+    limit=10,
+    per_page=10,
+):
+    items = load_id_searches(path)
+    pending = [
+        item
+        for item in items
+        if item.get("Status") == "Revisar"
+        and any(
+            "url" not in candidate or "descricao" not in candidate
+            for candidate in item.get("IDs", [])
+        )
+    ]
+    selected = pending[:limit] if limit is not None else pending
+    for item in selected:
+        name = item["Nome"].strip()
+        print(f"[ATUALIZAR CANDIDATOS] {name}")
+        response = search_series(name, per_page=per_page)
+        item["IDs"] = rank_search_results(name, response)
+        save_json(path, items)
+        wait_between_requests(delay)
+    return len(selected), len(pending) - len(selected)
 
 
 def infer_format(details):
@@ -507,7 +535,10 @@ def update_csv_from_confirmed_ids(
     confirmed = [
         item
         for item in items
-        if item.get("Status") == "Confirmado automaticamente"
+        if item.get("Status") in {
+            "Confirmado automaticamente",
+            "Confirmado manualmente",
+        }
         and item.get("ID")
     ]
     if not csv_path.exists():
@@ -531,33 +562,45 @@ def update_csv_from_confirmed_ids(
     cache = load_json_object(cache_path)
     processed = 0
     updated = 0
-    missing = []
+    uncached = []
+    missing_from_csv = []
     for item in confirmed:
         if limit is not None and processed >= limit:
             break
         name = item["Nome"].strip()
         position = row_index.get(normalize_title(name))
         if position is None:
-            missing.append(name)
+            missing_from_csv.append(name)
             continue
 
         series_id = item["ID"]
         cache_key = str(series_id)
         summary = cache.get(cache_key)
         if not summary:
-            missing.append(f"{name} (dados ainda não consultados)")
+            uncached.append(name)
             continue
 
         row = rows[position]
-        row["ID da obra"] = summary.get("series_id", series_id)
-        row["Capítulo MangaUpdates"] = summary.get("latest_chapter") or ""
-        row["MangaUpdates"] = summary.get("url") or ""
-        row["Temática"] = join_values(summary.get("genres", []))
-        row["Formato"] = summary.get("format") or row.get("Formato", "")
-        row["Universo"] = join_values(summary.get("universe", []))
-        row["Correspondência API"] = "ID confirmado automaticamente"
+        values = {
+            "ID da obra": summary.get("series_id", series_id),
+            "Capítulo MangaUpdates": summary.get("latest_chapter") or "",
+            "MangaUpdates": summary.get("url") or "",
+            "Temática": join_values(summary.get("genres", [])),
+            "Formato": summary.get("format") or row.get("Formato", ""),
+            "Universo": join_values(summary.get("universe", [])),
+            "Correspondência API": (
+                "ID confirmado manualmente"
+                if item["Status"] == "Confirmado manualmente"
+                else "ID confirmado automaticamente"
+            ),
+        }
+        changed = any(
+            str(row.get(field, "")) != str(value)
+            for field, value in values.items()
+        )
+        row.update(values)
         processed += 1
-        updated += 1
+        updated += int(changed)
 
     temporary = csv_path.with_suffix(f"{csv_path.suffix}.tmp")
     with temporary.open("w", encoding="utf-8-sig", newline="") as file:
@@ -565,7 +608,7 @@ def update_csv_from_confirmed_ids(
         writer.writeheader()
         writer.writerows(rows)
     temporary.replace(csv_path)
-    return updated, len(confirmed) - processed, missing
+    return updated, processed, uncached, missing_from_csv
 
 
 def fetch_confirmed_details(
@@ -578,7 +621,10 @@ def fetch_confirmed_details(
     confirmed = [
         item
         for item in items
-        if item.get("Status") == "Confirmado automaticamente"
+        if item.get("Status") in {
+            "Confirmado automaticamente",
+            "Confirmado manualmente",
+        }
         and item.get("ID")
     ]
     cache = load_json_object(cache_path)
@@ -658,6 +704,11 @@ def main():
         action="store_true",
         help="Reprocessa itens marcados como Revisar.",
     )
+    parser.add_argument(
+        "--refresh-incomplete-candidates",
+        type=Path,
+        help="Atualiza candidatos sem URL ou descrição em itens para revisão.",
+    )
     args = parser.parse_args()
 
     try:
@@ -692,20 +743,46 @@ def main():
             print(f"Para revisão: {review}")
             print(f"Pendentes: {pending}")
             return
+        if args.refresh_incomplete_candidates:
+            if args.delay < 0:
+                raise SystemExit("--delay não pode ser negativo.")
+            if args.per_page < 1:
+                raise SystemExit("--per-page deve ser maior que zero.")
+            processed, pending = refresh_incomplete_candidates(
+                args.refresh_incomplete_candidates,
+                delay=args.delay,
+                limit=args.limit,
+                per_page=args.per_page,
+            )
+            print()
+            print(f"Obras atualizadas nesta execução: {processed}")
+            print(f"Obras incompletas para próximos lotes: {pending}")
+            return
         if args.update_csv_from_ids:
             if args.delay < 0:
                 raise SystemExit("--delay não pode ser negativo.")
-            updated, pending, missing = update_csv_from_confirmed_ids(
+            updated, checked, uncached, missing_from_csv = (
+                update_csv_from_confirmed_ids(
                 args.update_csv_from_ids,
                 delay=args.delay,
                 limit=args.limit,
+                )
             )
             print()
             print(f"CSV atualizado: {CSV_FILE}")
-            print(f"Obras atualizadas: {updated}")
-            print(f"Confirmadas pendentes para outro lote: {pending}")
-            print(f"Obras não encontradas no CSV: {len(missing)}")
-            for name in missing:
+            print(f"Obras verificadas: {checked}")
+            print(f"Linhas realmente alteradas: {updated}")
+            print(f"Aguardando consulta de detalhes na API: {len(uncached)}")
+            for name in uncached:
+                print(f"- {name}")
+            if uncached:
+                print()
+                print(
+                    "Próximo passo: use a opção 5.2 para consultar "
+                    "o próximo lote na API."
+                )
+            print(f"Obras realmente ausentes no CSV: {len(missing_from_csv)}")
+            for name in missing_from_csv:
                 print(f"- {name}")
             return
         if args.fetch_details_from_ids:

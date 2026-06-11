@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -151,6 +152,61 @@ class MangaUpdatesTests(unittest.TestCase):
             persisted = json.loads(path.read_text(encoding="utf-8"))
             self.assertNotIn("IDs", persisted[0])
 
+    def test_refresh_incomplete_candidates_only_reprocesses_missing_data(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "ids.json"
+            path.write_text(
+                json.dumps([
+                    {
+                        "Nome": "Incomplete",
+                        "Status": "Revisar",
+                        "IDs": [{"id": 1, "titulo": "Incomplete"}],
+                    },
+                    {
+                        "Nome": "Complete",
+                        "Status": "Revisar",
+                        "IDs": [{
+                            "id": 2,
+                            "titulo": "Complete",
+                            "url": "https://example.test",
+                            "descricao": "Description",
+                        }],
+                    },
+                ]),
+                encoding="utf-8",
+            )
+            response = {
+                "results": [{
+                    "record": {
+                        "series_id": 1,
+                        "title": "Incomplete",
+                        "type": "Manhwa",
+                        "url": "https://example.test/incomplete",
+                        "description": "Now complete",
+                    },
+                }],
+            }
+            with mock.patch(
+                "mangaupdates.search_series",
+                return_value=response,
+            ) as search:
+                processed, pending = (
+                    mangaupdates.refresh_incomplete_candidates(
+                        path,
+                        delay=0,
+                        limit=10,
+                    )
+                )
+
+            items = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(1, processed)
+            self.assertEqual(0, pending)
+            search.assert_called_once_with("Incomplete", per_page=10)
+            self.assertEqual(
+                "https://example.test/incomplete",
+                items[0]["IDs"][0]["url"],
+            )
+
     def test_catalog_titles_are_added_to_id_searches(self):
         with tempfile.TemporaryDirectory() as directory:
             catalog_path = Path(directory) / "mangas.json"
@@ -196,7 +252,7 @@ class MangaUpdatesTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with unittest.mock.patch(
+            with mock.patch(
                 "mangaupdates.get_series",
                 return_value={"series_id": 2, "title": "Pendente"},
             ) as get_series:
@@ -252,7 +308,7 @@ class MangaUpdatesTests(unittest.TestCase):
                     "Nota": "Ok",
                 })
 
-            updated, pending, missing = (
+            updated, checked, uncached, missing_from_csv = (
                 mangaupdates.update_csv_from_confirmed_ids(
                     ids_path,
                     csv_path=csv_path,
@@ -268,8 +324,9 @@ class MangaUpdatesTests(unittest.TestCase):
             ) as file:
                 row = next(csv.DictReader(file))
             self.assertEqual(1, updated)
-            self.assertEqual(0, pending)
-            self.assertEqual([], missing)
+            self.assertEqual(1, checked)
+            self.assertEqual([], uncached)
+            self.assertEqual([], missing_from_csv)
             self.assertEqual("Fila de Espera", row["Interesse"])
             self.assertEqual("Quero ler", row["Status"])
             self.assertEqual("Ok", row["Nota"])
@@ -279,6 +336,163 @@ class MangaUpdatesTests(unittest.TestCase):
                 "ID confirmado automaticamente",
                 row["Correspondência API"],
             )
+
+    def test_update_csv_distinguishes_uncached_from_missing_rows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ids_path = directory / "busca_ids.json"
+            csv_path = directory / "catalog.csv"
+            cache_path = directory / "cache.json"
+            ids_path.write_text(
+                json.dumps([
+                    {
+                        "Nome": "Sem cache",
+                        "Status": "Confirmado automaticamente",
+                        "ID": 1,
+                    },
+                    {
+                        "Nome": "Fora do CSV",
+                        "Status": "Confirmado automaticamente",
+                        "ID": 2,
+                    },
+                ]),
+                encoding="utf-8",
+            )
+            cache_path.write_text("{}", encoding="utf-8")
+            with csv_path.open("w", encoding="utf-8-sig", newline="") as file:
+                writer = csv.DictWriter(
+                    file,
+                    fieldnames=mangaupdates.CSV_COLUMNS,
+                )
+                writer.writeheader()
+                writer.writerow({"Nome": "Sem cache"})
+
+            updated, checked, uncached, missing_from_csv = (
+                mangaupdates.update_csv_from_confirmed_ids(
+                    ids_path,
+                    csv_path=csv_path,
+                    cache_path=cache_path,
+                    delay=0,
+                )
+            )
+
+            self.assertEqual(0, updated)
+            self.assertEqual(0, checked)
+            self.assertEqual(["Sem cache"], uncached)
+            self.assertEqual(["Fora do CSV"], missing_from_csv)
+
+    def test_manual_confirmation_is_exported_to_csv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ids_path = directory / "busca_ids.json"
+            csv_path = directory / "catalog.csv"
+            cache_path = directory / "cache.json"
+            ids_path.write_text(
+                json.dumps([{
+                    "Nome": "Beyond Memories",
+                    "Status": "Confirmado manualmente",
+                    "ID": 46829042951,
+                }]),
+                encoding="utf-8",
+            )
+            cache_path.write_text(
+                json.dumps({
+                    "46829042951": {
+                        "series_id": 46829042951,
+                        "url": "https://example.test/beyond",
+                    },
+                }),
+                encoding="utf-8",
+            )
+            with csv_path.open("w", encoding="utf-8-sig", newline="") as file:
+                writer = csv.DictWriter(
+                    file,
+                    fieldnames=mangaupdates.CSV_COLUMNS,
+                )
+                writer.writeheader()
+                writer.writerow({"Nome": "Beyond Memories"})
+
+            updated, checked, uncached, missing = (
+                mangaupdates.update_csv_from_confirmed_ids(
+                    ids_path,
+                    csv_path=csv_path,
+                    cache_path=cache_path,
+                    delay=0,
+                )
+            )
+
+            with csv_path.open(
+                "r",
+                encoding="utf-8-sig",
+                newline="",
+            ) as file:
+                row = next(csv.DictReader(file))
+            self.assertEqual(1, updated)
+            self.assertEqual(1, checked)
+            self.assertEqual([], uncached)
+            self.assertEqual([], missing)
+            self.assertEqual(
+                "ID confirmado manualmente",
+                row["Correspondência API"],
+            )
+
+    def test_update_csv_does_not_count_unchanged_rows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ids_path = directory / "ids.json"
+            csv_path = directory / "catalog.csv"
+            cache_path = directory / "cache.json"
+            ids_path.write_text(
+                json.dumps([{
+                    "Nome": "2020",
+                    "Status": "Confirmado manualmente",
+                    "ID": 8230323430,
+                }]),
+                encoding="utf-8",
+            )
+            cache_path.write_text(
+                json.dumps({
+                    "8230323430": {
+                        "series_id": 8230323430,
+                        "latest_chapter": 62,
+                        "url": "https://example.test/2020",
+                        "genres": ["Drama"],
+                        "format": "Manhwa",
+                        "universe": [],
+                    },
+                }),
+                encoding="utf-8",
+            )
+            with csv_path.open("w", encoding="utf-8-sig", newline="") as file:
+                writer = csv.DictWriter(
+                    file,
+                    fieldnames=mangaupdates.CSV_COLUMNS,
+                )
+                writer.writeheader()
+                writer.writerow({
+                    "Nome": "2020",
+                    "ID da obra": 8230323430,
+                    "Capítulo MangaUpdates": 62,
+                    "MangaUpdates": "https://example.test/2020",
+                    "Temática": "Drama",
+                    "Formato": "Manhwa",
+                    "Universo": "",
+                    "Correspondência API": "ID confirmado manualmente",
+                })
+
+            updated, checked, uncached, missing = (
+                mangaupdates.update_csv_from_confirmed_ids(
+                    ids_path,
+                    csv_path=csv_path,
+                    cache_path=cache_path,
+                    delay=0,
+                )
+            )
+
+            self.assertEqual(0, updated)
+            self.assertEqual(1, checked)
+            self.assertEqual([], uncached)
+            self.assertEqual([], missing)
 
     def test_write_csv_uses_notion_columns_and_id(self):
         manga = {

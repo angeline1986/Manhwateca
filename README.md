@@ -270,9 +270,13 @@ O processo funciona assim:
 
 1. **Opção 4:** busca os IDs e atualiza
    `reports/integrations/buscaIds.json`.
-2. Revise no JSON os itens com `Status: Revisar`.
-3. **Opção 5.2:** consulta na API os detalhes dos IDs ainda pendentes.
-4. **Opção 5.1:** usa os dados salvos para atualizar
+2. Use a opção `4.2` para atualizar candidatos antigos sem link ou descrição.
+3. Gere `reports/audits/mangaupdates_id_review.html` na opção `4.3` para
+   comparar os candidatos marcados com `Status: Revisar`.
+4. Selecione os candidatos, exporte as decisões e use a opção `4.4` para
+   importá-las. O processo valida os IDs e cria um backup do `buscaIds.json`.
+5. **Opção 5.2:** consulta na API os detalhes dos IDs ainda pendentes.
+6. **Opção 5.1:** usa os dados salvos para atualizar
    `reports/integrations/manhwateca_import.csv`, sem chamar a API.
 
 As consultas são feitas em lotes de 10, com intervalo de 3 segundos. O

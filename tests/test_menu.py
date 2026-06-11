@@ -64,6 +64,69 @@ class MenuTests(unittest.TestCase):
                 "10",
             ],
         )
+        self.assertEqual(
+            menu.MANGAUPDATES_REFRESH_CANDIDATES_COMMAND,
+            [
+                "scripts/mangaupdates.py",
+                "--refresh-incomplete-candidates",
+                "reports/integrations/buscaIds.json",
+                "--delay",
+                "3",
+                "--limit",
+                "10",
+            ],
+        )
+
+    @patch("menu.run_command")
+    @patch("builtins.input", return_value="3")
+    def test_mangaupdates_id_submenu_generates_review_page(
+        self,
+        _input,
+        run_command,
+    ):
+        run_command.return_value = True
+
+        result = menu.mangaupdates_id_menu()
+
+        self.assertTrue(result)
+        run_command.assert_called_once_with(["scripts/id_review.py"])
+
+    @patch("menu.run_command")
+    @patch("builtins.input", return_value="2")
+    def test_mangaupdates_id_submenu_refreshes_incomplete_candidates(
+        self,
+        _input,
+        run_command,
+    ):
+        run_command.return_value = True
+
+        result = menu.mangaupdates_id_menu()
+
+        self.assertTrue(result)
+        run_command.assert_called_once_with(
+            menu.MANGAUPDATES_REFRESH_CANDIDATES_COMMAND
+        )
+
+    @patch("menu.run_command")
+    @patch(
+        "builtins.input",
+        side_effect=["4", "reports/integrations/decisions.json"],
+    )
+    def test_mangaupdates_id_submenu_imports_review_decisions(
+        self,
+        _input,
+        run_command,
+    ):
+        run_command.return_value = True
+
+        result = menu.mangaupdates_id_menu()
+
+        self.assertTrue(result)
+        run_command.assert_called_once_with([
+            "scripts/id_review.py",
+            "--import-decisions",
+            "reports/integrations/decisions.json",
+        ])
 
     @patch("menu.subprocess.run")
     def test_run_command_uses_project_root(self, run):
