@@ -58,26 +58,34 @@ MENU = f"""
   {LOCAL_COLOR}2. 🔤 Organização Estrutural{RESET_COLOR}
      Organiza as obras em grupos alfabéticos.
 
-  {API_COLOR}[ ETAPA 2: ENRIQUECIMENTO DE DADOS ]{RESET_COLOR}
+  {AUTOMATION_COLOR}[ ETAPA 2: CATALOGAR BIBLIOTECA ]{RESET_COLOR}
 
-  {API_COLOR}3. 🔎 MangaUpdates: Localizar IDs{RESET_COLOR}
+  {AUTOMATION_COLOR}3. 📚 Catalogar Biblioteca{RESET_COLOR}
+     Lê o Drive e atualiza data/mangas.json.
+
+  {API_COLOR}[ ETAPA 3: ENRIQUECER DADOS ]{RESET_COLOR}
+
+  {API_COLOR}4. 🔎 MangaUpdates: Localizar IDs{RESET_COLOR}
      Busca IDs e atualiza buscaIds.json.
 
-  {API_COLOR}4. 🌐 MangaUpdates: Dados e CSV{RESET_COLOR}
+  {API_COLOR}5. 🌐 MangaUpdates: Dados e CSV{RESET_COLOR}
      Usa dados salvos ou consulta novos detalhes na API.
 
-  {NOTION_COLOR}[ ETAPA 3: SINCRONIZAÇÃO COM NOTION ]{RESET_COLOR}
+  {NOTION_COLOR}[ ETAPA 4: SINCRONIZAR COM NOTION ]{RESET_COLOR}
 
-  {NOTION_COLOR}5. 🔄 Sincronizar Catálogo{RESET_COLOR}
-     Cataloga os arquivos e cria páginas no Notion.
+  {NOTION_COLOR}6. 🔄 Sincronizar Catálogo{RESET_COLOR}
+     Simula, importa ou atualiza páginas no Notion.
 
-  {NOTION_COLOR}6. 📥 Atualizar Metadados{RESET_COLOR}
+  {NOTION_COLOR}7. 📥 Atualizar Metadados{RESET_COLOR}
      Atualiza páginas existentes usando o CSV.
 
-  {AUTOMATION_COLOR}[ AUTOMAÇÃO ]{RESET_COLOR}
+  {AUTOMATION_COLOR}[ AUTOMAÇÃO E SUPORTE ]{RESET_COLOR}
 
-  {AUTOMATION_COLOR}7. 🚀 Executar Fluxo Completo{RESET_COLOR}
+  {AUTOMATION_COLOR}8. 🚀 Executar Fluxo Completo{RESET_COLOR}
      Gera relatórios, cataloga e simula a sincronização.
+
+  {AUTOMATION_COLOR}9. 🧹 Executar Testes{RESET_COLOR}
+     Verifica automaticamente as principais regras do projeto.
 
   {EXIT_COLOR}0. ❌ Sair{RESET_COLOR}
 """
@@ -170,42 +178,37 @@ def notion_menu():
     while True:
         print("\nSINCRONIZAÇÃO COM NOTION")
         print()
-        print(f"  {TITLE_COLOR}1. 🔍 Catalogar biblioteca{RESET_COLOR}")
-        print("     Lê as obras e capítulos e atualiza data/mangas.json.")
-        print()
-        print(f"  {TITLE_COLOR}2. 🔄 Simular próximo lote no Notion{RESET_COLOR}")
+        print(f"  {TITLE_COLOR}1. 🔄 Simular próximo lote no Notion{RESET_COLOR}")
         print("     Mostra as próximas 25 obras e quantas ainda ficarão pendentes.")
         print()
-        print(f"  {TITLE_COLOR}3. ✅ Importar próximo lote no Notion{RESET_COLOR}")
+        print(f"  {TITLE_COLOR}2. ✅ Importar próximo lote no Notion{RESET_COLOR}")
         print("     Cria até 25 obras ausentes sem duplicar as já importadas.")
         print()
-        print(f"  {TITLE_COLOR}4. 🌐 Atualizar dados do MangaUpdates{RESET_COLOR}")
+        print(f"  {TITLE_COLOR}3. 🌐 Atualizar dados do MangaUpdates{RESET_COLOR}")
         print("     Consulta somente as obras com ID confirmado na configuração.")
         print()
-        print(f"  {TITLE_COLOR}5. ♻️ Atualizar páginas já importadas{RESET_COLOR}")
+        print(f"  {TITLE_COLOR}4. ♻️ Atualizar páginas já importadas{RESET_COLOR}")
         print("     Atualiza campos e contagens sem criar novas páginas.")
         print()
         print(f"  {EXIT_COLOR}0. ↩ Voltar{RESET_COLOR}")
         option = input("\nEscolha uma opção: ").strip()
 
         if option == "1":
-            return run_command(["scripts/scan.py"])
-        if option == "2":
             return run_command(
                 ["scripts/sync.py", "--simulate-batch", "--batch-size", "25"]
             )
-        if option == "3":
+        if option == "2":
             return confirm_sync_batch()
-        if option == "4":
+        if option == "3":
             if not run_command(["scripts/mangaupdates.py"]):
                 return False
             return run_command(["scripts/scan.py"])
-        if option == "5":
+        if option == "4":
             return run_command(["scripts/sync.py", "--update-existing"])
         if option == "0":
             return True
 
-        print("\nOpção inválida. Escolha 0, 1, 2, 3, 4 ou 5.")
+        print("\nOpção inválida. Escolha 0, 1, 2, 3 ou 4.")
 
 
 def mangaupdates_csv_menu():
@@ -261,27 +264,26 @@ def organization_menu():
         print(f"  {TITLE_COLOR}1. 📚 Aplicar organização alfabética{RESET_COLOR}")
         print("     Move as pastas para os grupos alfabéticos após confirmação.")
         print()
-        print(f"  {TITLE_COLOR}2. 🧹 Executar testes{RESET_COLOR}")
-        print("     Verifica automaticamente as principais regras do projeto.")
-        print()
         print(f"  {EXIT_COLOR}0. ↩ Voltar{RESET_COLOR}")
         option = input("\nEscolha uma opção: ").strip()
 
         if option == "1":
             return apply_organization()
-        if option == "2":
-            return run_command([
-                "-m",
-                "unittest",
-                "discover",
-                "-s",
-                "tests",
-                "-v",
-            ])
         if option == "0":
             return True
 
-        print("\nOpção inválida. Escolha 0, 1 ou 2.")
+        print("\nOpção inválida. Escolha 0 ou 1.")
+
+
+def run_tests():
+    return run_command([
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-v",
+    ])
 
 
 def apply_file_names():
@@ -350,11 +352,13 @@ def main():
     actions = {
         "1": standardization_menu,
         "2": organization_menu,
-        "3": lambda: run_command(MANGAUPDATES_ID_COMMAND),
-        "4": mangaupdates_csv_menu,
-        "5": notion_menu,
-        "6": confirm_csv_notion_update,
-        "7": run_full_flow,
+        "3": lambda: run_command(["scripts/scan.py"]),
+        "4": lambda: run_command(MANGAUPDATES_ID_COMMAND),
+        "5": mangaupdates_csv_menu,
+        "6": notion_menu,
+        "7": confirm_csv_notion_update,
+        "8": run_full_flow,
+        "9": run_tests,
     }
 
     while True:
@@ -368,7 +372,7 @@ def main():
 
         action = actions.get(option)
         if action is None:
-            print("\nOpção inválida. Escolha um número de 0 a 7.")
+            print("\nOpção inválida. Escolha um número de 0 a 9.")
             pause()
             continue
 

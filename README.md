@@ -77,16 +77,18 @@ alfabética e a padronização dos arquivos, catalogar as obras e sincronizar co
 o Notion. Toda ação que altera a biblioteca ou o Notion apresenta as opções
 numéricas `1. Aplicar` e `2. Cancelar`.
 
-| Etapa | Opção | Função                                               |
-| ----- | :---: | ---------------------------------------------------- |
-| Local |   1   | Padroniza e audita pastas, capítulos e capas.        |
-| Local |   2   | Organiza as obras em grupos alfabéticos.             |
-| API   |   3   | Busca IDs e atualiza `buscaIds.json`.                |
-| API   |   4   | Usa o cache ou consulta detalhes e atualiza o CSV.   |
-| Notion |   5   | Cataloga os arquivos e sincroniza com o Notion.     |
-| Notion |   6   | Atualiza páginas existentes usando o CSV.           |
-| Extra |   7   | Gera relatórios, cataloga e simula a sincronização.  |
-|       |   0   | Encerra o programa.                                  |
+| Etapa   | Opção | Função                                              |
+| ------- | :---: | --------------------------------------------------- |
+| Local   |   1   | Padroniza e audita pastas, capítulos e capas.       |
+| Local   |   2   | Organiza as obras em grupos alfabéticos.            |
+| Catálogo|   3   | Lê o Drive e atualiza `data/mangas.json`.           |
+| API     |   4   | Busca IDs e atualiza `buscaIds.json`.               |
+| API     |   5   | Usa o cache ou consulta detalhes e atualiza o CSV.  |
+| Notion  |   6   | Simula, importa ou atualiza páginas do catálogo.    |
+| Notion  |   7   | Atualiza páginas existentes usando o CSV.           |
+| Suporte |   8   | Gera relatórios, cataloga e simula a sincronização. |
+| Suporte |   9   | Executa os testes automatizados.                    |
+|         |   0   | Encerra o programa.                                 |
 
 ### Ordem recomendada
 
@@ -96,11 +98,11 @@ numéricas `1. Aplicar` e `2. Cancelar`.
 2. No mesmo submenu, registre problemas encontrados para revisão manual.
 3. Resolva as observações pendentes.
 4. Use a opção 2 para organizar as pastas e o submenu 1 para renomear arquivos.
-5. Use a opção `5.1` para catalogar a biblioteca atual.
-6. Use a opção 3 para localizar IDs.
-7. Na opção 4, consulte os detalhes na API e atualize o CSV.
-8. Volte à opção 5 para simular ou aplicar a sincronização.
-9. Use a opção 6 para enviar ao Notion os metadados do CSV.
+5. Use a opção 3 para catalogar a biblioteca atual.
+6. Use a opção 4 para localizar IDs.
+7. Na opção 5, consulte os detalhes na API e atualize o CSV.
+8. Use a opção 6 para simular ou aplicar a sincronização.
+9. Use a opção 7 para enviar ao Notion os metadados do CSV.
 
 ### 1. Escanear a biblioteca
 
@@ -266,11 +268,11 @@ evitando confundir versões Manhwa, Novel e obras com nomes semelhantes.
 
 O processo funciona assim:
 
-1. **Opção 3:** busca os IDs e atualiza
+1. **Opção 4:** busca os IDs e atualiza
    `reports/integrations/buscaIds.json`.
 2. Revise no JSON os itens com `Status: Revisar`.
-3. **Opção 4.2:** consulta na API os detalhes dos IDs ainda pendentes.
-4. **Opção 4.1:** usa os dados salvos para atualizar
+3. **Opção 5.2:** consulta na API os detalhes dos IDs ainda pendentes.
+4. **Opção 5.1:** usa os dados salvos para atualizar
    `reports/integrations/manhwateca_import.csv`, sem chamar a API.
 
 As consultas são feitas em lotes de 10, com intervalo de 3 segundos. O
@@ -279,18 +281,18 @@ processo pode ser retomado sem repetir as obras já concluídas.
 A atualização do CSV preserva campos manuais como `Interesse`,
 `Status` e `Nota`.
 
-A opção 6 simula a atualização do Notion antes de pedir confirmação. Ela
+A opção 7 simula a atualização do Notion antes de pedir confirmação. Ela
 atualiza somente páginas existentes.
 
 ### Novas obras e capítulos
 
-- **Obra nova no Drive:** execute primeiro a opção `5.1 Catalogar biblioteca`.
-  Depois, a opção 3 adiciona automaticamente a obra ausente ao
+- **Obra nova no Drive:** execute primeiro a opção 3.
+  Depois, a opção 4 adiciona automaticamente a obra ausente ao
   `buscaIds.json` e procura seu ID.
-- **Capítulos novos:** execute novamente a opção `5.1 Catalogar biblioteca`.
-  Depois use `5.5 Atualizar páginas já importadas` para enviar as novas
+- **Capítulos novos:** execute novamente a opção 3.
+  Depois use `6.4 Atualizar páginas já importadas` para enviar as novas
   contagens ao Notion.
-- **Novos metadados do MangaUpdates:** use a opção 4.2. IDs já consultados são
+- **Novos metadados do MangaUpdates:** use a opção 5.2. IDs já consultados são
   ignorados pelo cache; somente os pendentes entram no próximo lote.
 
 ## Organização dos relatórios

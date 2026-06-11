@@ -181,6 +181,109 @@
         8px 16px 32px rgba(125, 167, 173, 0.08);
     }
 
+    .detail-column {
+      position: sticky;
+      top: 24px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .detail-column .detail {
+      position: static;
+    }
+
+    .flows {
+      padding: 22px 24px;
+      border: 1px solid rgba(202, 103, 142, 0.14);
+      border-radius: 10px;
+      background: #fff;
+      box-shadow:
+        1px 2px 4px rgba(0, 0, 0, 0.025),
+        4px 8px 20px rgba(254, 215, 170, 0.08);
+    }
+
+    .flows-title {
+      margin: 0 0 13px;
+      color: var(--muted);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .flow {
+      border-top: 1px solid var(--line);
+    }
+
+    .flow:first-of-type { border-top: 0; }
+
+    .flow summary {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 13px 2px;
+      cursor: pointer;
+      font-size: 0.94rem;
+      font-weight: 650;
+      list-style: none;
+    }
+
+    .flow summary::-webkit-details-marker { display: none; }
+
+    .flow summary::before {
+      content: "▸";
+      color: #c0c6cf;
+      transition: transform 140ms ease;
+    }
+
+    .flow[open] summary::before { transform: rotate(90deg); }
+
+    .flow-body {
+      padding: 0 2px 16px 22px;
+      color: #606977;
+      font-size: 0.86rem;
+      line-height: 1.55;
+    }
+
+    .flow-body p { margin: 0 0 11px; }
+
+    .flow-files {
+      margin-top: 12px;
+      padding: 9px 11px;
+      border-radius: 5px;
+      background: #f7f8fa;
+      color: #77808d;
+      font-size: 0.75rem;
+      line-height: 1.55;
+    }
+
+    .flow-body code {
+      font-family: inherit;
+      font-size: inherit;
+      color: inherit;
+    }
+
+    .flow-steps {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    .flow-step {
+      padding: 6px 9px;
+      border-radius: 5px;
+      background: #f3f6f8;
+      color: #3f4a58;
+      font-size: 0.76rem;
+      font-weight: 650;
+    }
+
+    .flow-step + .flow-step::before {
+      content: "→";
+      margin-right: 7px;
+      color: #a6adb7;
+    }
+
     .eyebrow {
       color: var(--muted);
       font-size: 0.76rem;
@@ -266,7 +369,7 @@
       header { align-items: flex-start; }
       .catalog { display: none; }
       .layout { grid-template-columns: 1fr; gap: 28px; }
-      .detail { position: static; }
+      .detail-column { position: static; }
     }
   </style>
 </head>
@@ -284,7 +387,144 @@
 
     <section class="layout">
       <nav class="menu" id="menu" aria-label="Menu da Manhwateca"></nav>
-      <article class="detail" id="detail" aria-live="polite"></article>
+      <div class="detail-column">
+        <article class="detail" id="detail" aria-live="polite"></article>
+        <section class="flows" aria-label="Fluxos recomendados">
+          <h2 class="flows-title">Fluxos recomendados</h2>
+
+          <details class="flow" open>
+            <summary>Principal: obra nova completa</summary>
+            <div class="flow-body">
+              <p>
+                Use quando uma nova obra entra no Drive e precisa seguir todo
+                o processo até o Notion.
+              </p>
+              <div class="flow-steps">
+                <span class="flow-step">1. Auditar</span>
+                <span class="flow-step">2. Organizar</span>
+                <span class="flow-step">3. Catalogar</span>
+                <span class="flow-step">4. Localizar ID</span>
+                <span class="flow-step">5. Gerar CSV</span>
+                <span class="flow-step">6. Sincronizar</span>
+                <span class="flow-step">7. Metadados</span>
+              </div>
+            </div>
+          </details>
+
+          <details class="flow">
+            <summary>Alternativo 1: capítulos novos</summary>
+            <div class="flow-body">
+              <p>
+                Use quando a obra já existe e apenas recebeu novos capítulos
+                no Drive.
+              </p>
+              <div class="flow-steps">
+                <span class="flow-step">3. Catalogar</span>
+                <span class="flow-step">6.4 Atualizar existentes</span>
+              </div>
+            </div>
+          </details>
+
+          <details class="flow">
+            <summary>Alternativo 2: atualizar metadados</summary>
+            <div class="flow-body">
+              <p>
+                Use quando os IDs já estão confirmados e você deseja atualizar
+                os dados externos e as páginas existentes.
+              </p>
+              <div class="flow-steps">
+                <span class="flow-step">5.2 Consultar API</span>
+                <span class="flow-step">5.1 Atualizar CSV</span>
+                <span class="flow-step">7. Atualizar Notion</span>
+              </div>
+            </div>
+          </details>
+
+          <details class="flow">
+            <summary>Alternativo 3: revisar IDs duvidosos</summary>
+            <div class="flow-body">
+              <p>
+                Use quando a busca marcar obras com
+                <code>Status: Revisar</code> no arquivo de IDs.
+              </p>
+              <div class="flow-steps">
+                <span class="flow-step">3. Catalogar</span>
+                <span class="flow-step">4. Localizar IDs</span>
+                <span class="flow-step">Revisar buscaIds.json</span>
+                <span class="flow-step">5.2 Consultar API</span>
+                <span class="flow-step">5.1 Atualizar CSV</span>
+                <span class="flow-step">7. Atualizar Notion</span>
+              </div>
+            </div>
+          </details>
+
+          <details class="flow">
+            <summary>Alternativo 4: importar obras já catalogadas</summary>
+            <div class="flow-body">
+              <p>
+                Use quando o catálogo local já está atualizado e não é
+                necessário consultar novamente o MangaUpdates.
+              </p>
+              <div class="flow-steps">
+                <span class="flow-step">6.1 Simular lote</span>
+                <span class="flow-step">6.2 Importar lote</span>
+              </div>
+            </div>
+          </details>
+
+          <details class="flow">
+            <summary>Alternativo 5: corrigir organização ou nomes</summary>
+            <div class="flow-body">
+              <p>
+                Use quando relatórios ou revisão manual apontarem pastas,
+                capítulos ou capas fora do padrão.
+              </p>
+              <div class="flow-steps">
+                <span class="flow-step">1.1 Verificar</span>
+                <span class="flow-step">1.2 Padronizar arquivos</span>
+                <span class="flow-step">2.1 Organizar pastas</span>
+                <span class="flow-step">3. Recatalogar</span>
+              </div>
+            </div>
+          </details>
+
+          <details class="flow">
+            <summary>Alternativo 6: auditar sem alterar nada</summary>
+            <div class="flow-body">
+              <p>
+                Use para conferir a biblioteca e as integrações sem aplicar
+                mudanças nos arquivos ou no Notion.
+              </p>
+              <div class="flow-steps">
+                <span class="flow-step">1.1 Gerar relatórios</span>
+                <span class="flow-step">9. Executar testes</span>
+                <span class="flow-step">6.1 Simular lote</span>
+              </div>
+            </div>
+          </details>
+
+          <details class="flow">
+            <summary>Alternativo 7: exportar IDs confirmados para o CSV</summary>
+            <div class="flow-body">
+              <p>
+                Use quando existem IDs confirmados que ainda não aparecem no
+                CSV.
+              </p>
+              <div class="flow-steps">
+                <span class="flow-step">5.2 Consultar detalhes na API</span>
+                <span class="flow-step">Salvar no cache</span>
+                <span class="flow-step">5.1 Atualizar CSV</span>
+                <span class="flow-step">Conferir resultado</span>
+              </div>
+              <div class="flow-files">
+                Origem: integrations/buscaIds.json<br>
+                Cache: data/mangaupdates.json<br>
+                Destino: integrations/manhwateca_import.csv
+              </div>
+            </div>
+          </details>
+        </section>
+      </div>
     </section>
 
     <footer>Esta página é informativa e não executa comandos.</footer>
@@ -366,29 +606,48 @@
                 ],
                 files: "reports/logs/organize_history.jsonl",
                 note: "Gere e revise o preview antes de aplicar."
-              },
-              {
-                title: "2. Executar testes",
-                summary: "Valida automaticamente as regras do projeto.",
-                command: "python -m unittest discover -s tests -v",
-                steps: [
-                  "Executa os testes de organização, renomeação e integrações.",
-                  "Exibe falhas sem alterar a biblioteca."
-                ],
-                files: "tests/",
-                note: "É uma verificação técnica, sem efeitos nos arquivos das obras."
               }
             ]
           }
         ]
       },
       {
-        name: "Etapa 2: Enriquecimento de dados",
+        name: "Etapa 2: Catalogar biblioteca",
+        color: "#39805a",
+        items: [
+          {
+            id: "catalog",
+            number: "3",
+            icon: "📚",
+            title: "Catalogar Biblioteca",
+            summary: "Lê o Drive e atualiza data/mangas.json.",
+            badges: ["Executa ação", "Catálogo local"],
+            lead: "Transforma o estado atual da biblioteca no catálogo usado pelas etapas seguintes.",
+            options: [
+              {
+                title: "Catalogar biblioteca atual",
+                summary: "Detecta obras, capítulos, capas e lacunas.",
+                command: "python scripts/scan.py",
+                steps: [
+                  "Varre a biblioteca configurada em MANGA_ROOT.",
+                  "Detecta obras novas e atualiza as já conhecidas.",
+                  "Conta capítulos, side stories e lacunas.",
+                  "Registra capas e arquivos que não puderam ser interpretados."
+                ],
+                files: "data/mangas.json",
+                note: "Execute após adicionar uma obra ou novos capítulos no Drive."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        name: "Etapa 3: Enriquecer dados",
         color: "#b77a08",
         items: [
           {
             id: "ids",
-            number: "3",
+            number: "4",
             icon: "🔎",
             title: "MangaUpdates: Localizar IDs",
             summary: "Busca IDs e atualiza buscaIds.json.",
@@ -405,14 +664,14 @@
                   "Consulta até 10 títulos ainda pendentes.",
                   "Confirma correspondências seguras e marca dúvidas para revisão."
                 ],
-                files: "reports/integrations/buscaIds.json",
-                note: "Antes de usar, execute 5.1 para catalogar obras novas do Drive."
+                files: "integrations/buscaIds.json",
+                note: "Antes de usar, execute a opção 3 para catalogar obras novas do Drive."
               }
             ]
           },
           {
             id: "csv",
-            number: "4",
+            number: "5",
             icon: "🌐",
             title: "MangaUpdates: Dados e CSV",
             summary: "Usa cache ou consulta detalhes na API.",
@@ -425,11 +684,11 @@
                 command: "python scripts/mangaupdates.py --update-csv-from-ids reports/integrations/buscaIds.json",
                 steps: [
                   "Não chama a API.",
-                  "Lê IDs confirmados e detalhes já armazenados.",
+                  "Lê os IDs confirmados em integrations/buscaIds.json e os detalhes armazenados em data/mangaupdates.json.",
                   "Atualiza as linhas correspondentes no CSV.",
                   "Preserva Interesse, Status e Nota."
                 ],
-                files: "data/mangaupdates.json → reports/integrations/manhwateca_import.csv",
+                files: "data/mangaupdates.json → integrations/manhwateca_import.csv",
                 note: "IDs sem detalhes no cache permanecem pendentes."
               },
               {
@@ -442,7 +701,7 @@
                   "Salva cada resposta no cache.",
                   "Ao terminar, atualiza o CSV com os dados salvos."
                 ],
-                files: "data/mangaupdates.json · reports/integrations/manhwateca_import.csv",
+                files: "data/mangaupdates.json · integrations/manhwateca_import.csv",
                 note: "IDs já presentes no cache não geram nova requisição."
               }
             ]
@@ -450,32 +709,20 @@
         ]
       },
       {
-        name: "Etapa 3: Sincronização com Notion",
+        name: "Etapa 4: Sincronizar com Notion",
         color: "#7957a8",
         items: [
           {
             id: "sync",
-            number: "5",
+            number: "6",
             icon: "🔄",
             title: "Sincronizar Catálogo",
-            summary: "Cataloga arquivos e sincroniza com o Notion.",
+            summary: "Simula, importa ou atualiza páginas no Notion.",
             badges: ["Abre submenu", "Notion"],
             lead: "Controla o catálogo local, a criação em lotes e a atualização das páginas.",
             options: [
               {
-                title: "1. Catalogar biblioteca",
-                summary: "Detecta obras e capítulos atuais.",
-                command: "python scripts/scan.py",
-                steps: [
-                  "Varre a biblioteca configurada em MANGA_ROOT.",
-                  "Conta capítulos, side stories, lacunas e capas.",
-                  "Inclui obras novas e atualiza obras existentes."
-                ],
-                files: "data/mangas.json",
-                note: "Execute após adicionar uma obra ou novos capítulos no Drive."
-              },
-              {
-                title: "2. Simular próximo lote",
+                title: "1. Simular próximo lote",
                 summary: "Mostra o que seria criado sem aplicar.",
                 command: "python scripts/sync.py --simulate-batch --batch-size 25",
                 steps: [
@@ -487,7 +734,7 @@
                 note: "Não cria nem altera páginas."
               },
               {
-                title: "3. Importar próximo lote",
+                title: "2. Importar próximo lote",
                 summary: "Cria até 25 páginas após confirmação.",
                 command: "python scripts/sync.py --apply-batch --batch-size 25",
                 steps: [
@@ -500,7 +747,7 @@
                 note: "Esta ação altera o Notion."
               },
               {
-                title: "4. Atualizar dados do MangaUpdates",
+                title: "3. Atualizar dados do MangaUpdates",
                 summary: "Atualiza o cache configurado e recataloga.",
                 command: "python scripts/mangaupdates.py && python scripts/scan.py",
                 steps: [
@@ -512,7 +759,7 @@
                 note: "Realiza chamadas à API."
               },
               {
-                title: "5. Atualizar páginas já importadas",
+                title: "4. Atualizar páginas já importadas",
                 summary: "Envia novas contagens sem criar páginas.",
                 command: "python scripts/sync.py --update-existing",
                 steps: [
@@ -521,13 +768,13 @@
                   "Não cria obras novas."
                 ],
                 files: "Notion",
-                note: "Use após 5.1 quando adicionar capítulos no Drive."
+                note: "Use após a opção 3 quando adicionar capítulos no Drive."
               }
             ]
           },
           {
             id: "metadata",
-            number: "6",
+            number: "7",
             icon: "📥",
             title: "Atualizar Metadados",
             summary: "Atualiza páginas existentes usando o CSV.",
@@ -544,7 +791,7 @@
                   "Pede uma segunda confirmação.",
                   "Aplica somente após a confirmação final."
                 ],
-                files: "reports/integrations/manhwateca_import.csv → Notion",
+                files: "integrations/manhwateca_import.csv → Notion",
                 note: "Nunca cria páginas novas a partir do CSV."
               }
             ]
@@ -552,12 +799,12 @@
         ]
       },
       {
-        name: "Automação",
+        name: "Automação e suporte",
         color: "#39805a",
         items: [
           {
             id: "full",
-            number: "7",
+            number: "8",
             icon: "🚀",
             title: "Executar Fluxo Completo",
             summary: "Gera relatórios, cataloga e simula.",
@@ -576,6 +823,29 @@
                 ],
                 files: "reports/audits/ · data/mangas.json · notion_import_status.json",
                 note: "Não aplica organização, renomeação ou criação no Notion."
+              }
+            ]
+          },
+          {
+            id: "tests",
+            number: "9",
+            icon: "🧹",
+            title: "Executar Testes",
+            summary: "Valida as principais regras do projeto.",
+            badges: ["Executa ação", "Sem alterações"],
+            lead: "Executa a suíte automatizada para verificar organização, nomes e integrações.",
+            options: [
+              {
+                title: "Executar testes automatizados",
+                summary: "Exibe sucessos e falhas no terminal.",
+                command: "python -m unittest discover -s tests -v",
+                steps: [
+                  "Executa os testes de organização e renomeação.",
+                  "Valida os fluxos MangaUpdates e Notion.",
+                  "Aponta regressões sem alterar a biblioteca."
+                ],
+                files: "tests/",
+                note: "É uma verificação técnica sem efeitos nos arquivos das obras."
               }
             ]
           }

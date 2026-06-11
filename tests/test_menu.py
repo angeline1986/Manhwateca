@@ -20,15 +20,16 @@ class MenuTests(unittest.TestCase):
 
     def test_main_menu_has_separate_mangaupdates_options(self):
         self.assertIn(
-            "3. 🔎 MangaUpdates: Localizar IDs",
+            "4. 🔎 MangaUpdates: Localizar IDs",
             menu.MENU,
         )
         self.assertIn(
-            "4. 🌐 MangaUpdates: Dados e CSV",
+            "5. 🌐 MangaUpdates: Dados e CSV",
             menu.MENU,
         )
-        self.assertIn("5. 🔄 Sincronizar Catálogo", menu.MENU)
-        self.assertIn("6. 📥 Atualizar Metadados", menu.MENU)
+        self.assertIn("3. 📚 Catalogar Biblioteca", menu.MENU)
+        self.assertIn("6. 🔄 Sincronizar Catálogo", menu.MENU)
+        self.assertIn("7. 📥 Atualizar Metadados", menu.MENU)
         self.assertEqual(
             menu.MANGAUPDATES_CSV_COMMAND,
             [
@@ -49,7 +50,8 @@ class MenuTests(unittest.TestCase):
                 "10",
             ],
         )
-        self.assertIn("7. 🚀 Executar Fluxo Completo", menu.MENU)
+        self.assertIn("8. 🚀 Executar Fluxo Completo", menu.MENU)
+        self.assertIn("9. 🧹 Executar Testes", menu.MENU)
         self.assertEqual(
             menu.MANGAUPDATES_ID_COMMAND,
             [
@@ -98,16 +100,6 @@ class MenuTests(unittest.TestCase):
 
     @patch("menu.run_command")
     @patch("builtins.input", return_value="1")
-    def test_notion_submenu_catalogs_library(self, _input, run_command):
-        run_command.return_value = True
-
-        result = menu.notion_menu()
-
-        self.assertTrue(result)
-        run_command.assert_called_once_with(["scripts/scan.py"])
-
-    @patch("menu.run_command")
-    @patch("builtins.input", return_value="2")
     def test_notion_submenu_runs_simulation(self, _input, run_command):
         run_command.return_value = True
 
@@ -119,7 +111,7 @@ class MenuTests(unittest.TestCase):
         )
 
     @patch("menu.confirm_sync_batch")
-    @patch("builtins.input", return_value="3")
+    @patch("builtins.input", return_value="2")
     def test_notion_submenu_can_apply(self, _input, confirm_sync_batch):
         confirm_sync_batch.return_value = True
 
@@ -221,11 +213,10 @@ class MenuTests(unittest.TestCase):
         apply_organization.assert_called_once_with()
 
     @patch("menu.run_command")
-    @patch("builtins.input", return_value="2")
-    def test_organization_submenu_can_run_tests(self, _input, run_command):
+    def test_run_tests_executes_unittest_discovery(self, run_command):
         run_command.return_value = True
 
-        result = menu.organization_menu()
+        result = menu.run_tests()
 
         self.assertTrue(result)
         run_command.assert_called_once_with([
