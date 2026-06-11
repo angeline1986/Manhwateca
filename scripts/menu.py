@@ -29,6 +29,12 @@ MANGAUPDATES_CSV_COMMAND = [
     "scripts/mangaupdates.py",
     "--update-csv-from-ids",
     "reports/integrations/buscaIds.json",
+]
+
+MANGAUPDATES_DETAILS_COMMAND = [
+    "scripts/mangaupdates.py",
+    "--fetch-details-from-ids",
+    "reports/integrations/buscaIds.json",
     "--delay",
     "3",
     "--limit",
@@ -57,8 +63,8 @@ MENU = f"""
   {API_COLOR}3. 🔎 MangaUpdates: Localizar IDs{RESET_COLOR}
      Busca IDs e atualiza buscaIds.json.
 
-  {API_COLOR}4. 🌐 MangaUpdates: Atualizar CSV{RESET_COLOR}
-     Consulta os IDs confirmados e atualiza o CSV.
+  {API_COLOR}4. 🌐 MangaUpdates: Dados e CSV{RESET_COLOR}
+     Usa dados salvos ou consulta novos detalhes na API.
 
   {NOTION_COLOR}[ ETAPA 3: SINCRONIZAÇÃO COM NOTION ]{RESET_COLOR}
 
@@ -202,6 +208,31 @@ def notion_menu():
         print("\nOpção inválida. Escolha 0, 1, 2, 3, 4 ou 5.")
 
 
+def mangaupdates_csv_menu():
+    while True:
+        print("\nMANGAUPDATES: DADOS E CSV")
+        print()
+        print(f"  {API_COLOR}1. 📄 Atualizar CSV com dados salvos{RESET_COLOR}")
+        print("     Usa somente o cache local. Não consulta a API.")
+        print()
+        print(f"  {API_COLOR}2. 🌐 Consultar próximo lote na API{RESET_COLOR}")
+        print("     Busca detalhes de até 10 IDs e atualiza o CSV.")
+        print()
+        print(f"  {EXIT_COLOR}0. ↩ Voltar{RESET_COLOR}")
+        option = input("\nEscolha uma opção: ").strip()
+
+        if option == "1":
+            return run_command(MANGAUPDATES_CSV_COMMAND)
+        if option == "2":
+            if not run_command(MANGAUPDATES_DETAILS_COMMAND):
+                return False
+            return run_command(MANGAUPDATES_CSV_COMMAND)
+        if option == "0":
+            return True
+
+        print("\nOpção inválida. Escolha 0, 1 ou 2.")
+
+
 def confirm_library_change(label, action_label, command):
     print(f"\nEsta opção {label}.")
     print(f"  1. {action_label}")
@@ -320,7 +351,7 @@ def main():
         "1": standardization_menu,
         "2": organization_menu,
         "3": lambda: run_command(MANGAUPDATES_ID_COMMAND),
-        "4": lambda: run_command(MANGAUPDATES_CSV_COMMAND),
+        "4": mangaupdates_csv_menu,
         "5": notion_menu,
         "6": confirm_csv_notion_update,
         "7": run_full_flow,

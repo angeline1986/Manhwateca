@@ -140,12 +140,75 @@ class MangaUpdatesTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            items, processed = mangaupdates.fill_ids_file(path, limit=0)
+            items, processed = mangaupdates.fill_ids_file(
+                path,
+                limit=0,
+                catalog_path=Path(directory) / "missing_catalog.json",
+            )
 
             self.assertEqual(0, processed)
             self.assertNotIn("IDs", items[0])
             persisted = json.loads(path.read_text(encoding="utf-8"))
             self.assertNotIn("IDs", persisted[0])
+
+    def test_catalog_titles_are_added_to_id_searches(self):
+        with tempfile.TemporaryDirectory() as directory:
+            catalog_path = Path(directory) / "mangas.json"
+            catalog_path.write_text(
+                json.dumps([
+                    {"nome": "Obra existente"},
+                    {"nome": "Obra nova"},
+                ]),
+                encoding="utf-8",
+            )
+            items = [{"Nome": "Obra Existente"}]
+
+            added = mangaupdates.add_catalog_titles_to_id_searches(
+                items,
+                catalog_path=catalog_path,
+            )
+
+            self.assertEqual(1, added)
+            self.assertEqual("Obra nova", items[-1]["Nome"])
+
+    def test_fetch_confirmed_details_skips_cached_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ids_path = directory / "ids.json"
+            cache_path = directory / "cache.json"
+            ids_path.write_text(
+                json.dumps([
+                    {
+                        "Nome": "Já consultada",
+                        "Status": "Confirmado automaticamente",
+                        "ID": 1,
+                    },
+                    {
+                        "Nome": "Pendente",
+                        "Status": "Confirmado automaticamente",
+                        "ID": 2,
+                    },
+                ]),
+                encoding="utf-8",
+            )
+            cache_path.write_text(
+                json.dumps({"1": {"series_id": 1}}),
+                encoding="utf-8",
+            )
+
+            with unittest.mock.patch(
+                "mangaupdates.get_series",
+                return_value={"series_id": 2, "title": "Pendente"},
+            ) as get_series:
+                processed, pending = mangaupdates.fetch_confirmed_details(
+                    ids_path,
+                    delay=0,
+                    cache_path=cache_path,
+                )
+
+            self.assertEqual(1, processed)
+            self.assertEqual(0, pending)
+            get_series.assert_called_once_with(2)
 
     def test_update_csv_from_confirmed_ids_preserves_editorial_fields(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -215,14 +215,37 @@ def load_id_searches(path):
     return data
 
 
+def add_catalog_titles_to_id_searches(items, catalog_path=CATALOG_FILE):
+    if not catalog_path.exists():
+        return 0
+
+    known = {normalize_title(item["Nome"]) for item in items}
+    added = 0
+    for manga in load_catalog(catalog_path):
+        title = manga["nome"].strip()
+        normalized = normalize_title(title)
+        if normalized in known:
+            continue
+        items.append({"Nome": title})
+        known.add(normalized)
+        added += 1
+    return added
+
+
 def fill_ids_file(
     path,
     delay=3.0,
     limit=None,
     per_page=10,
     retry_review=False,
+    catalog_path=CATALOG_FILE,
 ):
     items = load_id_searches(path)
+    added = add_catalog_titles_to_id_searches(items, catalog_path)
+    if added:
+        save_json(path, items)
+        print(f"[CATÁLOGO] {added} nova(s) obra(s) adicionada(s) ao JSON.")
+
     cleaned = False
     for item in items:
         if item.get("Status") == "Confirmado automaticamente" and item.pop(
@@ -522,11 +545,8 @@ def update_csv_from_confirmed_ids(
         cache_key = str(series_id)
         summary = cache.get(cache_key)
         if not summary:
-            print(f"[DETALHAR] {name} ({series_id})")
-            summary = summarize_series(get_series(series_id))
-            cache[cache_key] = summary
-            save_json(cache_path, cache)
-            wait_between_requests(delay)
+            missing.append(f"{name} (dados ainda não consultados)")
+            continue
 
         row = rows[position]
         row["ID da obra"] = summary.get("series_id", series_id)
@@ -546,6 +566,35 @@ def update_csv_from_confirmed_ids(
         writer.writerows(rows)
     temporary.replace(csv_path)
     return updated, len(confirmed) - processed, missing
+
+
+def fetch_confirmed_details(
+    ids_path,
+    delay=3.0,
+    limit=None,
+    cache_path=CACHE_FILE,
+):
+    items = load_id_searches(ids_path)
+    confirmed = [
+        item
+        for item in items
+        if item.get("Status") == "Confirmado automaticamente"
+        and item.get("ID")
+    ]
+    cache = load_json_object(cache_path)
+    pending = [
+        item for item in confirmed if str(item["ID"]) not in cache
+    ]
+    selected = pending[:limit] if limit is not None else pending
+
+    for item in selected:
+        series_id = item["ID"]
+        print(f"[DETALHAR] {item['Nome']} ({series_id})")
+        cache[str(series_id)] = summarize_series(get_series(series_id))
+        save_json(cache_path, cache)
+        wait_between_requests(delay)
+
+    return len(selected), len(pending) - len(selected)
 
 
 def refresh_cache(mappings_path=MAPPINGS_FILE, cache_path=CACHE_FILE):
@@ -576,6 +625,11 @@ def main():
         "--update-csv-from-ids",
         type=Path,
         help="Atualiza o CSV usando os IDs confirmados no JSON informado.",
+    )
+    parser.add_argument(
+        "--fetch-details-from-ids",
+        type=Path,
+        help="Consulta detalhes dos IDs confirmados e atualiza o cache.",
     )
     parser.add_argument(
         "--delay",
@@ -653,6 +707,18 @@ def main():
             print(f"Obras não encontradas no CSV: {len(missing)}")
             for name in missing:
                 print(f"- {name}")
+            return
+        if args.fetch_details_from_ids:
+            if args.delay < 0:
+                raise SystemExit("--delay não pode ser negativo.")
+            processed, pending = fetch_confirmed_details(
+                args.fetch_details_from_ids,
+                delay=args.delay,
+                limit=args.limit,
+            )
+            print()
+            print(f"Detalhes consultados nesta execução: {processed}")
+            print(f"IDs confirmados ainda pendentes: {pending}")
             return
         if args.generate_csv:
             if args.delay < 0:

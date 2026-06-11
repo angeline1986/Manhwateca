@@ -24,7 +24,7 @@ class MenuTests(unittest.TestCase):
             menu.MENU,
         )
         self.assertIn(
-            "4. 🌐 MangaUpdates: Atualizar CSV",
+            "4. 🌐 MangaUpdates: Dados e CSV",
             menu.MENU,
         )
         self.assertIn("5. 🔄 Sincronizar Catálogo", menu.MENU)
@@ -34,6 +34,14 @@ class MenuTests(unittest.TestCase):
             [
                 "scripts/mangaupdates.py",
                 "--update-csv-from-ids",
+                "reports/integrations/buscaIds.json",
+            ],
+        )
+        self.assertEqual(
+            menu.MANGAUPDATES_DETAILS_COMMAND,
+            [
+                "scripts/mangaupdates.py",
+                "--fetch-details-from-ids",
                 "reports/integrations/buscaIds.json",
                 "--delay",
                 "3",
@@ -119,6 +127,40 @@ class MenuTests(unittest.TestCase):
 
         self.assertTrue(result)
         confirm_sync_batch.assert_called_once_with()
+
+    @patch("menu.run_command")
+    @patch("builtins.input", return_value="1")
+    def test_mangaupdates_csv_submenu_uses_saved_data(
+        self,
+        _input,
+        run_command,
+    ):
+        run_command.return_value = True
+
+        result = menu.mangaupdates_csv_menu()
+
+        self.assertTrue(result)
+        run_command.assert_called_once_with(menu.MANGAUPDATES_CSV_COMMAND)
+
+    @patch("menu.run_command")
+    @patch("builtins.input", return_value="2")
+    def test_mangaupdates_csv_submenu_fetches_then_updates_csv(
+        self,
+        _input,
+        run_command,
+    ):
+        run_command.return_value = True
+
+        result = menu.mangaupdates_csv_menu()
+
+        self.assertTrue(result)
+        self.assertEqual(
+            [
+                unittest.mock.call(menu.MANGAUPDATES_DETAILS_COMMAND),
+                unittest.mock.call(menu.MANGAUPDATES_CSV_COMMAND),
+            ],
+            run_command.call_args_list,
+        )
 
     @patch("menu.generate_reports")
     @patch("builtins.input", return_value="1")

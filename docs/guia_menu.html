@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manhwateca | Guia do Menu</title>
+  <style>
+    :root {
+      --ink: #2f2e2b;
+      --muted: #8b93a1;
+      --line: #eceef1;
+      --panel: #f7f6f3;
+      --blue: #2563eb;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #fff;
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+      font-size: 17px;
+    }
+
+    button { font: inherit; }
+
+    .shell {
+      width: min(1160px, calc(100% - 56px));
+      margin: 0 auto;
+      padding: 58px 0 64px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding-bottom: 34px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    header::before {
+      content: "📚";
+      font-size: 2.45rem;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 2.7rem);
+      font-weight: 750;
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .subtitle {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 1rem;
+    }
+
+    .catalog {
+      margin-left: auto;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.8rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(380px, 0.95fr) minmax(470px, 1.1fr);
+      gap: 60px;
+      margin-top: 48px;
+      align-items: start;
+    }
+
+    .menu {
+      padding: 28px 30px;
+      border: 1px solid rgba(202, 103, 142, 0.15);
+      border-radius: 10px;
+      background: #fff;
+      box-shadow:
+        1px 2px 4px rgba(0, 0, 0, 0.03),
+        4px 8px 20px rgba(254, 215, 170, 0.10);
+    }
+
+    .stage + .stage { margin-top: 28px; }
+
+    .stage-title {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .menu-item {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 8px;
+      padding: 11px 10px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .menu-item:hover,
+    .menu-item.selected { background: #f4f4f3; }
+
+    .menu-item:hover .item-copy strong,
+    .menu-item.selected .item-copy strong { color: var(--stage); }
+
+    .number { display: none; }
+
+    .item-copy strong {
+      display: block;
+      font-size: 1.04rem;
+      font-weight: 500;
+      transition: color 150ms ease;
+    }
+
+    .item-copy small { display: none; }
+
+    .arrow {
+      grid-column: 1;
+      grid-row: 1;
+      color: #cbd0d8;
+      font-size: 0;
+      transition: transform 150ms ease;
+    }
+
+    .arrow::before {
+      content: "▸";
+      font-size: 0.92rem;
+    }
+
+    .menu-item.open .arrow { transform: rotate(90deg); }
+
+    .tree-options {
+      margin: 2px 0 10px 19px;
+      padding: 3px 0 3px 17px;
+      border-left: 1px solid var(--line);
+    }
+
+    .tree-option {
+      width: 100%;
+      display: block;
+      padding: 9px 10px;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: #4b5563;
+      text-align: left;
+      cursor: pointer;
+      font-size: 0.93rem;
+      transition: background 140ms ease, color 140ms ease;
+    }
+
+    .tree-option:hover,
+    .tree-option.active {
+      background: #f5f6f7;
+      color: var(--ink);
+    }
+
+    .detail {
+      position: sticky;
+      top: 24px;
+      min-height: 460px;
+      padding: 31px 34px;
+      border: 1px solid rgba(125, 167, 173, 0.18);
+      border-radius: 10px;
+      background: #f7fbfc;
+      box-shadow:
+        2px 4px 10px rgba(125, 167, 173, 0.06),
+        8px 16px 32px rgba(125, 167, 173, 0.08);
+    }
+
+    .eyebrow {
+      color: var(--muted);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .detail h2 {
+      margin: 10px 0 8px;
+      font-size: 1.4rem;
+      font-weight: 650;
+    }
+
+    .lead {
+      margin: 0 0 20px;
+      color: #6b7280;
+      font-size: 0.93rem;
+      line-height: 1.55;
+    }
+
+    .badges, .suboptions { display: none; }
+
+    .action-box {
+      padding: 0;
+      background: transparent;
+      color: #374151;
+    }
+
+    .command {
+      margin: 0 0 18px;
+      padding: 15px 16px;
+      border: 1px solid #d9dde3;
+      border-radius: 5px;
+      background: #fff;
+      color: #242424;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.82rem;
+      overflow-wrap: anywhere;
+    }
+
+    .command::first-letter { color: var(--blue); }
+
+    .action-box ol {
+      margin: 0;
+      padding-left: 20px;
+      line-height: 1.65;
+      font-size: 0.94rem;
+    }
+
+    .action-box li + li { margin-top: 7px; }
+
+    .files {
+      margin-top: 18px;
+      padding: 11px 13px;
+      border-radius: 4px;
+      background: #eaf3ff;
+      color: #1557c0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.75rem;
+      overflow-wrap: anywhere;
+    }
+
+    .note {
+      margin-top: 14px;
+      padding: 11px 13px;
+      border-left: 3px solid var(--accent);
+      background: #fff;
+      color: #6b7280;
+      font-size: 0.84rem;
+      line-height: 1.5;
+    }
+
+    footer {
+      margin-top: 24px;
+      color: #a0a6b0;
+      text-align: center;
+      font-size: 0.72rem;
+    }
+
+    @media (max-width: 820px) {
+      .shell { width: min(100% - 28px, 680px); padding-top: 28px; }
+      header { align-items: flex-start; }
+      .catalog { display: none; }
+      .layout { grid-template-columns: 1fr; gap: 28px; }
+      .detail { position: static; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <h1>Manhwateca Workspace</h1>
+        <p class="subtitle">
+          Organização de metadados e arquivos locais
+        </p>
+      </div>
+      <div class="catalog">📂 data/mangas.json</div>
+    </header>
+
+    <section class="layout">
+      <nav class="menu" id="menu" aria-label="Menu da Manhwateca"></nav>
+      <article class="detail" id="detail" aria-live="polite"></article>
+    </section>
+
+    <footer>Esta página é informativa e não executa comandos.</footer>
+  </main>
+
+  <script>
+    const stages = [
+      {
+        name: "Etapa 1: Organização local",
+        color: "#168b9a",
+        items: [
+          {
+            id: "standardization",
+            number: "1",
+            icon: "📄",
+            title: "Padronização e Auditoria",
+            summary: "Analisa pastas, capítulos e capas.",
+            badges: ["Abre submenu", "Biblioteca local"],
+            lead: "Centraliza as verificações e correções dos nomes da biblioteca.",
+            options: [
+              {
+                title: "1. Verificar organização e nomes",
+                summary: "Gera previews sem alterar a biblioteca.",
+                command: "python scripts/organize.py && python scripts/rename_files.py && python scripts/chapter_audit.py",
+                steps: [
+                  "Escaneia pastas, capítulos e capas.",
+                  "Aponta renomeações, conflitos, lacunas e duplicidades.",
+                  "Gera relatórios HTML para revisão.",
+                  "Não move nem renomeia arquivos."
+                ],
+                files: "reports/audits/organize_preview.html · rename_preview.html · chapter_audit.html",
+                note: "Use esta opção antes de qualquer aplicação."
+              },
+              {
+                title: "2. Aplicar padronização dos arquivos",
+                summary: "Renomeia capítulos e capas após confirmação.",
+                command: "python scripts/rename_files.py --apply",
+                steps: [
+                  "Pede confirmação numérica.",
+                  "Aplica os nomes previstos no relatório.",
+                  "Padroniza a capa para cover, preservando a extensão.",
+                  "Bloqueia conflitos em vez de sobrescrever arquivos."
+                ],
+                files: "Biblioteca configurada em MANGA_ROOT",
+                note: "Esta ação altera arquivos físicos."
+              },
+              {
+                title: "3. Registrar ajustes da revisão",
+                summary: "Salva uma observação para correção posterior.",
+                command: "Ação interna do menu",
+                steps: [
+                  "Solicita uma descrição do problema.",
+                  "Cria o arquivo de revisão quando necessário.",
+                  "Adiciona a observação como tarefa pendente."
+                ],
+                files: "reports/reviews/review_notes.md",
+                note: "Não altera a biblioteca."
+              }
+            ]
+          },
+          {
+            id: "organization",
+            number: "2",
+            icon: "🔤",
+            title: "Organização Estrutural",
+            summary: "Organiza as obras em grupos alfabéticos.",
+            badges: ["Abre submenu", "Altera pastas"],
+            lead: "Move as obras para grupos como A, BC, KLM e ST.",
+            options: [
+              {
+                title: "1. Aplicar organização alfabética",
+                summary: "Move as pastas após confirmação.",
+                command: "python scripts/organize.py --apply",
+                steps: [
+                  "Pede confirmação numérica.",
+                  "Valida origens, destinos, conflitos e duplicidades.",
+                  "Move as obras para o grupo alfabético correto.",
+                  "Registra cada movimentação no histórico."
+                ],
+                files: "reports/logs/organize_history.jsonl",
+                note: "Gere e revise o preview antes de aplicar."
+              },
+              {
+                title: "2. Executar testes",
+                summary: "Valida automaticamente as regras do projeto.",
+                command: "python -m unittest discover -s tests -v",
+                steps: [
+                  "Executa os testes de organização, renomeação e integrações.",
+                  "Exibe falhas sem alterar a biblioteca."
+                ],
+                files: "tests/",
+                note: "É uma verificação técnica, sem efeitos nos arquivos das obras."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        name: "Etapa 2: Enriquecimento de dados",
+        color: "#b77a08",
+        items: [
+          {
+            id: "ids",
+            number: "3",
+            icon: "🔎",
+            title: "MangaUpdates: Localizar IDs",
+            summary: "Busca IDs e atualiza buscaIds.json.",
+            badges: ["Executa ação", "API", "Lote de 10"],
+            lead: "Compara as obras catalogadas com o JSON de IDs e pesquisa somente as pendentes.",
+            options: [
+              {
+                title: "Executar busca de IDs",
+                summary: "Não abre submenu.",
+                command: "python scripts/mangaupdates.py --fill-ids reports/integrations/buscaIds.json --delay 3 --limit 10",
+                steps: [
+                  "Lê as obras de data/mangas.json.",
+                  "Adiciona automaticamente obras novas ao buscaIds.json.",
+                  "Consulta até 10 títulos ainda pendentes.",
+                  "Confirma correspondências seguras e marca dúvidas para revisão."
+                ],
+                files: "reports/integrations/buscaIds.json",
+                note: "Antes de usar, execute 5.1 para catalogar obras novas do Drive."
+              }
+            ]
+          },
+          {
+            id: "csv",
+            number: "4",
+            icon: "🌐",
+            title: "MangaUpdates: Dados e CSV",
+            summary: "Usa cache ou consulta detalhes na API.",
+            badges: ["Abre submenu", "API opcional"],
+            lead: "Separa a consulta externa da atualização local do CSV.",
+            options: [
+              {
+                title: "1. Atualizar CSV com dados salvos",
+                summary: "Usa apenas o cache local.",
+                command: "python scripts/mangaupdates.py --update-csv-from-ids reports/integrations/buscaIds.json",
+                steps: [
+                  "Não chama a API.",
+                  "Lê IDs confirmados e detalhes já armazenados.",
+                  "Atualiza as linhas correspondentes no CSV.",
+                  "Preserva Interesse, Status e Nota."
+                ],
+                files: "data/mangaupdates.json → reports/integrations/manhwateca_import.csv",
+                note: "IDs sem detalhes no cache permanecem pendentes."
+              },
+              {
+                title: "2. Consultar próximo lote na API",
+                summary: "Busca até 10 detalhes e depois atualiza o CSV.",
+                command: "python scripts/mangaupdates.py --fetch-details-from-ids reports/integrations/buscaIds.json --delay 3 --limit 10",
+                steps: [
+                  "Seleciona IDs confirmados ainda ausentes do cache.",
+                  "Consulta os detalhes no MangaUpdates com intervalo.",
+                  "Salva cada resposta no cache.",
+                  "Ao terminar, atualiza o CSV com os dados salvos."
+                ],
+                files: "data/mangaupdates.json · reports/integrations/manhwateca_import.csv",
+                note: "IDs já presentes no cache não geram nova requisição."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        name: "Etapa 3: Sincronização com Notion",
+        color: "#7957a8",
+        items: [
+          {
+            id: "sync",
+            number: "5",
+            icon: "🔄",
+            title: "Sincronizar Catálogo",
+            summary: "Cataloga arquivos e sincroniza com o Notion.",
+            badges: ["Abre submenu", "Notion"],
+            lead: "Controla o catálogo local, a criação em lotes e a atualização das páginas.",
+            options: [
+              {
+                title: "1. Catalogar biblioteca",
+                summary: "Detecta obras e capítulos atuais.",
+                command: "python scripts/scan.py",
+                steps: [
+                  "Varre a biblioteca configurada em MANGA_ROOT.",
+                  "Conta capítulos, side stories, lacunas e capas.",
+                  "Inclui obras novas e atualiza obras existentes."
+                ],
+                files: "data/mangas.json",
+                note: "Execute após adicionar uma obra ou novos capítulos no Drive."
+              },
+              {
+                title: "2. Simular próximo lote",
+                summary: "Mostra o que seria criado sem aplicar.",
+                command: "python scripts/sync.py --simulate-batch --batch-size 25",
+                steps: [
+                  "Consulta páginas existentes no Notion.",
+                  "Seleciona as próximas 25 obras ausentes.",
+                  "Mostra criações, atualizações, duplicidades e pendências."
+                ],
+                files: "reports/integrations/notion_import_status.json",
+                note: "Não cria nem altera páginas."
+              },
+              {
+                title: "3. Importar próximo lote",
+                summary: "Cria até 25 páginas após confirmação.",
+                command: "python scripts/sync.py --apply-batch --batch-size 25",
+                steps: [
+                  "Pede confirmação numérica.",
+                  "Reconcilia novamente as páginas existentes.",
+                  "Cria somente as próximas obras ausentes.",
+                  "Evita duplicar obras já importadas."
+                ],
+                files: "Notion · reports/integrations/notion_import_status.json",
+                note: "Esta ação altera o Notion."
+              },
+              {
+                title: "4. Atualizar dados do MangaUpdates",
+                summary: "Atualiza o cache configurado e recataloga.",
+                command: "python scripts/mangaupdates.py && python scripts/scan.py",
+                steps: [
+                  "Consulta IDs confirmados em config/mangaupdates.json.",
+                  "Atualiza os metadados externos.",
+                  "Refaz data/mangas.json com os dados atualizados."
+                ],
+                files: "data/mangaupdates.json · data/mangas.json",
+                note: "Realiza chamadas à API."
+              },
+              {
+                title: "5. Atualizar páginas já importadas",
+                summary: "Envia novas contagens sem criar páginas.",
+                command: "python scripts/sync.py --update-existing",
+                steps: [
+                  "Consulta páginas que já existem.",
+                  "Atualiza capítulos, contagens e campos gerenciados.",
+                  "Não cria obras novas."
+                ],
+                files: "Notion",
+                note: "Use após 5.1 quando adicionar capítulos no Drive."
+              }
+            ]
+          },
+          {
+            id: "metadata",
+            number: "6",
+            icon: "📥",
+            title: "Atualizar Metadados",
+            summary: "Atualiza páginas existentes usando o CSV.",
+            badges: ["Executa com confirmação", "Notion"],
+            lead: "Envia ao Notion os metadados editoriais e externos presentes no CSV.",
+            options: [
+              {
+                title: "Simular e aplicar atualização",
+                summary: "O menu pede duas confirmações.",
+                command: "python scripts/notion_csv.py [--apply]",
+                steps: [
+                  "Pede confirmação para iniciar.",
+                  "Simula quais páginas existentes seriam atualizadas.",
+                  "Pede uma segunda confirmação.",
+                  "Aplica somente após a confirmação final."
+                ],
+                files: "reports/integrations/manhwateca_import.csv → Notion",
+                note: "Nunca cria páginas novas a partir do CSV."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        name: "Automação",
+        color: "#39805a",
+        items: [
+          {
+            id: "full",
+            number: "7",
+            icon: "🚀",
+            title: "Executar Fluxo Completo",
+            summary: "Gera relatórios, cataloga e simula.",
+            badges: ["Executa sequência", "Sem aplicação automática"],
+            lead: "Roda uma sequência segura de preparação e conferência.",
+            options: [
+              {
+                title: "Executar fluxo",
+                summary: "Interrompe ao primeiro erro.",
+                command: "Ação composta do menu",
+                steps: [
+                  "Gera o preview de organização.",
+                  "Gera o preview de renomeação.",
+                  "Atualiza data/mangas.json.",
+                  "Simula o próximo lote de 25 obras no Notion."
+                ],
+                files: "reports/audits/ · data/mangas.json · notion_import_status.json",
+                note: "Não aplica organização, renomeação ou criação no Notion."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        name: "Encerrar",
+        color: "#b54c4c",
+        items: [
+          {
+            id: "exit",
+            number: "0",
+            icon: "❌",
+            title: "Sair",
+            summary: "Encerra o menu.",
+            badges: ["Ação imediata"],
+            lead: "Finaliza o programa sem executar scripts adicionais.",
+            options: [
+              {
+                title: "Encerrar",
+                summary: "Retorna ao terminal.",
+                command: "Nenhum comando adicional",
+                steps: ["Exibe a mensagem de despedida.", "Encerra o processo do menu."],
+                files: "Nenhum arquivo alterado",
+                note: "É seguro sair a qualquer momento entre as operações."
+              }
+            ]
+          }
+        ]
+      }
+    ];
+
+    const menu = document.getElementById("menu");
+    const detail = document.getElementById("detail");
+    let selectedItem = null;
+    let selectedOption = 0;
+    const openItems = new Set(["standardization"]);
+
+    function renderMenu() {
+      menu.innerHTML = stages.map(stage => `
+        <section class="stage" style="--stage:${stage.color}">
+          <h2 class="stage-title">${stage.name}</h2>
+          ${stage.items.map(item => `
+            <button class="menu-item
+                    ${openItems.has(item.id) ? "open" : ""}
+                    ${selectedItem?.id === item.id ? "selected" : ""}"
+                    data-item="${item.id}">
+              <span class="item-copy">
+                <strong>${item.number}. ${item.title}</strong>
+              </span>
+              <span class="arrow">→</span>
+            </button>
+            ${openItems.has(item.id) ? `
+              <div class="tree-options">
+                ${item.options.map((option, index) => `
+                  <button class="tree-option
+                          ${selectedItem?.id === item.id && selectedOption === index
+                            ? "active"
+                            : ""}"
+                          data-tree-item="${item.id}"
+                          data-tree-option="${index}">
+                    ${option.title}
+                  </button>
+                `).join("")}
+              </div>
+            ` : ""}
+          `).join("")}
+        </section>
+      `).join("");
+
+      menu.querySelectorAll("[data-item]").forEach(button => {
+        button.addEventListener("click", () => toggleItem(button.dataset.item));
+      });
+      menu.querySelectorAll("[data-tree-option]").forEach(button => {
+        button.addEventListener("click", () => {
+          const found = findItem(button.dataset.treeItem);
+          selectedItem = found.item;
+          selectedOption = Number(button.dataset.treeOption);
+          renderMenu();
+          renderDetail(found);
+        });
+      });
+    }
+
+    function findItem(id) {
+      for (const stage of stages) {
+        const item = stage.items.find(candidate => candidate.id === id);
+        if (item) return { item, color: stage.color, stage: stage.name };
+      }
+    }
+
+    function toggleItem(id) {
+      const found = findItem(id);
+      selectedItem = found.item;
+      selectedOption = 0;
+      if (openItems.has(id)) {
+        openItems.delete(id);
+      } else {
+        openItems.add(id);
+      }
+      renderMenu();
+      renderDetail(found);
+    }
+
+    function renderDetail(found = findItem(selectedItem.id)) {
+      const { item, color, stage } = found;
+      const action = item.options[selectedOption];
+      detail.style.setProperty("--accent", color);
+      detail.innerHTML = `
+        <div class="eyebrow">Lógica de automação</div>
+        <h2>${action.title}</h2>
+        <p class="lead">${item.lead}</p>
+        <div class="action-box">
+          <p class="command">CMD: ${action.command}</p>
+          <ol>${action.steps.map(step => `<li>${step}</li>`).join("")}</ol>
+          <div class="files">▣ ${action.files}</div>
+        </div>
+        <div class="note"><strong>Atenção:</strong> ${action.note}</div>
+      `;
+    }
+
+    selectedItem = stages[0].items[0];
+    renderMenu();
+    renderDetail(findItem(selectedItem.id));
+  </script>
+</body>
+</html>
