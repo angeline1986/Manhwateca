@@ -77,6 +77,7 @@ class MangaUpdatesTests(unittest.TestCase):
                     "series_id": 3923312591,
                     "title": "The Golden Goose Dressed as Alpha Boss",
                     "type": "Manhwa",
+                    "genres": ["Yaoi"],
                     "year": "2025",
                     "url": "https://example.test/golden-goose",
                     "description": "A" * 800,
@@ -98,6 +99,7 @@ class MangaUpdatesTests(unittest.TestCase):
         )
         self.assertEqual(734, len(candidates[0]["descricao"]))
         self.assertTrue(candidates[0]["descricao"].endswith("…"))
+        self.assertTrue(candidates[0]["bl"])
 
     def test_close_candidates_require_review(self):
         candidates = [
@@ -120,6 +122,41 @@ class MangaUpdatesTests(unittest.TestCase):
 
         self.assertIsNone(selected)
         self.assertEqual("Revisar", status)
+
+    def test_unique_exact_match_is_confirmed_despite_strong_second(self):
+        selected, status = mangaupdates.select_ranked_candidate([
+            {"id": 1, "pontuacao": 1.0, "posicao": 1},
+            {"id": 2, "pontuacao": 0.9, "posicao": 2},
+        ])
+
+        self.assertEqual(1, selected["id"])
+        self.assertEqual("Confirmado automaticamente", status)
+
+    def test_tied_exact_matches_still_require_review(self):
+        selected, status = mangaupdates.select_ranked_candidate([
+            {"id": 1, "pontuacao": 1.0, "posicao": 1},
+            {"id": 2, "pontuacao": 1.0, "posicao": 2},
+        ])
+
+        self.assertIsNone(selected)
+        self.assertEqual("Revisar", status)
+
+    def test_candidate_filter_prefers_bl_and_supported_types(self):
+        candidates = [
+            {"id": 1, "tipo": "Manga", "bl": False},
+            {"id": 2, "tipo": "Manhwa", "bl": True},
+            {"id": 3, "tipo": "Novel", "bl": True},
+        ]
+
+        self.assertEqual(
+            [2],
+            [
+                candidate["id"]
+                for candidate in mangaupdates.filter_relevant_candidates(
+                    candidates
+                )
+            ],
+        )
 
     def test_short_description_is_whitespace_normalized(self):
         self.assertEqual(
@@ -170,6 +207,8 @@ class MangaUpdatesTests(unittest.TestCase):
                             "titulo": "Complete",
                             "url": "https://example.test",
                             "descricao": "Description",
+                            "generos": ["Yaoi"],
+                            "bl": True,
                         }],
                     },
                 ]),
@@ -183,6 +222,7 @@ class MangaUpdatesTests(unittest.TestCase):
                         "type": "Manhwa",
                         "url": "https://example.test/incomplete",
                         "description": "Now complete",
+                        "genres": ["Yaoi"],
                     },
                 }],
             }
@@ -204,8 +244,57 @@ class MangaUpdatesTests(unittest.TestCase):
             search.assert_called_once_with("Incomplete", per_page=10)
             self.assertEqual(
                 "https://example.test/incomplete",
-                items[0]["IDs"][0]["url"],
+                items[0]["ID"] and response["results"][0]["record"]["url"],
             )
+            self.assertEqual("Confirmado automaticamente", items[0]["Status"])
+            self.assertNotIn("IDs", items[0])
+
+    def test_refresh_incomplete_candidates_reprocesses_missing_bl_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "ids.json"
+            path.write_text(
+                json.dumps([{
+                    "Nome": "Exact Work",
+                    "Status": "Revisar",
+                    "IDs": [{
+                        "id": 7,
+                        "titulo": "Exact Work",
+                        "url": "https://example.test/exact",
+                        "descricao": "Description",
+                    }],
+                }]),
+                encoding="utf-8",
+            )
+            response = {
+                "results": [{
+                    "record": {
+                        "series_id": 7,
+                        "title": "Exact Work",
+                        "type": "Manhwa",
+                        "url": "https://example.test/exact",
+                        "description": "Description",
+                        "genres": ["Shounen Ai"],
+                    },
+                }],
+            }
+            with mock.patch(
+                "mangaupdates.search_series",
+                return_value=response,
+            ):
+                processed, pending = (
+                    mangaupdates.refresh_incomplete_candidates(
+                        path,
+                        delay=0,
+                        limit=10,
+                    )
+                )
+
+            item = json.loads(path.read_text(encoding="utf-8"))[0]
+            self.assertEqual(1, processed)
+            self.assertEqual(0, pending)
+            self.assertEqual("Confirmado automaticamente", item["Status"])
+            self.assertEqual(7, item["ID"])
+            self.assertNotIn("IDs", item)
 
     def test_catalog_titles_are_added_to_id_searches(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -226,6 +315,65 @@ class MangaUpdatesTests(unittest.TestCase):
 
             self.assertEqual(1, added)
             self.assertEqual("Obra nova", items[-1]["Nome"])
+
+    def test_search_terms_prefer_configured_alternatives(self):
+        terms = mangaupdates.search_terms_for_item(
+            {"Nome": "XX Cheio de Segredos"},
+            {
+                "XX Cheio de Segredos": {
+                    "nome_oficial": "Full of Secrets",
+                    "nomes_busca": ["The Secretive XX"],
+                },
+            },
+        )
+
+        self.assertEqual(
+            ["The Secretive XX", "Full of Secrets", "XX Cheio de Segredos"],
+            terms,
+        )
+
+    def test_search_candidates_uses_alternative_until_strong_match(self):
+        responses = {
+            "The Secretive XX": {
+                "results": [{
+                    "record": {
+                        "series_id": 10,
+                        "title": "The Secretive XX",
+                        "type": "Manhwa",
+                    },
+                }],
+            },
+        }
+        with mock.patch(
+            "mangaupdates.search_series",
+            side_effect=lambda title, per_page: responses[title],
+        ) as search:
+            candidates, term = mangaupdates.search_candidates_for_item(
+                {"Nome": "XX Cheio de Segredos"},
+                {
+                    "XX Cheio de Segredos": {
+                        "nomes_busca": ["The Secretive XX"],
+                    },
+                },
+            )
+
+        self.assertEqual("The Secretive XX", term)
+        self.assertEqual(10, candidates[0]["id"])
+        search.assert_called_once_with("The Secretive XX", per_page=10)
+
+    def test_initial_filter_accepts_letters_accents_and_numbers(self):
+        initial_filter = mangaupdates.normalize_initial_filter("AÇ 0-9")
+
+        self.assertTrue(
+            mangaupdates.matches_initial_filter("Além das memórias", initial_filter)
+        )
+        self.assertTrue(
+            mangaupdates.matches_initial_filter("Ção", initial_filter)
+        )
+        self.assertTrue(mangaupdates.matches_initial_filter("2020", initial_filter))
+        self.assertFalse(
+            mangaupdates.matches_initial_filter("Beyond Memories", initial_filter)
+        )
 
     def test_fetch_confirmed_details_skips_cached_ids(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -435,6 +583,68 @@ class MangaUpdatesTests(unittest.TestCase):
                 "ID confirmado manualmente",
                 row["Correspondência API"],
             )
+
+    def test_update_csv_deduplicates_same_id_and_matches_catalog_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ids_path = directory / "busca_ids.json"
+            csv_path = directory / "catalog.csv"
+            cache_path = directory / "cache.json"
+            metadata_path = directory / "catalog_metadata.json"
+            ids_path.write_text(
+                json.dumps([
+                    {
+                        "Nome": "Love Shuttle",
+                        "Status": "Confirmado manualmente",
+                        "ID": 53840259364,
+                    },
+                    {
+                        "Nome": "Ônibus do amor_love shuttle",
+                        "Status": "Confirmado manualmente",
+                        "ID": 53840259364,
+                    },
+                ]),
+                encoding="utf-8",
+            )
+            cache_path.write_text("{}", encoding="utf-8")
+            metadata_path.write_text(
+                json.dumps({
+                    "Ônibus do amor_love shuttle": {
+                        "nome_oficial": "Love Shuttle",
+                        "alias": "Ônibus do Amor",
+                    },
+                }),
+                encoding="utf-8",
+            )
+            with csv_path.open("w", encoding="utf-8-sig", newline="") as file:
+                writer = csv.DictWriter(
+                    file,
+                    fieldnames=mangaupdates.CSV_COLUMNS,
+                )
+                writer.writeheader()
+                writer.writerow({
+                    "Nome": "Love Shuttle",
+                    "Alias": "Ônibus do Amor",
+                })
+
+            with mock.patch.object(
+                mangaupdates,
+                "METADATA_FILE",
+                metadata_path,
+            ):
+                updated, checked, uncached, missing = (
+                    mangaupdates.update_csv_from_confirmed_ids(
+                        ids_path,
+                        csv_path=csv_path,
+                        cache_path=cache_path,
+                        delay=0,
+                    )
+                )
+
+            self.assertEqual(0, updated)
+            self.assertEqual(0, checked)
+            self.assertEqual(["Love Shuttle"], uncached)
+            self.assertEqual([], missing)
 
     def test_update_csv_does_not_count_unchanged_rows(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -1,5 +1,6 @@
 import argparse
 import csv
+import json
 import os
 import re
 import unicodedata
@@ -12,6 +13,7 @@ from notion_client import Client
 load_dotenv()
 
 CSV_FILE = Path("reports/integrations/manhwateca_import.csv")
+METADATA_FILE = Path("config/catalog_metadata.json")
 MULTI_VALUE_SEPARATOR = "|"
 
 
@@ -101,6 +103,37 @@ def load_rows(path=CSV_FILE):
         return list(csv.DictReader(file))
 
 
+def load_metadata(path=METADATA_FILE):
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as file:
+        data = json.load(file)
+    return data if isinstance(data, dict) else {}
+
+
+def equivalent_names(row, metadata):
+    names = {
+        row.get("Nome", "").strip(),
+        *split_values(row.get("Alias")),
+    }
+    normalized_names = {normalize_title(name) for name in names if name}
+    for local_name, values in metadata.items():
+        search_names = values.get("nomes_busca", [])
+        if isinstance(search_names, str):
+            search_names = [search_names]
+        configured = {
+            local_name,
+            values.get("nome_oficial", ""),
+            values.get("alias", ""),
+            *search_names,
+        }
+        if normalized_names & {
+            normalize_title(name) for name in configured if name
+        }:
+            names.update(name for name in configured if name)
+    return {normalize_title(name) for name in names if name}
+
+
 def load_existing_pages(notion, database_id):
     pages = {}
     cursor = None
@@ -122,16 +155,19 @@ def load_existing_pages(notion, database_id):
     return pages
 
 
-def update_from_csv(notion, database_id, rows, apply=False):
+def update_from_csv(
+    notion,
+    database_id,
+    rows,
+    apply=False,
+    metadata=None,
+):
     existing = load_existing_pages(notion, database_id)
+    metadata = load_metadata() if metadata is None else metadata
     summary = {"updated": 0, "missing": [], "duplicates": []}
     for row in rows:
         name = row.get("Nome", "").strip()
-        candidates = {normalize_title(name)}
-        candidates.update(
-            normalize_title(alias)
-            for alias in split_values(row.get("Alias"))
-        )
+        candidates = equivalent_names(row, metadata)
         matches_by_id = {}
         for candidate in candidates:
             for page in existing.get(candidate, []):

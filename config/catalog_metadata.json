@@ -622,7 +622,11 @@
   "XX Cheio de Segredos": {
     "nome_oficial": "Full of Secrets",
     "alias": "XX Cheio de Segredos",
-    "interesse": "Finalizado"
+    "interesse": "Finalizado",
+    "nomes_busca": [
+      "The Secretive XX",
+      "Full of Secrets"
+    ]
   },
   "Yang Ilwoo": {
     "nome_oficial": "Yang Ilwoo",

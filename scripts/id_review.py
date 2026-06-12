@@ -1,7 +1,10 @@
 import argparse
+import csv
 import html
 import json
+import re
 import shutil
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -11,6 +14,9 @@ REPORT_FILE = Path("reports/audits/mangaupdates_id_review.html")
 DEFAULT_DECISIONS_FILE = Path(
     "reports/integrations/mangaupdates_id_decisions.json"
 )
+CSV_FILE = Path("reports/integrations/manhwateca_import.csv")
+METADATA_FILE = Path("config/catalog_metadata.json")
+CACHE_FILE = Path("data/mangaupdates.json")
 
 
 def load_items(path=IDS_FILE):
@@ -57,8 +63,17 @@ def import_decisions(decisions_path, ids_path=IDS_FILE):
         name = str(decision.get("Nome") or "").strip()
         series_id = decision.get("ID")
         selected_title = str(decision.get("Nome encontrado") or "").strip()
+        manual_id = decision.get("Origem") == "ID informado manualmente"
         if not name or series_id in (None, ""):
             rejected.append("Decisão sem Nome ou ID.")
+            continue
+        try:
+            series_id = int(series_id)
+        except (TypeError, ValueError):
+            rejected.append(f"{name}: ID inválido.")
+            continue
+        if series_id <= 0:
+            rejected.append(f"{name}: ID deve ser um número positivo.")
             continue
         if name in seen:
             rejected.append(f"{name}: decisão duplicada no arquivo.")
@@ -82,20 +97,29 @@ def import_decisions(decisions_path, ids_path=IDS_FILE):
             ),
             None,
         )
-        if candidate is None:
+        if candidate is None and not manual_id:
             rejected.append(
                 f"{name}: ID {series_id} não pertence aos candidatos exibidos."
             )
             continue
-        candidate_title = str(candidate.get("titulo") or "").strip()
-        if selected_title and selected_title != candidate_title:
+        candidate_title = (
+            selected_title or f"ID {series_id}"
+            if manual_id
+            else str(candidate.get("titulo") or "").strip()
+        )
+        if (
+            candidate
+            and not manual_id
+            and selected_title
+            and selected_title != candidate_title
+        ):
             rejected.append(
                 f"{name}: título selecionado não corresponde ao candidato."
             )
             continue
 
         item["Status"] = "Confirmado manualmente"
-        item["ID"] = candidate["id"]
+        item["ID"] = series_id
         item["Nome encontrado"] = candidate_title
         item.pop("IDs", None)
         applied.append(name)
@@ -119,6 +143,115 @@ def score_class(score):
     if score >= 0.7:
         return "score-medium"
     return "score-low"
+
+
+def normalize_title(value):
+    value = unicodedata.normalize("NFKD", str(value or ""))
+    value = value.encode("ascii", "ignore").decode().casefold()
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", value).split())
+
+
+def load_json_object(path):
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as file:
+        data = json.load(file)
+    return data if isinstance(data, dict) else {}
+
+
+def count_confirmed_without_details(items, cache_path=CACHE_FILE):
+    cache = load_json_object(cache_path)
+    return sum(
+        1
+        for item in items
+        if item.get("Status") in {
+            "Confirmado automaticamente",
+            "Confirmado manualmente",
+        }
+        and item.get("ID")
+        and str(item["ID"]) not in cache
+    )
+
+
+def consolidate_review_items(items, csv_path=None, metadata_path=METADATA_FILE):
+    review_items = [
+        item for item in items
+        if item.get("Status") == "Revisar" and item.get("IDs")
+    ]
+    if not csv_path or not csv_path.exists():
+        return review_items
+
+    with csv_path.open(encoding="utf-8-sig", newline="") as file:
+        rows = list(csv.DictReader(file))
+
+    row_index = {}
+    for position, row in enumerate(rows):
+        for value in (row.get("Nome"), row.get("Alias")):
+            for title in str(value or "").split("|"):
+                if title.strip():
+                    row_index.setdefault(normalize_title(title), position)
+
+    metadata = load_json_object(metadata_path)
+    for local_title, values in metadata.items():
+        names = [
+            values.get("nome_oficial"),
+            values.get("alias"),
+            local_title,
+        ]
+        position = next(
+            (
+                row_index[normalize_title(name)]
+                for name in names
+                if name and normalize_title(name) in row_index
+            ),
+            None,
+        )
+        if position is not None:
+            for name in names:
+                if name:
+                    row_index.setdefault(normalize_title(name), position)
+
+    confirmed_positions = {
+        row_index[normalize_title(item.get("Nome"))]
+        for item in items
+        if item.get("Status") in {
+            "Confirmado automaticamente",
+            "Confirmado manualmente",
+        }
+        and item.get("ID")
+        and normalize_title(item.get("Nome")) in row_index
+    }
+
+    grouped = {}
+    for item in review_items:
+        position = row_index.get(normalize_title(item.get("Nome")))
+        if (
+            position is None
+            or position in confirmed_positions
+            or str(rows[position].get("ID da obra") or "").strip()
+        ):
+            continue
+        group = grouped.setdefault(position, {
+            "Nome": rows[position].get("Nome") or item.get("Nome"),
+            "Nome decisão": item.get("Nome"),
+            "Nomes relacionados": [],
+            "Status": "Revisar",
+            "IDs": [],
+        })
+        group["Nomes relacionados"].append(item.get("Nome"))
+        known_ids = {candidate.get("id") for candidate in group["IDs"]}
+        group["IDs"].extend(
+            candidate
+            for candidate in item.get("IDs", [])
+            if candidate.get("id") not in known_ids
+        )
+        group["IDs"].sort(
+            key=lambda candidate: (
+                -float(candidate.get("pontuacao") or 0),
+                candidate.get("posicao") or 999,
+            )
+        )
+    return list(grouped.values())
 
 
 def render_candidate(candidate, suggested=False):
@@ -148,6 +281,7 @@ def render_candidate(candidate, suggested=False):
         <span>{html.escape(str(candidate.get("tipo") or "Tipo desconhecido"))}</span>
         <span>{html.escape(str(candidate.get("ano") or "Ano desconhecido"))}</span>
         <span>ID {series_id}</span>
+        {"<span>BL confirmado pela API</span>" if candidate.get("bl") else ""}
       </div>
       <p class="description">{description}</p>
       <div class="candidate-actions">
@@ -162,10 +296,18 @@ def render_candidate(candidate, suggested=False):
     """
 
 
-def render_report(items):
-    review_items = [
+def render_report(items, csv_path=None, metadata_path=METADATA_FILE):
+    review_items = consolidate_review_items(
+        items,
+        csv_path=csv_path,
+        metadata_path=metadata_path,
+    )
+    confirmed_items = [
         item for item in items
-        if item.get("Status") == "Revisar" and item.get("IDs")
+        if item.get("Status") in {
+            "Confirmado automaticamente",
+            "Confirmado manualmente",
+        } and item.get("ID")
     ]
     confirmed = sum(
         item.get("Status") in {
@@ -176,7 +318,21 @@ def render_report(items):
     )
     cards = []
     for item in review_items:
-        candidates = item.get("IDs", [])
+        candidates = [
+            candidate for candidate in item.get("IDs", [])
+            if float(candidate.get("pontuacao") or 0) > 0.70
+        ]
+        decision_name = str(item.get("Nome decisão") or item.get("Nome", ""))
+        related_names = [
+            str(name) for name in item.get("Nomes relacionados", [])
+            if name and str(name) != str(item.get("Nome"))
+        ]
+        related_text = (
+            "<div class='related-names'>Também catalogada como: "
+            + html.escape(" | ".join(related_names))
+            + "</div>"
+            if related_names else ""
+        )
         candidates_html = "".join(
             render_candidate(candidate, suggested=index == 0)
             for index, candidate in enumerate(candidates)
@@ -189,7 +345,9 @@ def render_report(items):
             quote=True,
         )
         cards.append(f"""
-        <details class="work" data-search="{search}">
+        <details class="work" data-category="review"
+          data-decision-name="{html.escape(decision_name, quote=True)}"
+          data-search="{search}">
           <summary>
             <span>
               <span class="work-title">{html.escape(str(item.get("Nome", "")))}</span>
@@ -199,14 +357,61 @@ def render_report(items):
           </summary>
           <div class="work-body">
             <p class="guidance">Compare título, tipo, ano e sinopse. Abra a ficha
-            externa quando precisar confirmar personagens ou capa.</p>
-            <div class="candidate-grid">{candidates_html}</div>
+            externa quando precisar confirmar personagens ou capa. A lista
+            mostra somente candidatos com score acima de 0,70 e prioriza
+            títulos classificados como Yaoi ou Shounen Ai.</p>
+            {related_text}
+            <div class="candidate-grid">{candidates_html or
+              "<div class='no-candidates'>Nenhum candidato atingiu o score mínimo.</div>"}</div>
+            <div class="manual-id">
+              <div>
+                <strong>Nenhuma das opções?</strong>
+                <span>Informe o ID correto da obra no MangaUpdates.</span>
+              </div>
+              <div class="manual-id-action">
+                <input type="number" min="1" step="1"
+                  class="manual-id-input" placeholder="Ex.: 53840259364">
+                <button type="button" class="manual-id-button">
+                  Usar este ID
+                </button>
+              </div>
+            </div>
+          </div>
+        </details>
+        """)
+
+    for item in confirmed_items:
+        confirmation = str(item.get("Status"))
+        status_label = (
+            "Aplicado"
+            if confirmation == "Confirmado manualmente"
+            else "Confirmado"
+        )
+        cards.append(f"""
+        <details class="work applied-work"
+          data-category="confirmed"
+          data-search="{html.escape(str(item.get("Nome", "")).casefold(), quote=True)}">
+          <summary>
+            <span>
+              <span class="work-title">{html.escape(str(item.get("Nome", "")))}</span>
+              <span class="candidate-count">ID {html.escape(str(item.get("ID")))}</span>
+            </span>
+            <span class="status applied">{status_label}</span>
+          </summary>
+          <div class="work-body">
+            <p class="guidance">Decisão importada no buscaIds.json.</p>
+            <div class="flow-files">
+              Nome encontrado: {html.escape(str(item.get("Nome encontrado", "")))}<br>
+              Status: {html.escape(confirmation)}
+            </div>
           </div>
         </details>
         """)
 
     data = json.dumps(
-        [{"name": item.get("Nome", "")} for item in review_items],
+        [{
+            "name": item.get("Nome decisão") or item.get("Nome", ""),
+        } for item in review_items],
         ensure_ascii=False,
     ).replace("</", "<\\/")
     return f"""<!DOCTYPE html>
@@ -228,7 +433,11 @@ h1 {{ margin:0 0 5px; font-size:30px; letter-spacing:-.03em; }}
 .subtitle,.muted {{ color:var(--muted); }}
 .summary {{ display:flex; gap:10px; flex-wrap:wrap; }}
 .pill {{ padding:8px 12px; border:1px solid var(--line); border-radius:9px;
-background:var(--paper); box-shadow:0 5px 18px rgba(31,41,55,.04); }}
+background:var(--paper); box-shadow:0 5px 18px rgba(31,41,55,.04);
+color:var(--ink); cursor:pointer; font:inherit; }}
+.pill:hover {{ border-color:#b9c7d8; transform:translateY(-1px); }}
+.pill.active {{ color:#235da8; border-color:#9fc1ec; background:var(--blue-soft);
+box-shadow:0 5px 18px rgba(57,118,210,.12); }}
 .toolbar {{ position:sticky; top:0; z-index:5; display:flex; gap:12px;
 padding:14px; margin-bottom:18px; border:1px solid var(--line); border-radius:12px;
 background:rgba(255,255,255,.94); box-shadow:0 8px 26px rgba(31,41,55,.06);
@@ -249,9 +458,21 @@ summary::-webkit-details-marker {{ display:none; }}
 .status {{ padding:4px 10px; border-radius:999px; color:var(--amber); background:#fff5df;
 font-size:12px; font-weight:700; }}
 .status.selected {{ color:var(--green); background:#e8f7ef; }}
+.status.applied {{ color:#315f91; background:#eaf3ff; }}
 .work-body {{ padding:0 20px 20px; border-top:1px solid var(--line); }}
 .guidance {{ color:var(--muted); }}
+.related-names {{ margin:-2px 0 14px; padding:8px 10px; color:#536174;
+background:#f3f6f9; border-radius:7px; font-size:13px; }}
 .candidate-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }}
+.no-candidates {{ grid-column:1/-1; padding:18px; color:var(--muted);
+border:1px dashed #ccd4de; border-radius:9px; text-align:center; }}
+.manual-id {{ display:flex; justify-content:space-between; align-items:center; gap:18px;
+margin-top:16px; padding:16px; border:1px solid #dce4ed; border-radius:9px;
+background:#f8fafc; }}
+.manual-id span {{ display:block; color:var(--muted); font-size:13px; }}
+.manual-id-action {{ display:flex; gap:8px; }}
+.manual-id-input {{ width:190px; min-width:0; }}
+.manual-id-button {{ color:#fff; background:#586b84; white-space:nowrap; }}
 .candidate {{ padding:16px; border:1px solid var(--line); border-radius:9px; background:#fff; }}
 .candidate.suggested {{ border-color:#bdd7f6; background:var(--blue-soft); }}
 .candidate.selected {{ outline:2px solid #62a67f; background:#f1fbf5; }}
@@ -273,7 +494,9 @@ font-size:12px; }}
 .empty {{ padding:35px; text-align:center; border:1px solid var(--line); border-radius:12px;
 background:#fff; }}
 @media(max-width:800px) {{ .hero,.toolbar {{ align-items:stretch; flex-direction:column; }}
-.candidate-grid {{ grid-template-columns:1fr; }} }}
+.candidate-grid {{ grid-template-columns:1fr; }}
+.manual-id,.manual-id-action {{ align-items:stretch; flex-direction:column; }}
+.manual-id-input {{ width:100%; }} }}
 </style>
 </head>
 <body>
@@ -281,9 +504,14 @@ background:#fff; }}
   <header class="hero">
     <div><h1>Revisão de IDs MangaUpdates</h1>
     <div class="subtitle">Compare os candidatos antes de vinculá-los à biblioteca.</div></div>
-    <div class="summary"><span class="pill"><strong>{len(review_items)}</strong> para revisar</span>
-    <span class="pill"><strong>{confirmed}</strong> IDs confirmados</span>
-    <span class="pill"><strong id="selectedCount">0</strong> decisões tomadas</span></div>
+    <div class="summary">
+      <button type="button" class="pill active" data-filter="review"
+        aria-pressed="true"><strong>{len(review_items)}</strong> para revisar</button>
+      <button type="button" class="pill" data-filter="confirmed"
+        aria-pressed="false"><strong>{confirmed}</strong> IDs confirmados</button>
+      <button type="button" class="pill" data-filter="selected"
+        aria-pressed="false"><strong id="selectedCount">0</strong> decisões tomadas</button>
+    </div>
   </header>
   <div class="toolbar">
     <input id="search" type="search" placeholder="Buscar obra ou candidato...">
@@ -296,9 +524,27 @@ background:#fff; }}
 <script>
 const works = {data};
 const decisions = JSON.parse(localStorage.getItem("manhwateca-id-decisions") || "{{}}");
-function refresh() {{
+const reviewNames = new Set(works.map((work) => work.name));
+let activeFilter = "review";
+Object.keys(decisions).forEach((name) => {{
+  if (!reviewNames.has(name)) delete decisions[name];
+}});
+function applyFilters() {{
+  const query = document.getElementById("search").value.trim()
+    .toLocaleLowerCase("pt-BR");
   document.querySelectorAll(".work").forEach((work) => {{
-    const name = work.querySelector(".work-title").textContent;
+    const name = work.dataset.decisionName ||
+      work.querySelector(".work-title").textContent;
+    const categoryMatch = activeFilter === "selected"
+      ? Boolean(decisions[name])
+      : work.dataset.category === activeFilter;
+    work.hidden = !categoryMatch || !work.dataset.search.includes(query);
+  }});
+}}
+function refresh() {{
+  document.querySelectorAll(".work:not(.applied-work)").forEach((work) => {{
+    const name = work.dataset.decisionName ||
+      work.querySelector(".work-title").textContent;
     const selected = decisions[name];
     work.querySelectorAll(".candidate").forEach((card) => {{
       card.classList.toggle("selected", card.querySelector(".select-button").dataset.id === String(selected?.id));
@@ -309,26 +555,54 @@ function refresh() {{
   }});
   document.getElementById("selectedCount").textContent = Object.keys(decisions).length;
   localStorage.setItem("manhwateca-id-decisions", JSON.stringify(decisions));
+  applyFilters();
 }}
 document.querySelectorAll(".select-button").forEach((button) => button.addEventListener("click", () => {{
   const work = button.closest(".work");
-  const name = work.querySelector(".work-title").textContent;
+  const name = work.dataset.decisionName ||
+    work.querySelector(".work-title").textContent;
   decisions[name] = {{ id:Number(button.dataset.id), title:button.dataset.title }};
   refresh();
 }}));
+document.querySelectorAll(".manual-id-button").forEach((button) =>
+  button.addEventListener("click", () => {{
+    const work = button.closest(".work");
+    const input = work.querySelector(".manual-id-input");
+    const id = Number(input.value);
+    if (!Number.isInteger(id) || id <= 0) {{
+      input.focus();
+      return alert("Informe um ID numérico válido.");
+    }}
+    const name = work.dataset.decisionName ||
+      work.querySelector(".work-title").textContent;
+    decisions[name] = {{
+      id,
+      title:`ID ${{id}}`,
+      source:"ID informado manualmente"
+    }};
+    refresh();
+  }}));
 document.getElementById("search").addEventListener("input", (event) => {{
-  const query = event.target.value.trim().toLocaleLowerCase("pt-BR");
-  document.querySelectorAll(".work").forEach((work) => {{
-    work.hidden = !work.dataset.search.includes(query);
-  }});
+  applyFilters();
 }});
+document.querySelectorAll("[data-filter]").forEach((button) =>
+  button.addEventListener("click", () => {{
+    activeFilter = button.dataset.filter;
+    document.querySelectorAll("[data-filter]").forEach((item) => {{
+      const active = item === button;
+      item.classList.toggle("active", active);
+      item.setAttribute("aria-pressed", String(active));
+    }});
+    applyFilters();
+  }}));
 document.getElementById("expandAll").addEventListener("click", () =>
   document.querySelectorAll(".work:not([hidden])").forEach((work) => work.open = true));
 document.getElementById("collapseAll").addEventListener("click", () =>
   document.querySelectorAll(".work").forEach((work) => work.open = false));
 document.getElementById("export").addEventListener("click", () => {{
   const payload = Object.entries(decisions).map(([Nome, choice]) => ({{
-    Nome, ID:choice.id, "Nome encontrado":choice.title
+    Nome, ID:choice.id, "Nome encontrado":choice.title,
+    Origem:choice.source || "Candidato exibido"
   }}));
   if (!payload.length) return alert("Selecione pelo menos um candidato.");
   const blob = new Blob([JSON.stringify(payload, null, 2) + "\\n"], {{type:"application/json"}});
@@ -344,14 +618,19 @@ refresh();
 </html>"""
 
 
-def generate_report(ids_path=IDS_FILE, report_path=REPORT_FILE):
+def generate_report(
+    ids_path=IDS_FILE,
+    report_path=REPORT_FILE,
+    csv_path=CSV_FILE,
+):
     items = load_items(ids_path)
+    review_items = consolidate_review_items(items, csv_path=csv_path)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(render_report(items), encoding="utf-8")
-    review_count = sum(
-        bool(item.get("Status") == "Revisar" and item.get("IDs"))
-        for item in items
+    report_path.write_text(
+        render_report(items, csv_path=csv_path),
+        encoding="utf-8",
     )
+    review_count = len(review_items)
     print(f"Relatório gerado: {report_path}")
     print(f"Obras aguardando revisão: {review_count}")
 
@@ -386,6 +665,20 @@ def main():
             print(f"- {reason}")
         if backup:
             print(f"Backup criado: {backup}")
+        pending_details = count_confirmed_without_details(
+            load_items(args.ids_file)
+        )
+        if pending_details:
+            print()
+            print(
+                f"Próximo passo: {pending_details} ID(s) confirmado(s) ainda "
+                "não possuem detalhes."
+            )
+            print(
+                "Use a opção 5.2 - Consultar próximo lote na API. "
+                "Ela também atualizará o CSV."
+            )
+        generate_report(ids_path=args.ids_file)
         return
 
     generate_report(ids_path=args.ids_file)

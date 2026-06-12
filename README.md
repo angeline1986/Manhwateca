@@ -264,13 +264,27 @@ python scripts/scan.py
 A identificação não aceita automaticamente o primeiro resultado da busca,
 evitando confundir versões Manhwa, Novel e obras com nomes semelhantes.
 
+Quando o nome local está em português, adicione `nomes_busca` à obra em
+`config/catalog_metadata.json`. A busca tenta primeiro esses títulos
+alternativos, depois o nome oficial e, por último, o nome local.
+
+Os resultados priorizam obras classificadas pela API como `Yaoi` ou
+`Shounen Ai` e descartam formatos incompatíveis quando existem candidatos BL.
+Uma correspondência exata única pode ser confirmada automaticamente; empates
+exatos continuam marcados para revisão.
+
+No menu, a opção `4.1` aceita letras iniciais como `A`, `ABC` ou `0-9`.
+Deixar o campo vazio mantém a busca em todas as obras pendentes.
+
 ## MangaUpdates e CSV
 
 O processo funciona assim:
 
 1. **Opção 4:** busca os IDs e atualiza
    `reports/integrations/buscaIds.json`.
-2. Use a opção `4.2` para atualizar candidatos antigos sem link ou descrição.
+2. Use a opção `4.2` para atualizar candidatos antigos sem link, descrição ou
+   classificação BL. Correspondências exatas e únicas podem ser confirmadas
+   automaticamente nessa atualização.
 3. Gere `reports/audits/mangaupdates_id_review.html` na opção `4.3` para
    comparar os candidatos marcados com `Status: Revisar`.
 4. Selecione os candidatos, exporte as decisões e use a opção `4.4` para

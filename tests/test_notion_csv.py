@@ -87,6 +87,27 @@ class NotionCsvTests(unittest.TestCase):
         self.assertEqual(1, summary["updated"])
         self.assertEqual([], summary["missing"])
 
+    def test_update_matches_existing_page_by_local_catalog_name(self):
+        pages = FakePages()
+        notion = SimpleNamespace(databases=FakeDatabases(), pages=pages)
+        metadata = {
+            "Alpha": {
+                "nome_oficial": "Official Alpha",
+                "alias": "Alfa Oficial",
+            },
+        }
+
+        summary = notion_csv.update_from_csv(
+            notion,
+            "database",
+            [{"Nome": "Official Alpha", "Alias": "Alfa Oficial"}],
+            apply=False,
+            metadata=metadata,
+        )
+
+        self.assertEqual(1, summary["updated"])
+        self.assertEqual([], summary["missing"])
+
     def test_interesse_is_mapped_when_present(self):
         properties = notion_csv.build_properties({
             "Interesse": "Muito alto",

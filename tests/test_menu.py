@@ -92,6 +92,24 @@ class MenuTests(unittest.TestCase):
         run_command.assert_called_once_with(["scripts/id_review.py"])
 
     @patch("menu.run_command")
+    @patch("builtins.input", side_effect=["1", "ABC"])
+    def test_mangaupdates_id_submenu_filters_by_initials(
+        self,
+        _input,
+        run_command,
+    ):
+        run_command.return_value = True
+
+        result = menu.mangaupdates_id_menu()
+
+        self.assertTrue(result)
+        run_command.assert_called_once_with([
+            *menu.MANGAUPDATES_ID_COMMAND,
+            "--initials",
+            "ABC",
+        ])
+
+    @patch("menu.run_command")
     @patch("builtins.input", return_value="2")
     def test_mangaupdates_id_submenu_refreshes_incomplete_candidates(
         self,

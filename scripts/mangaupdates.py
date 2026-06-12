@@ -12,6 +12,8 @@ from pathlib import Path
 
 
 API_BASE = "https://api.mangaupdates.com/v1"
+BL_GENRES = {"yaoi", "shounen ai"}
+SUPPORTED_TYPES = {"Manhwa", "Manhua", "Manga", "OEL"}
 MAPPINGS_FILE = Path("config/mangaupdates.json")
 CACHE_FILE = Path("data/mangaupdates.json")
 CATALOG_FILE = Path("data/mangas.json")
@@ -173,6 +175,8 @@ def rank_search_results(title, response):
         score = title_similarity(title, candidate_title)
         if record.get("type") == "Manhwa":
             score = min(1.0, score + 0.05)
+        genres = record.get("genres") or []
+        normalized_genres = {str(genre).casefold() for genre in genres}
         candidates.append({
             "id": series_id,
             "titulo": candidate_title,
@@ -180,6 +184,8 @@ def rank_search_results(title, response):
             "ano": record.get("year"),
             "url": record.get("url"),
             "descricao": truncate_text(record.get("description")),
+            "generos": genres,
+            "bl": bool(normalized_genres & BL_GENRES),
             "pontuacao": round(score, 4),
             "posicao": position,
         })
@@ -189,11 +195,25 @@ def rank_search_results(title, response):
     )
 
 
+def filter_relevant_candidates(candidates):
+    supported = [
+        candidate
+        for candidate in candidates
+        if candidate.get("tipo") in SUPPORTED_TYPES
+    ]
+    bl_candidates = [
+        candidate for candidate in supported if candidate.get("bl")
+    ]
+    return bl_candidates or supported
+
+
 def select_ranked_candidate(candidates, threshold=0.72, margin=0.08):
     if not candidates:
         return None, "Não encontrada"
     best = candidates[0]
     second_score = candidates[1]["pontuacao"] if len(candidates) > 1 else 0
+    if best["pontuacao"] >= 0.99 and second_score < 0.99:
+        return best, "Confirmado automaticamente"
     if second_score >= 0.65:
         return None, "Revisar"
     if (
@@ -232,6 +252,66 @@ def add_catalog_titles_to_id_searches(items, catalog_path=CATALOG_FILE):
     return added
 
 
+def search_terms_for_item(item, metadata):
+    name = item["Nome"].strip()
+    configured = metadata.get(name, {})
+    terms = configured.get("nomes_busca", [])
+    if isinstance(terms, str):
+        terms = [terms]
+    official = configured.get("nome_oficial")
+    candidates = [*terms, official, name]
+    unique = []
+    seen = set()
+    for term in candidates:
+        term = str(term or "").strip()
+        normalized = normalize_title(term)
+        if not term or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(term)
+    return unique
+
+
+def search_candidates_for_item(item, metadata, per_page=10):
+    best_candidates = []
+    best_term = item["Nome"].strip()
+    for term in search_terms_for_item(item, metadata):
+        response = search_series(term, per_page=per_page)
+        candidates = filter_relevant_candidates(
+            rank_search_results(term, response)
+        )
+        if candidates and (
+            not best_candidates
+            or candidates[0]["pontuacao"] > best_candidates[0]["pontuacao"]
+        ):
+            best_candidates = candidates
+            best_term = term
+        if candidates and candidates[0]["pontuacao"] >= 0.95:
+            break
+    return best_candidates, best_term
+
+
+def normalize_initial_filter(value):
+    value = unicodedata.normalize("NFD", value or "")
+    value = value.encode("ascii", "ignore").decode("ascii").upper()
+    letters = {character for character in value if character.isalpha()}
+    include_numbers = any(character.isdigit() for character in value)
+    return letters, include_numbers
+
+
+def matches_initial_filter(title, initial_filter):
+    letters, include_numbers = initial_filter
+    if not letters and not include_numbers:
+        return True
+    normalized = normalize_title(title)
+    if not normalized:
+        return False
+    initial = normalized[0].upper()
+    if initial.isdigit():
+        return include_numbers
+    return initial in letters
+
+
 def fill_ids_file(
     path,
     delay=3.0,
@@ -239,8 +319,10 @@ def fill_ids_file(
     per_page=10,
     retry_review=False,
     catalog_path=CATALOG_FILE,
+    initials="",
 ):
     items = load_id_searches(path)
+    metadata = load_json_object(METADATA_FILE)
     added = add_catalog_titles_to_id_searches(items, catalog_path)
     if added:
         save_json(path, items)
@@ -257,8 +339,11 @@ def fill_ids_file(
         save_json(path, items)
 
     processed = 0
+    initial_filter = normalize_initial_filter(initials)
     for item in items:
         if item.get("ID"):
+            continue
+        if not matches_initial_filter(item["Nome"], initial_filter):
             continue
         if item.get("Status") == "Revisar" and not retry_review:
             continue
@@ -267,8 +352,12 @@ def fill_ids_file(
 
         name = item["Nome"].strip()
         print(f"[BUSCAR ID] {name}")
-        response = search_series(name, per_page=per_page)
-        candidates = rank_search_results(name, response)
+        candidates, search_term = search_candidates_for_item(
+            item,
+            metadata,
+            per_page=per_page,
+        )
+        item["Termo de busca"] = search_term
         selected, status = select_ranked_candidate(candidates)
         item["Status"] = status
         if selected:
@@ -299,12 +388,16 @@ def refresh_incomplete_candidates(
     per_page=10,
 ):
     items = load_id_searches(path)
+    metadata = load_json_object(METADATA_FILE)
     pending = [
         item
         for item in items
         if item.get("Status") == "Revisar"
         and any(
-            "url" not in candidate or "descricao" not in candidate
+            "url" not in candidate
+            or "descricao" not in candidate
+            or "generos" not in candidate
+            or "bl" not in candidate
             for candidate in item.get("IDs", [])
         )
     ]
@@ -312,8 +405,22 @@ def refresh_incomplete_candidates(
     for item in selected:
         name = item["Nome"].strip()
         print(f"[ATUALIZAR CANDIDATOS] {name}")
-        response = search_series(name, per_page=per_page)
-        item["IDs"] = rank_search_results(name, response)
+        candidates, search_term = search_candidates_for_item(
+            item,
+            metadata,
+            per_page=per_page,
+        )
+        item["Termo de busca"] = search_term
+        selected_candidate, status = select_ranked_candidate(candidates)
+        item["Status"] = status
+        if selected_candidate:
+            item.pop("IDs", None)
+            item["ID"] = selected_candidate["id"]
+            item["Nome encontrado"] = selected_candidate["titulo"]
+        else:
+            item["IDs"] = candidates
+            item.pop("ID", None)
+            item.pop("Nome encontrado", None)
         save_json(path, items)
         wait_between_requests(delay)
     return len(selected), len(pending) - len(selected)
@@ -559,21 +666,43 @@ def update_csv_from_confirmed_ids(
             for title in value.split("|"):
                 row_index.setdefault(normalize_title(title.strip()), position)
 
+    metadata = load_json_object(METADATA_FILE)
+    for local_title, values in metadata.items():
+        candidate_names = [
+            values.get("nome_oficial"),
+            values.get("alias"),
+        ]
+        position = next(
+            (
+                row_index.get(normalize_title(candidate))
+                for candidate in candidate_names
+                if candidate and row_index.get(normalize_title(candidate)) is not None
+            ),
+            None,
+        )
+        if position is not None:
+            row_index.setdefault(normalize_title(local_title), position)
+
     cache = load_json_object(cache_path)
     processed = 0
     updated = 0
     uncached = []
     missing_from_csv = []
+    handled_ids = set()
     for item in confirmed:
         if limit is not None and processed >= limit:
             break
+        series_id = item["ID"]
+        if series_id in handled_ids:
+            continue
+        handled_ids.add(series_id)
+
         name = item["Nome"].strip()
         position = row_index.get(normalize_title(name))
         if position is None:
             missing_from_csv.append(name)
             continue
 
-        series_id = item["ID"]
         cache_key = str(series_id)
         summary = cache.get(cache_key)
         if not summary:
@@ -705,9 +834,14 @@ def main():
         help="Reprocessa itens marcados como Revisar.",
     )
     parser.add_argument(
+        "--initials",
+        default="",
+        help="Filtra obras pelas letras iniciais, por exemplo A, ABC ou 0-9.",
+    )
+    parser.add_argument(
         "--refresh-incomplete-candidates",
         type=Path,
-        help="Atualiza candidatos sem URL ou descrição em itens para revisão.",
+        help="Atualiza candidatos sem URL, descrição ou classificação BL.",
     )
     args = parser.parse_args()
 
@@ -732,6 +866,7 @@ def main():
                 limit=args.limit,
                 per_page=args.per_page,
                 retry_review=args.retry_review,
+                initials=args.initials,
             )
             confirmed = sum(bool(item.get("ID")) for item in items)
             review = sum(item.get("Status") == "Revisar" for item in items)
@@ -756,7 +891,7 @@ def main():
             )
             print()
             print(f"Obras atualizadas nesta execução: {processed}")
-            print(f"Obras incompletas para próximos lotes: {pending}")
+            print(f"Obras antigas para próximos lotes: {pending}")
             return
         if args.update_csv_from_ids:
             if args.delay < 0:

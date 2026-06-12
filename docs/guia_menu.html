@@ -645,7 +645,8 @@
                     <tr><td><code>config/titles.json</code></td>
                       <td>Correções, aliases e abreviações de títulos.</td><td>1 a 3</td></tr>
                     <tr><td><code>config/catalog_metadata.json</code></td>
-                      <td>Nome oficial, alias e interesse preservados no CSV.</td><td>5</td></tr>
+                      <td>Nome oficial, alias, interesse e títulos alternativos
+                        usados na busca da API.</td><td>4 e 5</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -812,24 +813,26 @@
                 steps: [
                   "Lê as obras de data/mangas.json.",
                   "Adiciona automaticamente obras novas ao buscaIds.json.",
+                  "Permite filtrar pelo início do nome local: A, ABC ou 0-9.",
+                  "Prioriza candidatos Yaoi ou Shounen Ai e formatos compatíveis.",
                   "Consulta até 10 títulos ainda pendentes.",
-                  "Confirma correspondências seguras e marca dúvidas para revisão."
+                  "Confirma matches exatos únicos e mantém empates para revisão."
                 ],
                 files: "integrations/buscaIds.json",
                 note: "Antes de usar, execute a opção 3 para catalogar obras novas do Drive."
               },
               {
                 title: "2. Atualizar candidatos incompletos",
-                summary: "Refaz buscas antigas que não possuem link ou descrição.",
+                summary: "Refaz buscas antigas sem link, descrição ou classificação BL.",
                 command: "python scripts/mangaupdates.py --refresh-incomplete-candidates reports/integrations/buscaIds.json --delay 3 --limit 10",
                 steps: [
                   "Seleciona somente obras em revisão com candidatos no formato antigo.",
                   "Refaz até 10 buscas com intervalo de 3 segundos.",
-                  "Adiciona URL e descrição retornadas pela API.",
-                  "Preserva o status Revisar para a decisão humana."
+                  "Adiciona URL, descrição, gêneros e identificação BL retornados pela API.",
+                  "Confirma automaticamente um resultado exato e único; empates continuam para revisão."
                 ],
                 files: "integrations/buscaIds.json",
-                note: "Repita a opção até o contador de obras incompletas chegar a zero."
+                note: "Repita a opção até o contador de obras antigas chegar a zero."
               },
               {
                 title: "3. Gerar página de revisão dos IDs",

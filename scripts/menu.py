@@ -254,7 +254,7 @@ def mangaupdates_id_menu():
         print("     Consulta até 10 obras e atualiza buscaIds.json.")
         print()
         print(f"  {API_COLOR}2. ♻️ Atualizar candidatos incompletos{RESET_COLOR}")
-        print("     Busca novamente obras sem link ou descrição, em lotes de 10.")
+        print("     Atualiza link, descrição e gênero BL de candidatos antigos.")
         print()
         print(f"  {API_COLOR}3. 📋 Gerar página de revisão dos IDs{RESET_COLOR}")
         print("     Compara candidatos marcados como Revisar em um relatório HTML.")
@@ -266,7 +266,13 @@ def mangaupdates_id_menu():
         option = input("\nEscolha uma opção: ").strip()
 
         if option == "1":
-            return run_command(MANGAUPDATES_ID_COMMAND)
+            print("\nInforme as letras iniciais que deseja consultar.")
+            print("Exemplos: A, ABC ou 0-9. Pressione Enter para todas.")
+            initials = input("Letras: ").strip()
+            command = list(MANGAUPDATES_ID_COMMAND)
+            if initials:
+                command.extend(["--initials", initials])
+            return run_command(command)
         if option == "2":
             return run_command(MANGAUPDATES_REFRESH_CANDIDATES_COMMAND)
         if option == "3":
