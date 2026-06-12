@@ -37,19 +37,20 @@ class NotionCsvTests(unittest.TestCase):
             "Último capítulo disponível": "10",
             "Capítulos encontrados": "8",
             "Side stories": "0",
-            "Lacunas": "4-5",
             "Status da contagem": "Revisar",
             "Capítulo MangaUpdates": "",
             "MangaUpdates": "",
             "ID da obra": "",
             "Temática": "",
             "Formato": "",
+            "Tamanho": "",
             "Universo": "",
             "Picância": "",
         })
 
         self.assertNotIn("Temática", properties)
         self.assertNotIn("Formato", properties)
+        self.assertNotIn("Tamanho", properties)
         self.assertNotIn("Universo", properties)
         self.assertNotIn("Picância", properties)
         self.assertNotIn("Interesse", properties)
@@ -116,4 +117,24 @@ class NotionCsvTests(unittest.TestCase):
         self.assertEqual(
             {"name": "Muito alto"},
             properties["Interesse"]["select"],
+        )
+
+    def test_tamanho_is_mapped_when_present(self):
+        properties = notion_csv.build_properties({"Tamanho": "Longo"})
+
+        self.assertEqual(
+            {"name": "Longo"},
+            properties["Tamanho"]["select"],
+        )
+
+    def test_last_read_is_mapped_only_when_positive(self):
+        self.assertNotIn(
+            "Último lido",
+            notion_csv.build_properties({"Último lido": "0"}),
+        )
+        self.assertEqual(
+            {"number": 17},
+            notion_csv.build_properties(
+                {"Último lido": "17"}
+            )["Último lido"],
         )

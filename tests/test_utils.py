@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from utils import (
+    classify_manga_size,
     compact_number_ranges,
     extract_chapter_numbers,
     get_canonical_manga_name,
@@ -15,6 +16,20 @@ from utils import (
 
 
 class UtilsTests(unittest.TestCase):
+    def test_classifies_size_by_last_available_chapter(self):
+        cases = {
+            0: "Curto",
+            39: "Curto",
+            40: "Médio",
+            54: "Médio",
+            55: "Grande",
+            80: "Grande",
+            81: "Longo",
+        }
+        for chapter, expected in cases.items():
+            with self.subTest(chapter=chapter):
+                self.assertEqual(expected, classify_manga_size(chapter))
+
     def test_uses_configured_short_title(self):
         aliases = {
             "segredo_conquistar_amor_não_correspondido":
@@ -79,6 +94,27 @@ class UtilsTests(unittest.TestCase):
         self.assertIn(5, result["duplicate_chapters"])
         self.assertEqual(["Obra extra.pdf"], result["unparsed_files"])
         self.assertEqual("Revisar", result["count_status"])
+
+    def test_scan_infers_last_read_from_first_main_chapter(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manga_path = Path(directory)
+            (manga_path / "A Agenda Alfa cap 18-30.pdf").touch()
+            (manga_path / "A Agenda Alfa cap 31.pdf").touch()
+
+            result = scan_chapters(manga_path)
+
+        self.assertEqual(18, result["next_to_read"])
+        self.assertEqual(17, result["last_read"])
+
+    def test_scan_uses_side_story_when_there_are_no_main_chapters(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manga_path = Path(directory)
+            (manga_path / "2020 side story 1-5.pdf").touch()
+
+            result = scan_chapters(manga_path)
+
+        self.assertEqual(1, result["next_to_read"])
+        self.assertEqual(0, result["last_read"])
 
     def test_compacts_number_ranges(self):
         self.assertEqual(

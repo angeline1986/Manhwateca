@@ -5,6 +5,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from utils import (
+    classify_manga_size,
     clean_manga_name,
     get_cover_file,
     get_canonical_manga_name,
@@ -121,9 +122,11 @@ def scan_mangas() -> list[dict]:
             "alias": [],
             "status": "Quero ler",
             "nota": "Ok",
-            "ultimo_lido": 0,
+            "ultimo_lido": chapter_data["last_read"],
+            "proximo_a_ler": chapter_data["next_to_read"],
 
             "main_caps": chapter_data["main_caps"],
+            "tamanho": classify_manga_size(chapter_data["main_caps"]),
             "side_caps": chapter_data["side_caps"],
             "total_caps": chapter_data["total_caps"],
             "chapters_found": chapter_data["chapters_found"],

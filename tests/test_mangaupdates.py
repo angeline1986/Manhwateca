@@ -715,7 +715,6 @@ class MangaUpdatesTests(unittest.TestCase):
             "main_caps": 10,
             "chapters_found": 8,
             "side_stories_found": 2,
-            "missing_ranges": ["4-5"],
             "count_status": "Revisar",
         }
         external = {
@@ -748,7 +747,6 @@ class MangaUpdatesTests(unittest.TestCase):
         self.assertEqual("123", row["ID da obra"])
         self.assertEqual("Muito alto", row["Interesse"])
         self.assertEqual("Drama", row["Temática"])
-        self.assertEqual("4-5", row["Lacunas"])
         self.assertEqual("Exata", row["Correspondência API"])
 
     def test_catalog_metadata_overrides_name_alias_and_interest(self):

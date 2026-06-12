@@ -48,19 +48,14 @@ def build_properties(row):
                 "text": {"content": ", ".join(split_values(row.get("Alias")))}
             }]
         },
-        "Último capítulo disponível": {
+        "Último cap disponível": {
             "number": optional_number(row.get("Último capítulo disponível"))
         },
-        "Capítulos encontrados": {
+        "Caps encontrados": {
             "number": optional_number(row.get("Capítulos encontrados"))
         },
         "Side stories": {
             "number": optional_number(row.get("Side stories"))
-        },
-        "Lacunas": {
-            "rich_text": [{
-                "text": {"content": row.get("Lacunas", "-") or "-"}
-            }]
         },
         "Status da contagem": {
             "select": (
@@ -69,7 +64,7 @@ def build_properties(row):
                 else None
             )
         },
-        "Capítulo MangaUpdates": {
+        "Cap MangaUpdates": {
             "number": optional_number(row.get("Capítulo MangaUpdates"))
         },
         "MangaUpdates": {"url": row.get("MangaUpdates") or None},
@@ -77,6 +72,9 @@ def build_properties(row):
             "number": optional_number(row.get("ID da obra"))
         },
     }
+    last_read = optional_number(row.get("Último lido"))
+    if last_read is not None and last_read > 0:
+        properties["Último lido"] = {"number": last_read}
     if row.get("Temática"):
         properties["Temática"] = {
             "multi_select": [
@@ -85,6 +83,8 @@ def build_properties(row):
         }
     if row.get("Formato"):
         properties["Formato"] = {"select": {"name": row["Formato"]}}
+    if row.get("Tamanho"):
+        properties["Tamanho"] = {"select": {"name": row["Tamanho"]}}
     if row.get("Universo"):
         properties["Universo"] = {
             "multi_select": [
@@ -184,9 +184,10 @@ def update_from_csv(
         summary["updated"] += 1
         print(f"[ATUALIZAR] {name}")
         if apply:
+            properties = build_properties(row)
             notion.pages.update(
                 page_id=matches[0]["id"],
-                properties=build_properties(row),
+                properties=properties,
             )
     return summary
 

@@ -30,6 +30,16 @@ SIDE_STORY_KEYWORDS = [
 TITLE_ALIASES_FILE = Path("config/titles.json")
 
 
+def classify_manga_size(last_chapter: int) -> str:
+    if last_chapter >= 81:
+        return "Longo"
+    if last_chapter >= 55:
+        return "Grande"
+    if last_chapter >= 40:
+        return "Médio"
+    return "Curto"
+
+
 def get_required_path_env(name: str) -> Path:
     value = os.getenv(name, "").strip()
 
@@ -226,6 +236,10 @@ def scan_chapters(manga_path: Path) -> dict:
 
     main_caps = max(main_numbers, default=0)
     side_caps = max(side_numbers, default=0)
+    next_to_read = min(main_numbers, default=0)
+    if not next_to_read:
+        next_to_read = min(side_numbers, default=0)
+    last_read = max(next_to_read - 1, 0)
     missing_main = (
         set(range(1, main_caps + 1)) - main_numbers
         if main_caps
@@ -255,6 +269,8 @@ def scan_chapters(manga_path: Path) -> dict:
     return {
         "main_caps": main_caps,
         "side_caps": side_caps,
+        "next_to_read": next_to_read,
+        "last_read": last_read,
         "total_caps": main_caps,
         "chapters_found": len(main_numbers),
         "side_stories_found": len(side_numbers),

@@ -49,6 +49,7 @@ def manga(name):
         "status": "Quero ler",
         "nota": "Ok",
         "ultimo_lido": 0,
+        "tamanho": "Curto",
         "total_caps": 12,
         "path": f"/tmp/{name}",
     }
@@ -69,11 +70,15 @@ class SyncTests(unittest.TestCase):
         self.assertNotIn("Path", properties)
         self.assertEqual(
             {"number": 0},
-            properties["Último capítulo disponível"],
+            properties["Último cap disponível"],
         )
         self.assertEqual(
             {"number": 0},
-            properties["Capítulos encontrados"],
+            properties["Caps encontrados"],
+        )
+        self.assertEqual(
+            {"name": "Curto"},
+            properties["Tamanho"]["select"],
         )
         self.assertEqual(
             [{"name": "Regressão"}, {"name": "Sobrevivência"}],
@@ -95,10 +100,33 @@ class SyncTests(unittest.TestCase):
     def test_build_properties_preserves_unmanaged_classification_fields(self):
         properties = sync.build_properties(manga("Alpha"))
 
+        self.assertNotIn("Alias", properties)
+        self.assertNotIn("Último lido", properties)
         self.assertNotIn("Temática", properties)
         self.assertNotIn("Formato", properties)
         self.assertNotIn("Universo", properties)
         self.assertNotIn("Picância", properties)
+
+    def test_build_properties_updates_alias_only_when_present(self):
+        item = manga("Alpha")
+        item["alias"] = ["Alfa", "Alpha Work"]
+
+        properties = sync.build_properties(item)
+
+        self.assertEqual(
+            [{
+                "text": {"content": "Alfa, Alpha Work"},
+            }],
+            properties["Alias"]["rich_text"],
+        )
+
+    def test_build_properties_updates_last_read_only_when_known(self):
+        item = manga("Alpha")
+        item["ultimo_lido"] = 12
+
+        properties = sync.build_properties(item)
+
+        self.assertEqual({"number": 12}, properties["Último lido"])
 
     def test_normalize_title_ignores_accents_punctuation_and_underscores(self):
         self.assertEqual(

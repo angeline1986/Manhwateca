@@ -43,31 +43,29 @@ def load_mangas(path=DATA_FILE):
 def build_properties(manga):
     properties = {
         "Nome": {"title": [{"text": {"content": manga["nome"]}}]},
-        "Alias": {
-            "rich_text": [
-                {"text": {"content": ", ".join(manga.get("alias", []))}}
-            ],
-        },
         "Status": {"select": {"name": manga["status"]}},
         "Nota": {"select": {"name": manga["nota"]}},
-        "Último lido": {"number": manga["ultimo_lido"]},
-        "Último capítulo disponível": {"number": manga.get("main_caps", 0)},
-        "Capítulos encontrados": {"number": manga.get("chapters_found", 0)},
+        "Último cap disponível": {"number": manga.get("main_caps", 0)},
+        "Tamanho": {"select": {"name": manga["tamanho"]}},
+        "Caps encontrados": {"number": manga.get("chapters_found", 0)},
         "Side stories": {"number": manga.get("side_stories_found", 0)},
-        "Lacunas": {
-            "rich_text": [{
-                "text": {
-                    "content": ", ".join(manga.get("missing_ranges", [])) or "-"
-                }
-            }]
-        },
         "Status da contagem": {
             "select": {"name": manga.get("count_status", "Revisar")}
         },
     }
 
+    if manga.get("alias"):
+        properties["Alias"] = {
+            "rich_text": [
+                {"text": {"content": ", ".join(manga["alias"])}}
+            ],
+        }
+
+    if manga.get("ultimo_lido", 0) > 0:
+        properties["Último lido"] = {"number": manga["ultimo_lido"]}
+
     if manga.get("mangaupdates_latest_chapter") is not None:
-        properties["Capítulo MangaUpdates"] = {
+        properties["Cap MangaUpdates"] = {
             "number": manga["mangaupdates_latest_chapter"]
         }
     if manga.get("mangaupdates_url"):

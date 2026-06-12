@@ -210,12 +210,12 @@ Mangas/
 | Status                      | Select       |
 | Nota                        | Select       |
 | Último lido                 | Number       |
-| Último capítulo disponível  | Number       |
-| Capítulos encontrados       | Number       |
+| Último cap disponível       | Number       |
+| Tamanho                     | Select       |
+| Caps encontrados            | Number       |
 | Side stories                | Number       |
-| Lacunas                     | Text         |
 | Status da contagem          | Select       |
-| Capítulo MangaUpdates       | Number       |
+| Cap MangaUpdates            | Number       |
 | MangaUpdates                | URL          |
 | Temática                    | Multi-select |
 | Formato                     | Select       |
