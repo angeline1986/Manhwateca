@@ -9,6 +9,7 @@ Sistema pessoal para organização e tracking de manhwas.
 - [Campos do Notion](#campos-do-notion)
 - [MangaUpdates e CSV](#mangaupdates-e-csv)
 - [Organização dos relatórios](#organização-dos-relatórios)
+- [Arquitetura](#arquitetura)
 
 ## Objetivo
 
@@ -26,13 +27,26 @@ Os arquivos físicos permanecem fora do projeto.
 
 ```text
 Manhwateca/
+├── manhwateca/
 ├── config/
 ├── data/
+├── docs/
+├── reports/
 ├── scripts/
+├── tests/
 ├── .env
 ├── README.md
 └── requirements.txt
 ```
+
+## Arquitetura
+
+Os arquivos em `scripts/` são pontos de entrada compatíveis com os comandos
+atuais. As regras de negócio ficam no pacote `manhwateca/`, podendo ser
+reutilizadas pelo menu, pelos testes e pela aplicação web.
+
+O mapa dos módulos e as instruções para adicionar integrações estão em
+[`docs/arquitetura.md`](docs/arquitetura.md).
 
 ## Dependências
 
@@ -56,6 +70,53 @@ MANGA_ROOT=
 pip install -r requirements.txt
 python scripts/menu.py
 ```
+
+### Interface web local
+
+```bash
+python server.py
+```
+
+Para abrir automaticamente no navegador:
+
+```bash
+python server.py --open
+```
+
+No macOS, também é possível abrir `start_manhwateca.command`.
+
+Abra `http://127.0.0.1:8000`. A versão atual mostra o status do ambiente,
+o catálogo pesquisável e permite executar tarefas em segundo plano:
+
+- previews de organização e renomeação;
+- auditoria de capítulos;
+- catalogação da biblioteca;
+- consulta de progresso, capítulos e alertas por obra;
+- destaque das mudanças da última catalogação;
+- busca de IDs e atualização de candidatos do MangaUpdates;
+- revisão e aplicação direta de IDs, inclusive por ID manual;
+- consulta de detalhes e atualização do CSV;
+- simulação e importação controlada de lotes no Notion;
+- atualização de páginas existentes sem criar obras novas;
+- acompanhamento de pendências e duplicidades do Notion;
+- prévia das propriedades do CSV antes da atualização;
+- aplicação confirmada dos metadados em páginas existentes;
+- dashboard editorial com busca e filtros rápidos;
+- edição local de status, nota, interesse, picância e progresso;
+- preservação das edições após uma nova catalogação;
+- fluxo completo com etapas selecionáveis;
+- pausa para revisões manuais e retomada sem repetir etapas concluídas;
+- interrupção automática quando algum comando falha;
+- testes automatizados.
+
+O histórico fica em `reports/logs/web_tasks.json`. O fluxo guiado fica em
+`reports/logs/web_workflow.json`. Ações que alteram arquivos da biblioteca ou
+o Notion exigem digitar `APLICAR`.
+
+O painel de diagnóstico verifica configuração, arquivos essenciais e
+permissões de escrita. Edições editoriais criam backups em
+`reports/backups/editorial/` e um log em
+`reports/logs/editorial_changes.jsonl`.
 
 ## Fluxo recomendado
 

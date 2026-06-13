@@ -1,0 +1,1 @@
+"""Núcleo reutilizável da Manhwateca."""

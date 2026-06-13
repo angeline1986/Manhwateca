@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manhwateca Workspace</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div class="brand-mark">📚</div>
+      <div>
+        <h1>Manhwateca Workspace</h1>
+        <p>Organização, catálogo e integrações em um só lugar.</p>
+      </div>
+      <span class="local-badge">Somente local</span>
+    </header>
+
+    <section class="intro">
+      <div>
+        <span class="eyebrow">ORGANIZAÇÃO LOCAL</span>
+        <h2>Visão geral do ambiente</h2>
+        <p>
+          Gere previews, revise os relatórios e aplique mudanças somente após
+          uma confirmação explícita. O Notion não é alterado nesta etapa.
+        </p>
+      </div>
+      <button id="refresh" type="button">Atualizar status</button>
+    </section>
+
+    <section class="status-grid" id="statusGrid" aria-live="polite">
+      <article class="status-card loading">Consultando o ambiente...</article>
+    </section>
+
+    <section class="diagnostics-panel">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">DIAGNÓSTICO</span>
+          <h2>Prontidão do ambiente</h2>
+        </div>
+        <button id="refreshDiagnostics" type="button">Verificar novamente</button>
+      </div>
+      <div class="diagnostic-grid" id="diagnosticGrid"></div>
+    </section>
+
+    <section class="task-panel">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">AÇÕES E HISTÓRICO</span>
+          <h2>Verificar, revisar e aplicar</h2>
+          <p>As ações mutáveis são destacadas e exigem digitar APLICAR.</p>
+        </div>
+      </div>
+      <div class="action-grid" id="actionGrid"></div>
+      <form class="review-form" id="reviewForm">
+        <label for="reviewNote">Registrar ajuste da revisão</label>
+        <div>
+          <input id="reviewNote" type="text" placeholder="Ex.: corrigir título da obra">
+          <button type="submit">Salvar observação</button>
+        </div>
+        <span id="reviewFeedback" aria-live="polite"></span>
+      </form>
+      <div class="task-list" id="taskList">
+        <p class="empty">Nenhuma tarefa executada nesta sessão.</p>
+      </div>
+    </section>
+
+    <section class="catalog-panel">
+      <div class="catalog-heading">
+        <div>
+          <span class="eyebrow">CATÁLOGO DA BIBLIOTECA</span>
+          <h2>Obras e progresso local</h2>
+          <p>Dados atuais de <code>data/mangas.json</code>.</p>
+        </div>
+        <input id="catalogSearch" type="search" placeholder="Buscar obra ou alias">
+      </div>
+      <div class="catalog-summary" id="catalogSummary"></div>
+      <div class="catalog-changes" id="catalogChanges"></div>
+      <div class="catalog-table-wrap">
+        <table class="catalog-table">
+          <thead>
+            <tr>
+              <th>Obra</th>
+              <th>Último lido</th>
+              <th>Próximo</th>
+              <th>Disponível</th>
+              <th>Tamanho</th>
+              <th>Arquivos</th>
+              <th>Side stories</th>
+              <th>Situação</th>
+            </tr>
+          </thead>
+          <tbody id="catalogList"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="mangaupdates-panel">
+      <div class="catalog-heading">
+        <div>
+          <span class="eyebrow">MANGAUPDATES</span>
+          <h2>Localizar e revisar IDs</h2>
+          <p>Selecione candidatos ou informe o ID correto manualmente.</p>
+        </div>
+        <input id="reviewSearch" type="search" placeholder="Buscar obra pendente">
+      </div>
+      <div class="catalog-summary" id="reviewSummary"></div>
+      <div class="review-toolbar">
+        <button id="applyDecisions" type="button">Aplicar decisões</button>
+        <span id="decisionFeedback" aria-live="polite"></span>
+      </div>
+      <div class="review-list" id="idReviewList"></div>
+    </section>
+
+    <section class="notion-panel">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">SINCRONIZAÇÃO COM NOTION</span>
+          <h2>Catálogo e páginas importadas</h2>
+          <p>Criações acontecem em lotes de até 25 obras.</p>
+        </div>
+        <button id="refreshNotion" type="button">Atualizar status</button>
+      </div>
+      <div class="catalog-summary" id="notionSummary"></div>
+      <div class="notion-meta" id="notionMeta"></div>
+      <div class="notion-lists" id="notionLists"></div>
+    </section>
+
+    <section class="metadata-panel">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">CSV → NOTION</span>
+          <h2>Atualização de metadados</h2>
+          <p>
+            Prévia dos campos de <code>manhwateca_import.csv</code> que serão
+            enviados às páginas existentes.
+          </p>
+        </div>
+        <button id="refreshMetadata" type="button">Atualizar status</button>
+      </div>
+      <div class="catalog-summary" id="metadataSummary"></div>
+      <div class="notion-meta" id="metadataMeta"></div>
+      <div class="metadata-layout">
+        <div class="metadata-updates" id="metadataUpdates"></div>
+        <div class="metadata-alerts" id="metadataAlerts"></div>
+      </div>
+    </section>
+
+    <section class="editorial-panel">
+      <div class="catalog-heading">
+        <div>
+          <span class="eyebrow">DASHBOARD EDITORIAL</span>
+          <h2>Leitura e curadoria</h2>
+          <p>Edite os dados locais e sincronize com o Notion depois.</p>
+        </div>
+        <input id="editorialSearch" type="search" placeholder="Buscar obra">
+      </div>
+      <div class="catalog-summary" id="editorialSummary"></div>
+      <div class="editorial-filters" id="editorialFilters">
+        <button type="button" data-editorial-filter="all">Todas</button>
+        <button type="button" data-editorial-filter="reading">Em leitura</button>
+        <button type="button" data-editorial-filter="without-id">Sem ID</button>
+        <button type="button" data-editorial-filter="incomplete">Incompletas</button>
+        <button type="button" data-editorial-filter="new-chapters">Com capítulos</button>
+        <button type="button" data-editorial-filter="audit">Auditoria</button>
+      </div>
+      <div class="editorial-list" id="editorialList"></div>
+      <span id="editorialFeedback" aria-live="polite"></span>
+    </section>
+
+    <section class="workflow-panel">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">AUTOMAÇÃO GUIADA</span>
+          <h2>Fluxo completo</h2>
+          <p>Selecione etapas. A execução para em falhas e decisões manuais.</p>
+        </div>
+        <button id="startWorkflow" type="button">Executar selecionadas</button>
+      </div>
+      <div class="workflow-notice" id="workflowNotice"></div>
+      <div class="workflow-steps" id="workflowSteps"></div>
+      <div class="workflow-actions">
+        <button id="resumeWorkflow" type="button">Retomar fluxo</button>
+        <span id="workflowFeedback" aria-live="polite"></span>
+      </div>
+    </section>
+  </main>
+  <script src="/js/app.js"></script>
+</body>
+</html>

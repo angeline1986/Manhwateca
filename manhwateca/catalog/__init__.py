@@ -1,0 +1,1 @@
+"""Catalogação da biblioteca local."""

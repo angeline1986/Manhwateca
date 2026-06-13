@@ -1,0 +1,1 @@
+"""Organização estrutural da biblioteca."""

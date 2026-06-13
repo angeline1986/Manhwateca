@@ -72,6 +72,8 @@ class NotionCsvTests(unittest.TestCase):
 
         self.assertEqual(1, summary["updated"])
         self.assertEqual(["Beta"], summary["missing"])
+        self.assertEqual("Alpha", summary["updates"][0]["name"])
+        self.assertIn("Alias", summary["updates"][0]["properties"])
         self.assertFalse(pages.updated)
 
     def test_update_matches_existing_page_by_portuguese_alias(self):
