@@ -7,185 +7,350 @@
   <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
-  <main class="shell">
-    <header class="hero">
-      <div class="brand-mark">📚</div>
-      <div>
-        <h1>Manhwateca Workspace</h1>
-        <p>Organização, catálogo e integrações em um só lugar.</p>
-      </div>
-      <span class="local-badge">Somente local</span>
-    </header>
-
-    <section class="intro">
-      <div>
-        <span class="eyebrow">ORGANIZAÇÃO LOCAL</span>
-        <h2>Visão geral do ambiente</h2>
-        <p>
-          Gere previews, revise os relatórios e aplique mudanças somente após
-          uma confirmação explícita. O Notion não é alterado nesta etapa.
-        </p>
-      </div>
-      <button id="refresh" type="button">Atualizar status</button>
-    </section>
-
-    <section class="status-grid" id="statusGrid" aria-live="polite">
-      <article class="status-card loading">Consultando o ambiente...</article>
-    </section>
-
-    <section class="diagnostics-panel">
-      <div class="section-heading">
-        <div>
-          <span class="eyebrow">DIAGNÓSTICO</span>
-          <h2>Prontidão do ambiente</h2>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <span class="brand-mark">M</span>
+        <div class="brand-copy">
+          <strong>Manhwa<span>teca</span></strong>
+          <small>Rose Edition</small>
         </div>
-        <button id="refreshDiagnostics" type="button">Verificar novamente</button>
+        <button class="sidebar-toggle" id="sidebarToggle" type="button"
+                aria-label="Recolher menu lateral" aria-expanded="true">
+          ‹
+        </button>
       </div>
-      <div class="diagnostic-grid" id="diagnosticGrid"></div>
-    </section>
 
-    <section class="task-panel">
-      <div class="section-heading">
-        <div>
-          <span class="eyebrow">AÇÕES E HISTÓRICO</span>
-          <h2>Verificar, revisar e aplicar</h2>
-          <p>As ações mutáveis são destacadas e exigem digitar APLICAR.</p>
-        </div>
-      </div>
-      <div class="action-grid" id="actionGrid"></div>
-      <form class="review-form" id="reviewForm">
-        <label for="reviewNote">Registrar ajuste da revisão</label>
-        <div>
-          <input id="reviewNote" type="text" placeholder="Ex.: corrigir título da obra">
-          <button type="submit">Salvar observação</button>
-        </div>
-        <span id="reviewFeedback" aria-live="polite"></span>
-      </form>
-      <div class="task-list" id="taskList">
-        <p class="empty">Nenhuma tarefa executada nesta sessão.</p>
-      </div>
-    </section>
+      <nav class="main-nav" aria-label="Navegação principal">
+        <button class="nav-link active" data-page="overview">
+          <span class="nav-icon">⌂</span><span>Visão geral</span>
+        </button>
+        <button class="nav-link" data-page="library">
+          <span class="nav-icon">▤</span><span>Biblioteca</span>
+        </button>
+        <button class="nav-link" data-page="organization">
+          <span class="nav-icon">◇</span><span>Organização</span>
+        </button>
+        <button class="nav-link" data-page="mangaupdates">
+          <span class="nav-icon">⌕</span><span>MangaUpdates</span>
+        </button>
+        <button class="nav-link" data-page="notion">
+          <span class="nav-icon">↻</span><span>Notion</span>
+        </button>
+        <button class="nav-link" data-page="automation">
+          <span class="nav-icon">▶</span><span>Automação</span>
+        </button>
+      </nav>
 
-    <section class="catalog-panel">
-      <div class="catalog-heading">
-        <div>
-          <span class="eyebrow">CATÁLOGO DA BIBLIOTECA</span>
-          <h2>Obras e progresso local</h2>
-          <p>Dados atuais de <code>data/mangas.json</code>.</p>
-        </div>
-        <input id="catalogSearch" type="search" placeholder="Buscar obra ou alias">
+      <div class="sidebar-footer">
+        <button class="nav-link" data-page="settings">
+          <span class="nav-icon">⚙</span><span>Configurações</span>
+        </button>
+        <span class="local-badge">Somente local</span>
       </div>
-      <div class="catalog-summary" id="catalogSummary"></div>
-      <div class="catalog-changes" id="catalogChanges"></div>
-      <div class="catalog-table-wrap">
-        <table class="catalog-table">
-          <thead>
-            <tr>
-              <th>Obra</th>
-              <th>Último lido</th>
-              <th>Próximo</th>
-              <th>Disponível</th>
-              <th>Tamanho</th>
-              <th>Arquivos</th>
-              <th>Side stories</th>
-              <th>Situação</th>
-            </tr>
-          </thead>
-          <tbody id="catalogList"></tbody>
-        </table>
-      </div>
-    </section>
+    </aside>
 
-    <section class="mangaupdates-panel">
-      <div class="catalog-heading">
+    <main class="workspace">
+      <header class="topbar" id="topbar">
+        <button class="menu-toggle" id="menuToggle" type="button"
+                aria-label="Abrir menu">☰</button>
         <div>
-          <span class="eyebrow">MANGAUPDATES</span>
-          <h2>Localizar e revisar IDs</h2>
-          <p>Selecione candidatos ou informe o ID correto manualmente.</p>
+          <span class="eyebrow" id="pageEyebrow">PAINEL LOCAL</span>
+          <h1 id="pageTitle">Visão geral</h1>
+          <p id="pageSubtitle">Acompanhe a biblioteca e as integrações.</p>
         </div>
-        <input id="reviewSearch" type="search" placeholder="Buscar obra pendente">
-      </div>
-      <div class="catalog-summary" id="reviewSummary"></div>
-      <div class="review-toolbar">
-        <button id="applyDecisions" type="button">Aplicar decisões</button>
-        <span id="decisionFeedback" aria-live="polite"></span>
-      </div>
-      <div class="review-list" id="idReviewList"></div>
-    </section>
+        <button class="topbar-action" id="refresh" type="button">
+          Recarregar Dash
+        </button>
+      </header>
 
-    <section class="notion-panel">
-      <div class="section-heading">
-        <div>
-          <span class="eyebrow">SINCRONIZAÇÃO COM NOTION</span>
-          <h2>Catálogo e páginas importadas</h2>
-          <p>Criações acontecem em lotes de até 25 obras.</p>
-        </div>
-        <button id="refreshNotion" type="button">Atualizar status</button>
-      </div>
-      <div class="catalog-summary" id="notionSummary"></div>
-      <div class="notion-meta" id="notionMeta"></div>
-      <div class="notion-lists" id="notionLists"></div>
-    </section>
+      <div class="page-container">
+        <section class="page active" id="page-overview">
+          <div class="status-grid" id="statusGrid" aria-live="polite">
+            <article class="status-card loading">Consultando o ambiente...</article>
+          </div>
 
-    <section class="metadata-panel">
-      <div class="section-heading">
-        <div>
-          <span class="eyebrow">CSV → NOTION</span>
-          <h2>Atualização de metadados</h2>
-          <p>
-            Prévia dos campos de <code>manhwateca_import.csv</code> que serão
-            enviados às páginas existentes.
-          </p>
-        </div>
-        <button id="refreshMetadata" type="button">Atualizar status</button>
-      </div>
-      <div class="catalog-summary" id="metadataSummary"></div>
-      <div class="notion-meta" id="metadataMeta"></div>
-      <div class="metadata-layout">
-        <div class="metadata-updates" id="metadataUpdates"></div>
-        <div class="metadata-alerts" id="metadataAlerts"></div>
-      </div>
-    </section>
+          <section class="panel quick-guide">
+              <span class="eyebrow">O QUE DESEJA FAZER?</span>
+              <h2>Escolha o caminho conforme sua necessidade</h2>
+              <div class="journey-grid">
+                <button type="button" class="journey-card" data-page="organization">
+                  <span class="journey-face">
+                    <svg viewBox="0 0 48 48" aria-hidden="true">
+                      <path d="M5 13h14l4 5h20v22H5z"/>
+                      <circle cx="36" cy="35" r="7"/>
+                      <path d="M36 24v4M36 42v4M25 35h4M43 35h4M28.2 27.2l2.8 2.8M41 40l2.8 2.8M43.8 27.2 41 30M31 40l-2.8 2.8"/>
+                    </svg>
+                    <b>Organizar<br>Arquivos</b>
+                  </span>
+                  <span class="journey-description">
+                    <span>Verifica nomes, capas e pastas antes de qualquer alteração.</span>
+                    <em class="tile-action">Simular</em>
+                  </span>
+                </button>
+                <button type="button" class="journey-card" data-action="catalog_scan">
+                  <span class="journey-face">
+                    <svg viewBox="0 0 48 48" aria-hidden="true">
+                      <circle cx="24" cy="24" r="18"/>
+                      <path d="M24 15v18M15 24h18"/>
+                    </svg>
+                    <b>Novos<br>Capítulos</b>
+                  </span>
+                  <span class="journey-description">
+                    <span>Lê o Drive novamente e atualiza <code>data/mangas.json</code>.</span>
+                    <em class="tile-action">Atualizar</em>
+                  </span>
+                </button>
+                <button type="button" class="journey-card" data-page="mangaupdates">
+                  <span class="journey-face">
+                    <svg viewBox="0 0 48 48" aria-hidden="true">
+                      <circle cx="21" cy="21" r="14"/>
+                      <path d="m31 31 12 12"/>
+                    </svg>
+                    <b>Metadados<br>API</b>
+                  </span>
+                  <span class="journey-description">
+                    <span>Busca IDs e detalhes no MangaUpdates sem alterar Drive ou Notion.</span>
+                    <em class="tile-action">Consultar</em>
+                  </span>
+                </button>
+                <button type="button" class="journey-card featured" data-page="notion">
+                  <span class="journey-face">
+                    <svg viewBox="0 0 48 48" aria-hidden="true">
+                      <path d="M39 17a17 17 0 0 0-29-5l-4 5M9 31a17 17 0 0 0 29 5l4-5"/>
+                      <path d="M6 7v10h10M42 41V31H32"/>
+                    </svg>
+                    <b>Notion Sync</b>
+                  </span>
+                  <span class="journey-description">
+                    <span>Simule primeiro. A aplicação exige confirmação explícita.</span>
+                    <em class="tile-action">Publicar</em>
+                  </span>
+                </button>
+              </div>
+          </section>
+        </section>
 
-    <section class="editorial-panel">
-      <div class="catalog-heading">
-        <div>
-          <span class="eyebrow">DASHBOARD EDITORIAL</span>
-          <h2>Leitura e curadoria</h2>
-          <p>Edite os dados locais e sincronize com o Notion depois.</p>
-        </div>
-        <input id="editorialSearch" type="search" placeholder="Buscar obra">
-      </div>
-      <div class="catalog-summary" id="editorialSummary"></div>
-      <div class="editorial-filters" id="editorialFilters">
-        <button type="button" data-editorial-filter="all">Todas</button>
-        <button type="button" data-editorial-filter="reading">Em leitura</button>
-        <button type="button" data-editorial-filter="without-id">Sem ID</button>
-        <button type="button" data-editorial-filter="incomplete">Incompletas</button>
-        <button type="button" data-editorial-filter="new-chapters">Com capítulos</button>
-        <button type="button" data-editorial-filter="audit">Auditoria</button>
-      </div>
-      <div class="editorial-list" id="editorialList"></div>
-      <span id="editorialFeedback" aria-live="polite"></span>
-    </section>
+        <section class="page" id="page-library">
+          <section class="panel catalog-panel">
+            <div class="catalog-heading">
+              <div>
+                <span class="eyebrow">CATÁLOGO LOCAL</span>
+                <h2>Obras e progresso</h2>
+                <p>
+                  Mostra o que foi encontrado na última catalogação.
+                  Clique em um alerta para entender o motivo e o próximo passo.
+                </p>
+              </div>
+              <input id="catalogSearch" type="search" placeholder="Buscar obra ou alias">
+            </div>
+            <div class="catalog-summary" id="catalogSummary"></div>
+            <div class="catalog-changes" id="catalogChanges"></div>
+            <div class="catalog-table-wrap">
+              <table class="catalog-table">
+                <thead><tr>
+                  <th>Obra</th><th>Último lido</th><th>Próximo</th>
+                  <th>Disponível</th><th>Tamanho</th><th>Arquivos</th>
+                  <th>Side stories</th><th>Situação</th>
+                </tr></thead>
+                <tbody id="catalogList"></tbody>
+              </table>
+            </div>
+          </section>
 
-    <section class="workflow-panel">
-      <div class="section-heading">
-        <div>
-          <span class="eyebrow">AUTOMAÇÃO GUIADA</span>
-          <h2>Fluxo completo</h2>
-          <p>Selecione etapas. A execução para em falhas e decisões manuais.</p>
-        </div>
-        <button id="startWorkflow" type="button">Executar selecionadas</button>
+          <section class="panel editorial-panel">
+            <div class="catalog-heading">
+              <div>
+                <span class="eyebrow">CURADORIA</span>
+                <h2>Dados editoriais</h2>
+                <p>Edite os dados locais antes de sincronizar.</p>
+              </div>
+              <input id="editorialSearch" type="search" placeholder="Buscar obra">
+            </div>
+            <div class="catalog-summary" id="editorialSummary"></div>
+            <div class="editorial-filters" id="editorialFilters">
+              <button type="button" data-editorial-filter="all" class="active">Todas</button>
+              <button type="button" data-editorial-filter="reading">Em leitura</button>
+              <button type="button" data-editorial-filter="without-id">Sem ID</button>
+              <button type="button" data-editorial-filter="incomplete">Incompletas</button>
+              <button type="button" data-editorial-filter="new-chapters">Com capítulos</button>
+              <button type="button" data-editorial-filter="audit">Auditoria</button>
+            </div>
+            <div class="editorial-list" id="editorialList"></div>
+            <span id="editorialFeedback" aria-live="polite"></span>
+          </section>
+        </section>
+
+        <section class="page" id="page-organization">
+          <section class="panel task-panel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">ORGANIZAÇÃO LOCAL</span>
+                <h2>Verificar e padronizar</h2>
+                <p>Gere previews antes de qualquer alteração física.</p>
+              </div>
+            </div>
+            <div class="action-grid" id="actionGrid"></div>
+            <form class="review-form" id="reviewForm">
+              <label for="reviewNote">Registrar ajuste da revisão</label>
+              <div>
+                <input id="reviewNote" type="text"
+                       placeholder="Ex.: corrigir título da obra">
+                <button type="submit">Salvar observação</button>
+              </div>
+              <span id="reviewFeedback" aria-live="polite"></span>
+            </form>
+          </section>
+        </section>
+
+        <section class="page" id="page-mangaupdates">
+          <section class="panel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">AÇÕES MANGAUPDATES</span>
+                <h2>Buscar e enriquecer dados</h2>
+                <p>Consulte em lotes, revise IDs e atualize o CSV.</p>
+              </div>
+            </div>
+            <div class="action-grid" id="mangaActionGrid"></div>
+          </section>
+
+          <section class="panel mangaupdates-panel">
+            <div class="catalog-heading">
+              <div>
+                <span class="eyebrow">REVISÃO DE IDS</span>
+                <h2>Correspondências pendentes</h2>
+                <p>Selecione um candidato ou informe o ID correto.</p>
+              </div>
+              <input id="reviewSearch" type="search" placeholder="Buscar obra pendente">
+            </div>
+            <div class="catalog-summary" id="reviewSummary"></div>
+            <div class="review-toolbar">
+              <button id="applyDecisions" type="button">Aplicar decisões</button>
+              <span id="decisionFeedback" aria-live="polite"></span>
+            </div>
+            <div class="review-list" id="idReviewList"></div>
+          </section>
+        </section>
+
+        <section class="page" id="page-notion">
+          <section class="panel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">AÇÕES NOTION</span>
+                <h2>Simular e sincronizar</h2>
+                <p>Criações e alterações exigem confirmação explícita.</p>
+              </div>
+            </div>
+            <div class="action-grid" id="notionActionGrid"></div>
+          </section>
+
+          <section class="panel notion-panel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">CATÁLOGO → NOTION</span>
+                <h2>Páginas importadas</h2>
+                <p>Criações acontecem em lotes de até 25 obras.</p>
+              </div>
+              <button class="ghost-button" id="refreshNotion" type="button">Atualizar</button>
+            </div>
+            <div class="catalog-summary" id="notionSummary"></div>
+            <div class="notion-meta" id="notionMeta"></div>
+            <div class="notion-lists" id="notionLists"></div>
+          </section>
+
+          <section class="panel metadata-panel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">CSV → NOTION</span>
+                <h2>Atualização de metadados</h2>
+                <p>Prévia dos campos enviados às páginas existentes.</p>
+              </div>
+              <button class="ghost-button" id="refreshMetadata" type="button">Atualizar</button>
+            </div>
+            <div class="catalog-summary" id="metadataSummary"></div>
+            <div class="notion-meta" id="metadataMeta"></div>
+            <div class="metadata-layout">
+              <div class="metadata-updates" id="metadataUpdates"></div>
+              <div class="metadata-alerts" id="metadataAlerts"></div>
+            </div>
+          </section>
+        </section>
+
+        <section class="page" id="page-automation">
+          <section class="panel workflow-panel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">AUTOMAÇÃO GUIADA</span>
+                <h2>Fluxo completo</h2>
+                <p>Selecione etapas; o fluxo pausa em falhas e decisões manuais.</p>
+              </div>
+              <button id="startWorkflow" type="button">Executar selecionadas</button>
+            </div>
+            <div class="workflow-notice" id="workflowNotice"></div>
+            <div class="workflow-steps" id="workflowSteps"></div>
+            <div class="workflow-actions">
+              <button id="resumeWorkflow" type="button">Retomar fluxo</button>
+              <span id="workflowFeedback" aria-live="polite"></span>
+            </div>
+          </section>
+
+          <section class="panel task-history">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">ATIVIDADE</span>
+                <h2>Histórico de tarefas</h2>
+              </div>
+            </div>
+            <div class="task-list" id="taskList">
+              <p class="empty">Nenhuma tarefa executada nesta sessão.</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="page" id="page-settings">
+          <div class="two-column settings-layout">
+            <section class="panel diagnostics-panel">
+              <div class="section-heading">
+                <div>
+                  <span class="eyebrow">DIAGNÓSTICO</span>
+                  <h2>Prontidão do ambiente</h2>
+                  <p>Confere arquivos, credenciais e permissões necessários.</p>
+                </div>
+                <button class="ghost-button" id="refreshDiagnostics" type="button">
+                  Verificar ambiente
+                </button>
+              </div>
+              <div class="diagnostic-grid" id="diagnosticGrid"></div>
+            </section>
+            <section class="panel">
+              <span class="eyebrow">AMBIENTE LOCAL</span>
+              <h2>Configurações do sistema</h2>
+              <p class="muted">As credenciais e o diretório da biblioteca são lidos do arquivo <code>.env</code>. Valores secretos nunca são exibidos nesta tela.</p>
+              <div class="settings-list">
+                <div><span>MANGA_ROOT</span><b>Biblioteca local</b></div>
+                <div><span>NOTION_TOKEN</span><b>Integração Notion</b></div>
+                <div><span>NOTION_DATABASE_ID</span><b>Base de destino</b></div>
+              </div>
+            </section>
+            <section class="panel">
+              <span class="eyebrow">SUPORTE</span>
+              <h2>Verificação técnica</h2>
+              <p class="muted">Execute os testes automatizados após mudanças importantes.</p>
+              <div class="action-grid single" id="supportActionGrid"></div>
+            </section>
+          </div>
+        </section>
       </div>
-      <div class="workflow-notice" id="workflowNotice"></div>
-      <div class="workflow-steps" id="workflowSteps"></div>
-      <div class="workflow-actions">
-        <button id="resumeWorkflow" type="button">Retomar fluxo</button>
-        <span id="workflowFeedback" aria-live="polite"></span>
-      </div>
-    </section>
-  </main>
+    </main>
+  </div>
+  <div class="task-toast" id="taskToast" hidden>
+    <div>
+      <strong id="taskToastTitle">Tarefa iniciada</strong>
+      <span id="taskToastText">Acompanhe o andamento no histórico.</span>
+    </div>
+    <button type="button" data-page="automation">Ver andamento</button>
+  </div>
   <script src="/js/app.js"></script>
 </body>
 </html>

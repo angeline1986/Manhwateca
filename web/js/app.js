@@ -3,6 +3,9 @@ const refreshButton = document.getElementById("refresh");
 const diagnosticGrid = document.getElementById("diagnosticGrid");
 const refreshDiagnostics = document.getElementById("refreshDiagnostics");
 const actionGrid = document.getElementById("actionGrid");
+const mangaActionGrid = document.getElementById("mangaActionGrid");
+const notionActionGrid = document.getElementById("notionActionGrid");
+const supportActionGrid = document.getElementById("supportActionGrid");
 const taskList = document.getElementById("taskList");
 const reviewForm = document.getElementById("reviewForm");
 const reviewNote = document.getElementById("reviewNote");
@@ -35,6 +38,9 @@ const workflowNotice = document.getElementById("workflowNotice");
 const workflowFeedback = document.getElementById("workflowFeedback");
 const startWorkflow = document.getElementById("startWorkflow");
 const resumeWorkflow = document.getElementById("resumeWorkflow");
+const taskToast = document.getElementById("taskToast");
+const sidebar = document.getElementById("sidebar");
+const sidebarToggle = document.getElementById("sidebarToggle");
 let taskTimer;
 let catalog = [];
 let lastCatalogTask;
@@ -48,6 +54,89 @@ let editorialOptions = {};
 let editorialFilter = "all";
 let workflowState;
 let workflowTimer;
+
+const pageMeta = {
+  overview: {
+    eyebrow: "MANHWATECA WORKSPACE",
+    title: "Organize os arquivos e mantenha o Notion atualizado.",
+    subtitle: "Esta tela mostra se o catálogo local, a biblioteca no Drive, os dados do MangaUpdates e a conexão com o Notion estão disponíveis para executar as próximas etapas.",
+  },
+  library: {
+    eyebrow: "ACERVO E CURADORIA",
+    title: "Biblioteca",
+    subtitle: "Consulte capítulos, leitura e dados editoriais.",
+  },
+  organization: {
+    eyebrow: "ARQUIVOS LOCAIS",
+    title: "Organização",
+    subtitle: "Revise e aplique padrões com segurança.",
+  },
+  mangaupdates: {
+    eyebrow: "ENRIQUECIMENTO",
+    title: "MangaUpdates",
+    subtitle: "Localize IDs e valide correspondências.",
+  },
+  notion: {
+    eyebrow: "INTEGRAÇÃO",
+    title: "Notion",
+    subtitle: "Simule lotes e atualize metadados.",
+  },
+  automation: {
+    eyebrow: "PROCESSAMENTO",
+    title: "Automação",
+    subtitle: "Execute o fluxo completo e acompanhe tarefas.",
+  },
+  settings: {
+    eyebrow: "AMBIENTE",
+    title: "Configurações",
+    subtitle: "Verifique requisitos e suporte técnico.",
+  },
+};
+
+function showPage(pageName, updateHash = true) {
+  const page = pageMeta[pageName] ? pageName : "overview";
+  document.getElementById("topbar").classList.toggle("overview", page === "overview");
+  document.getElementById("refresh").hidden = page !== "overview";
+  document.querySelectorAll(".page").forEach(section =>
+    section.classList.toggle("active", section.id === `page-${page}`)
+  );
+  document.querySelectorAll("[data-page]").forEach(button =>
+    button.classList.toggle("active", button.dataset.page === page)
+  );
+  document.getElementById("pageEyebrow").textContent = pageMeta[page].eyebrow;
+  document.getElementById("pageTitle").textContent = pageMeta[page].title;
+  document.getElementById("pageSubtitle").textContent = pageMeta[page].subtitle;
+  document.getElementById("sidebar").classList.remove("open");
+  if (updateHash) history.replaceState(null, "", `#${page}`);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+document.querySelectorAll("[data-page]").forEach(button =>
+  button.addEventListener("click", () => showPage(button.dataset.page))
+);
+document.getElementById("menuToggle").addEventListener("click", () =>
+  sidebar.classList.toggle("open")
+);
+
+function setSidebarCollapsed(collapsed) {
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+  sidebarToggle.textContent = collapsed ? "›" : "‹";
+  sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
+  sidebarToggle.setAttribute(
+    "aria-label", collapsed ? "Expandir menu lateral" : "Recolher menu lateral"
+  );
+  localStorage.setItem("manhwateca-sidebar-collapsed", String(collapsed));
+}
+
+sidebarToggle.addEventListener("click", () =>
+  setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"))
+);
+
+setSidebarCollapsed(
+  localStorage.getItem("manhwateca-sidebar-collapsed") === "true"
+);
+
+showPage(location.hash.replace("#", "") || "overview", false);
 
 function card(title, detail, available, label) {
   return `
@@ -71,24 +160,28 @@ async function loadStatus() {
     grid.innerHTML = [
       card(
         "Catálogo local",
-        `${data.catalog.count} obra(s) em ${data.catalog.path}.`,
+        `${data.catalog.count} obra(s) catalogadas. É atualizado ao executar “Catalogar biblioteca”.`,
         data.catalog.available
       ),
       card(
         "Biblioteca no Drive",
         data.library.configured
-          ? "A variável MANGA_ROOT está configurada."
-          : "Configure MANGA_ROOT no arquivo .env.",
+          ? "O diretório configurado está acessível para leitura e organização."
+          : "Configure MANGA_ROOT no arquivo .env para localizar os arquivos.",
         data.library.available
       ),
       card(
         "MangaUpdates",
-        "Cache externo e CSV de integração.",
+        data.mangaupdates.cache_available && data.mangaupdates.csv_available
+          ? "Cache de detalhes e CSV enriquecido estão disponíveis."
+          : "Ainda faltam o cache de detalhes ou o CSV enriquecido.",
         data.mangaupdates.cache_available && data.mangaupdates.csv_available
       ),
       card(
         "Notion",
-        "Token e banco necessários para sincronizações futuras.",
+        data.notion.configured
+          ? "Credenciais disponíveis para simular e aplicar sincronizações."
+          : "Configure token e database no .env antes de sincronizar.",
         data.notion.configured,
         data.notion.configured ? "Configurado" : "Não configurado"
       ),
@@ -128,13 +221,30 @@ refreshDiagnostics.addEventListener("click", loadDiagnostics);
 async function loadActions() {
   const response = await fetch("/api/actions");
   const actions = await response.json();
-  actionGrid.innerHTML = Object.entries(actions).map(([id, action]) => `
+  const render = entries => entries.map(([id, action]) => `
     <button class="action-button ${action.requires_confirmation ? "destructive" : ""}"
             type="button" data-action="${id}"
             data-confirmation="${action.requires_confirmation}">
-      ${action.label}
+      <strong>${escapeHtml(action.label)}</strong>
+      <span>${escapeHtml(action.description)}</span>
+      <small>${escapeHtml(action.result)}</small>
     </button>
   `).join("");
+  const entries = Object.entries(actions);
+  const organizationIds = new Set([
+    "organization_preview", "rename_preview", "chapter_audit",
+    "catalog_scan", "apply_organization", "apply_renaming",
+  ]);
+  const notionIds = new Set([
+    "notion_simulate_batch", "notion_apply_batch", "notion_update_existing",
+    "notion_csv_preview", "notion_csv_apply",
+  ]);
+  actionGrid.innerHTML = render(entries.filter(([id]) => organizationIds.has(id)));
+  mangaActionGrid.innerHTML = render(entries.filter(([, action]) =>
+    action.group === "mangaupdates"
+  ));
+  notionActionGrid.innerHTML = render(entries.filter(([id]) => notionIds.has(id)));
+  supportActionGrid.innerHTML = render(entries.filter(([id]) => id === "run_tests"));
 }
 
 async function startTask(action, requiresConfirmation) {
@@ -163,6 +273,10 @@ async function startTask(action, requiresConfirmation) {
     window.alert(payload.error || "Não foi possível iniciar a tarefa.");
     return;
   }
+  document.getElementById("taskToastTitle").textContent = payload.label;
+  document.getElementById("taskToastText").textContent =
+    "A tarefa foi iniciada. O resultado e os relatórios aparecerão no histórico.";
+  taskToast.hidden = false;
   await loadTasks();
 }
 
@@ -241,9 +355,10 @@ function summaryCard(label, value) {
 }
 
 function renderCatalog(items) {
-  catalogList.innerHTML = items.length ? items.map(manga => {
+  catalogList.innerHTML = items.length ? items.map((manga, index) => {
     const issues = [...(manga.count_issues || []), ...(manga.unparsed_files || [])];
     const aliases = (manga.alias || []).join(", ");
+    const detailsId = `catalog-issue-${index}`;
     return `
       <tr>
         <td><strong>${escapeHtml(manga.nome || "")}</strong>
@@ -254,13 +369,47 @@ function renderCatalog(items) {
         <td>${escapeHtml(manga.tamanho)}</td>
         <td>${manga.chapters_found}</td>
         <td>${manga.side_stories_found}</td>
-        <td><span class="state ${issues.length ? "warn" : "ok"}"
-          title="${escapeHtml(issues.join(" | "))}">
-          ${issues.length ? `${issues.length} alerta(s)` : "OK"}
-        </span></td>
+        <td>${issues.length
+          ? `<button class="issue-button" type="button"
+               data-issue-target="${detailsId}" aria-expanded="false">
+               Ver ${issues.length} alerta(s)
+             </button>`
+          : '<span class="state ok">OK</span>'}</td>
       </tr>
+      ${issues.length ? `
+        <tr class="issue-details" id="${detailsId}" hidden>
+          <td colspan="8">
+            <div>
+              <strong>O que precisa ser conferido em ${escapeHtml(manga.nome)}:</strong>
+              <ul>${issues.map(issue => `<li>${explainIssue(issue)}</li>`).join("")}</ul>
+              <p>
+                Gere uma auditoria atualizada para ver os arquivos envolvidos.
+                A auditoria apenas analisa; ela não altera a biblioteca.
+              </p>
+              <button type="button" data-action="chapter_audit">
+                Gerar auditoria de capítulos
+              </button>
+              <a href="/reports/audits/chapter_audit.html" target="_blank">
+                Abrir último relatório
+              </a>
+            </div>
+          </td>
+        </tr>` : ""}
     `;
   }).join("") : '<tr><td colspan="8" class="empty">Nenhuma obra encontrada.</td></tr>';
+}
+
+function explainIssue(issue) {
+  const labels = {
+    "lacunas": "Há intervalos entre os capítulos encontrados. Isso pode ser normal se capítulos já lidos foram apagados.",
+    "MangaUpdates divergente": "O último capítulo local difere da referência salva do MangaUpdates.",
+    "somente side stories": "A pasta contém apenas arquivos identificados como side stories.",
+  };
+  if (labels[issue]) return escapeHtml(labels[issue]);
+  if (String(issue).toLowerCase().endsWith(".pdf")) {
+    return `O arquivo ${escapeHtml(issue)} não pôde ser interpretado automaticamente.`;
+  }
+  return escapeHtml(issue);
 }
 
 function renderChanges(changes) {
@@ -525,6 +674,14 @@ editorialList.addEventListener("submit", async event => {
 function workflowStep(step, run) {
   const result = run.results?.[step.id];
   const status = result?.status || "pending";
+  const statusLabels = {
+    pending: "Aguardando",
+    running: "Executando",
+    completed: "Concluída",
+    failed: "Falhou",
+    manual: "Ação manual",
+    interrupted: "Interrompida",
+  };
   const checked = run.selected?.includes(step.id) ?? true;
   return `
     <article class="workflow-step ${status}">
@@ -534,7 +691,7 @@ function workflowStep(step, run) {
         <span><strong>${escapeHtml(step.label)}</strong>
           ${step.manual ? "<small>Etapa manual</small>" : ""}</span>
       </label>
-      <span class="workflow-status">${escapeHtml(status)}</span>
+      <span class="workflow-status">${escapeHtml(statusLabels[status] || status)}</span>
       ${result?.note ? `<p>${escapeHtml(result.note)}</p>` : ""}
       ${result?.messages?.length
         ? `<details><summary>Mensagens</summary><pre>${escapeHtml(result.messages.join("\n"))}</pre></details>`
@@ -556,7 +713,11 @@ function renderWorkflow(data) {
   workflowNotice.textContent = data.run.notification || (
     data.run.status === "completed"
       ? "Fluxo concluído."
-      : `Situação: ${data.run.status || "idle"}`
+      : data.run.status === "running"
+        ? "Fluxo em execução."
+        : ["failed", "interrupted"].includes(data.run.status)
+          ? "O fluxo foi interrompido. Consulte a etapa destacada."
+          : "Nenhum fluxo iniciado. Selecione as etapas e clique em Executar."
   );
   startWorkflow.disabled = data.run.status === "running";
   resumeWorkflow.hidden = !["failed", "interrupted"].includes(data.run.status);
@@ -667,7 +828,7 @@ async function loadCatalog() {
     summaryCard("Obras", data.summary.total),
     summaryCard("Último cap. disponível", data.summary.main_caps),
     summaryCard("Side stories", data.summary.side_stories),
-    summaryCard("Precisam de revisão", data.summary.review),
+    summaryCard("Conferências necessárias", data.summary.review),
     summaryCard("Arquivos não lidos", data.summary.unparsed),
   ].join("");
   renderChanges(data.changes);
@@ -682,11 +843,34 @@ catalogSearch.addEventListener("input", () => {
   ));
 });
 
-actionGrid.addEventListener("click", event => {
+function handleActionClick(event) {
   const button = event.target.closest("[data-action]");
   if (button) {
     startTask(button.dataset.action, button.dataset.confirmation === "true");
   }
+}
+
+[actionGrid, mangaActionGrid, notionActionGrid, supportActionGrid]
+  .forEach(container => container.addEventListener("click", handleActionClick));
+
+document.querySelector(".quick-guide").addEventListener("click", event => {
+  const action = event.target.closest("[data-action]");
+  if (action) handleActionClick(event);
+});
+
+catalogList.addEventListener("click", event => {
+  const issueButton = event.target.closest("[data-issue-target]");
+  if (issueButton) {
+    const details = document.getElementById(issueButton.dataset.issueTarget);
+    details.hidden = !details.hidden;
+    issueButton.setAttribute("aria-expanded", String(!details.hidden));
+    issueButton.textContent = details.hidden
+      ? issueButton.textContent.replace("Ocultar", "Ver")
+      : issueButton.textContent.replace("Ver", "Ocultar");
+    return;
+  }
+  const action = event.target.closest("[data-action]");
+  if (action) handleActionClick(event);
 });
 
 reviewForm.addEventListener("submit", async event => {

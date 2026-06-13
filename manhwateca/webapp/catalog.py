@@ -39,7 +39,8 @@ def build_summary(mangas):
             manga.get("side_stories_found", 0) for manga in mangas
         ),
         "review": sum(
-            manga.get("count_status", "Revisar") != "OK" for manga in mangas
+            bool(_actionable_issues(manga) or manga.get("unparsed_files"))
+            for manga in mangas
         ),
         "unparsed": sum(
             len(manga.get("unparsed_files", [])) for manga in mangas
@@ -75,9 +76,18 @@ def public_manga(manga):
         "chapters_found": manga.get("chapters_found", 0),
         "side_stories_found": manga.get("side_stories_found", 0),
         "count_status": manga.get("count_status", "Revisar"),
-        "count_issues": manga.get("count_issues", []),
+        "count_issues": _actionable_issues(manga),
         "unparsed_files": manga.get("unparsed_files", []),
         "mangaupdates_latest_chapter": manga.get(
             "mangaupdates_latest_chapter"
         ),
     }
+
+
+def _actionable_issues(manga):
+    ignored = {"lacunas", "somente side stories"}
+    issues = [
+        issue for issue in manga.get("count_issues", [])
+        if issue not in ignored
+    ]
+    return issues

@@ -57,3 +57,14 @@ class WebAppTests(unittest.TestCase):
 
         self.assertEqual("ok", status["status"])
         self.assertIn("Manhwateca Workspace", home)
+        for page in (
+            "overview",
+            "library",
+            "organization",
+            "mangaupdates",
+            "notion",
+            "automation",
+            "settings",
+        ):
+            self.assertIn(f'id="page-{page}"', home)
+            self.assertIn(f'data-page="{page}"', home)

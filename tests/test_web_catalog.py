@@ -21,6 +21,7 @@ class WebCatalogTests(unittest.TestCase):
                 "nome": "Beta",
                 "main_caps": 20,
                 "count_status": "Revisar",
+                "count_issues": ["arquivo não interpretado"],
                 "unparsed_files": ["arquivo.pdf"],
             },
         ]
@@ -36,6 +37,23 @@ class WebCatalogTests(unittest.TestCase):
         self.assertEqual(32, payload["summary"]["main_caps"])
         self.assertEqual(1, payload["summary"]["review"])
         self.assertNotIn("path", payload["mangas"][0])
+
+    def test_expected_gaps_are_not_shown_as_operational_alerts(self):
+        mangas = [{
+            "nome": "Alpha",
+            "count_status": "Revisar",
+            "count_issues": ["lacunas", "somente side stories"],
+        }]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "data").mkdir()
+            (root / "data/mangas.json").write_text(
+                json.dumps(mangas), encoding="utf-8"
+            )
+            payload = catalog_payload(root)
+
+        self.assertEqual(0, payload["summary"]["review"])
+        self.assertEqual([], payload["mangas"][0]["count_issues"])
 
     def test_compare_catalogs_reports_new_updated_and_removed(self):
         before = [
