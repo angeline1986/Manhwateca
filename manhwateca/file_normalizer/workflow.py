@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from manhwateca.file_normalizer import conflicts as conflict_rules
 from manhwateca.file_normalizer import executor, naming, planner
 from manhwateca.file_normalizer.grouping import GROUPS
+from manhwateca.file_normalizer.report import generate_report
 from manhwateca.reporting.files import write_report
 from manhwateca.shared.paths import get_required_path_env
 from manhwateca.shared.titles import get_canonical_manga_name
@@ -21,6 +22,16 @@ REPORT_PATH = Path("reports/audits/rename_preview.html")
 
 
 def generate_html(plan, conflicts, duplicates):
+    generate_report(
+        plan,
+        conflicts,
+        duplicates,
+        REPORT_PATH,
+        DRY_RUN,
+    )
+
+
+def generate_html_legacy(plan, conflicts, duplicates):
     total_files = sum(
         len(files)
         for mangas in plan.values()
@@ -756,6 +767,18 @@ def main(apply=False):
 
     generate_html(plan, conflicts, duplicates)
     applied = apply_plan(plan, conflicts)
+    if apply and applied:
+        plan = build_plan()
+        conflicts = detect_conflicts(plan)
+        duplicates = detect_duplicates(plan)
+        total_files = sum(
+            len(files)
+            for mangas in plan.values()
+            for files in mangas.values()
+        )
+        total_mangas = sum(len(mangas) for mangas in plan.values())
+        total_groups = sum(1 for mangas in plan.values() if mangas)
+        generate_html(plan, conflicts, duplicates)
 
     print(f"Pasta raiz: {MANGA_ROOT}")
     print(f"Modo simulação: {DRY_RUN}")

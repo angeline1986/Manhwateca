@@ -404,6 +404,11 @@ input:focus, select:focus { border-color: var(--rose); box-shadow: 0 0 0 4px rgb
 .workflow-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
 .task-history { margin-top: 24px; }
 .task-item { padding: 16px; }
+.task-highlight {
+  border-color: var(--rose) !important;
+  box-shadow: 0 0 0 4px rgba(169,77,107,.1);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
 .task-head { display: flex; justify-content: space-between; gap: 15px; }
 .task-item p { color: var(--muted); }
 .task-item pre { max-height: 180px; overflow: auto; margin: 12px 0 0; padding: 12px; border-radius: 9px; color: #f7e9ed; background: #493b3f; white-space: pre-wrap; font-size: 12px; }
@@ -422,9 +427,32 @@ input:focus, select:focus { border-color: var(--rose); box-shadow: 0 0 0 4px rgb
   background: #fff; box-shadow: 0 22px 55px rgba(82,42,56,.18);
 }
 .task-toast[hidden] { display: none; }
+.task-toast-content { flex: 1; min-width: 0; }
 .task-toast strong, .task-toast span { display: block; }
 .task-toast span { color: var(--muted); font-size: 13px; }
 .task-toast button { flex: none; }
+.task-toast > a {
+  flex: none; padding: 11px 16px; border-radius: 11px;
+  color: #fff; background: var(--rose); font-weight: 800; text-decoration: none;
+}
+.task-progress {
+  overflow: hidden; height: 6px; margin-top: 11px;
+  border-radius: 999px; background: #f4e4e4;
+}
+.task-progress span {
+  width: 38%; height: 100%; border-radius: inherit;
+  background: var(--rose);
+}
+.task-toast.running .task-progress span {
+  animation: task-progress 1.15s ease-in-out infinite;
+}
+.task-toast.completed .task-progress span,
+.task-toast.failed .task-progress span { width: 100%; animation: none; }
+.task-toast.failed .task-progress span { background: var(--danger); }
+@keyframes task-progress {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(275%); }
+}
 
 @media (max-width: 1100px) {
   .status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

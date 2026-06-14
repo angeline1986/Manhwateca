@@ -9,10 +9,60 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import rename_files
+from manhwateca.file_normalizer.report import generate_report
 from rename_files import normalize_chapter_name
 
 
 class RenameFilesTests(unittest.TestCase):
+    def test_report_lists_only_affected_works_in_group_order(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "rename_preview.html"
+            plan = defaultdict(lambda: defaultdict(list))
+            plan["ST"]["Speak of the devil"].append({
+                "old_name": "speak cap 1.pdf",
+                "new_name": "Speak of the devil cap 1.pdf",
+                "kind": "chapter",
+            })
+            plan["A"]["Alpha"].append({
+                "old_name": "alpha.jpeg",
+                "new_name": "cover.jpeg",
+                "kind": "cover",
+            })
+
+            generate_report(plan, [], [], report, True)
+            rendered = report.read_text(encoding="utf-8")
+
+        self.assertNotIn("Expandir Tudo", rendered)
+        self.assertNotIn(">BC<", rendered)
+        self.assertLess(rendered.index(">Alpha<"), rendered.index(">Speak of the devil<"))
+        self.assertIn("alpha.jpeg", rendered)
+        self.assertIn("cover.jpeg", rendered)
+        self.assertIn("Esta prévia não altera arquivos", rendered)
+
+    def test_apply_regenerates_report_with_final_file_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manga = root / "A" / "Obra"
+            report = root / "rename_preview.html"
+            manga.mkdir(parents=True)
+            old_file = manga / "obra capitulo 1.pdf"
+            old_file.touch()
+
+            with (
+                patch("rename_files.MANGA_ROOT", root),
+                patch("rename_files.REPORT_PATH", report),
+            ):
+                result = rename_files.main(apply=True)
+
+            rendered = report.read_text(encoding="utf-8")
+            renamed_files = [path.name for path in manga.iterdir()]
+
+        self.assertTrue(result)
+        self.assertEqual(["Obra cap 1.pdf"], renamed_files)
+        self.assertIn("0 nomes serão ajustados em 0 obras", rendered)
+        self.assertIn("Nenhum arquivo precisa ser renomeado", rendered)
+        self.assertNotIn("Será renomeado", rendered)
+
     def test_uses_folder_name_as_canonical_title(self):
         result = normalize_chapter_name(
             "xx cheio de segredos cap 13 FIM.pdf",

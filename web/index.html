@@ -339,7 +339,7 @@
             </div>
           </section>
 
-          <section class="panel task-history">
+          <section class="panel task-history" id="taskHistory">
             <div class="section-heading">
               <div>
                 <span class="eyebrow">ATIVIDADE</span>
@@ -389,11 +389,15 @@
     </main>
   </div>
   <div class="task-toast" id="taskToast" hidden>
-    <div>
+    <div class="task-toast-content">
       <strong id="taskToastTitle">Tarefa iniciada</strong>
       <span id="taskToastText">Acompanhe o andamento no histórico.</span>
+      <div class="task-progress" id="taskProgress" aria-label="Tarefa em andamento">
+        <span></span>
+      </div>
     </div>
-    <button type="button" data-page="automation">Ver andamento</button>
+    <a id="taskResultLink" href="#" target="_blank" hidden>Abrir relatório</a>
+    <button type="button" id="viewTaskProgress">Ver andamento</button>
   </div>
   <script src="/js/app.js"></script>
 </body>

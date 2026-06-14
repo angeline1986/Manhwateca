@@ -43,6 +43,9 @@ const workflowFeedback = document.getElementById("workflowFeedback");
 const startWorkflow = document.getElementById("startWorkflow");
 const resumeWorkflow = document.getElementById("resumeWorkflow");
 const taskToast = document.getElementById("taskToast");
+const viewTaskProgress = document.getElementById("viewTaskProgress");
+const taskProgress = document.getElementById("taskProgress");
+const taskResultLink = document.getElementById("taskResultLink");
 const sidebar = document.getElementById("sidebar");
 const sidebarToggle = document.getElementById("sidebarToggle");
 let taskTimer;
@@ -301,7 +304,13 @@ async function startTask(action, requiresConfirmation) {
   }
   document.getElementById("taskToastTitle").textContent = payload.label;
   document.getElementById("taskToastText").textContent =
-    "A tarefa foi iniciada. O resultado e os relatórios aparecerão no histórico.";
+    "Preparando a execução...";
+  taskToast.dataset.taskId = payload.id;
+  taskToast.className = "task-toast running";
+  taskProgress.setAttribute("aria-label", "Tarefa em andamento");
+  taskResultLink.hidden = true;
+  viewTaskProgress.hidden = false;
+  viewTaskProgress.textContent = "Ver andamento";
   taskToast.hidden = false;
   await loadTasks();
 }
@@ -315,7 +324,7 @@ function renderTask(task) {
   `).join("");
   const messages = (task.messages || []).join("\n");
   return `
-    <article class="task-item">
+    <article class="task-item" data-task-id="${escapeHtml(task.id)}">
       <div class="task-head">
         <strong>${task.label}</strong>
         <span class="state ${task.status === "completed" ? "ok" : "warn"}">
@@ -330,6 +339,24 @@ function renderTask(task) {
   `;
 }
 
+viewTaskProgress.addEventListener("click", () => {
+  showPage("automation");
+  window.setTimeout(() => {
+    const task = taskList.querySelector(
+      `[data-task-id="${CSS.escape(taskToast.dataset.taskId || "")}"]`
+    );
+    (task || document.getElementById("taskHistory")).scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+    if (task) {
+      task.classList.add("task-highlight");
+      window.setTimeout(() => task.classList.remove("task-highlight"), 1800);
+    }
+    taskToast.hidden = true;
+  }, 120);
+});
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, character => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
@@ -342,6 +369,7 @@ async function loadTasks() {
   taskList.innerHTML = data.tasks.length
     ? data.tasks.map(renderTask).join("")
     : '<p class="empty">Nenhuma tarefa executada.</p>';
+  updateTaskToast(data.tasks);
   const hasRunning = data.tasks.some(task => ["queued", "running"].includes(task.status));
   const catalogTask = data.tasks.find(task =>
     task.action === "catalog_scan" && task.status === "completed"
@@ -374,6 +402,39 @@ async function loadTasks() {
   }
   clearTimeout(taskTimer);
   taskTimer = setTimeout(loadTasks, hasRunning ? 1000 : 5000);
+}
+
+function updateTaskToast(tasks) {
+  if (taskToast.hidden || !taskToast.dataset.taskId) return;
+  const task = tasks.find(item => item.id === taskToast.dataset.taskId);
+  if (!task) return;
+  const text = document.getElementById("taskToastText");
+  if (["queued", "running"].includes(task.status)) {
+    taskToast.className = "task-toast running";
+    text.textContent = task.status === "queued"
+      ? "Aguardando o início da tarefa..."
+      : "Executando. O resultado aparecerá assim que estiver pronto.";
+    return;
+  }
+  const completed = task.status === "completed";
+  taskToast.className = `task-toast ${completed ? "completed" : "failed"}`;
+  taskProgress.setAttribute(
+    "aria-label",
+    completed ? "Tarefa concluída" : "Tarefa encerrada com erro"
+  );
+  text.textContent = completed
+    ? "Tarefa concluída com sucesso."
+    : "A tarefa não foi concluída. Consulte o resultado para entender o motivo.";
+  const report = (task.reports || [])[0];
+  if (completed && report) {
+    taskResultLink.href = `/reports/${report.replace(/^reports\//, "")}`;
+    taskResultLink.hidden = false;
+    viewTaskProgress.hidden = true;
+  } else {
+    taskResultLink.hidden = true;
+    viewTaskProgress.hidden = false;
+    viewTaskProgress.textContent = "Ver resultado";
+  }
 }
 
 function summaryCard(label, value) {

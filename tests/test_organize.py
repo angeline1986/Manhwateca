@@ -9,6 +9,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import organize
+from manhwateca.library_organizer.report import generate_report
 
 
 def plan_item(source, destination):
@@ -27,6 +28,43 @@ def plan_item(source, destination):
 
 
 class OrganizeTests(unittest.TestCase):
+    def test_report_prioritizes_pending_moves_and_collapses_correct_works(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = root / "organize_preview.html"
+            correct_xyz = plan_item(
+                root / "XYZ" / "Zeta",
+                root / "XYZ" / "Zeta",
+            )
+            correct_a = plan_item(root / "A" / "Alpha", root / "A" / "Alpha")
+            pending = plan_item(root / "status" / "Beta", root / "BC" / "Beta")
+
+            generate_report(
+                [correct_xyz, correct_a, pending],
+                [],
+                [],
+                [],
+                report,
+                True,
+            )
+            rendered = report.read_text(encoding="utf-8")
+
+        self.assertIn("O que será alterado", rendered)
+        self.assertIn("Obras já organizadas", rendered)
+        self.assertIn('data-filter="move"', rendered)
+        self.assertIn("Beta", rendered)
+        self.assertIn('BC/<strong class="work-folder">Beta</strong>', rendered)
+        self.assertIn(
+            '<strong class="work-folder">Beta</strong>',
+            rendered,
+        )
+        self.assertLess(
+            rendered.index("<strong>A</strong>"),
+            rendered.index("<strong>XYZ</strong>"),
+        )
+        self.assertNotIn(str(root), rendered.split("<script>")[0])
+        self.assertNotIn("Expandir Tudo", rendered)
+
     def test_detects_pdf_without_chapter_keyword(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "Um homem casado"
@@ -132,6 +170,33 @@ class OrganizeTests(unittest.TestCase):
             self.assertEqual(str(source), entry["source"])
             self.assertEqual(str(destination), entry["destination"])
 
+    def test_apply_regenerates_report_with_final_library_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "status" / "Obra"
+            report = root / "organize_preview.html"
+            history = root / "history.jsonl"
+            source.mkdir(parents=True)
+            (source / "Obra cap 1.pdf").touch()
+
+            with (
+                patch("organize.MANGA_ROOT", root),
+                patch("organize.REPORT_PATH", report),
+                patch("organize.HISTORY_PATH", history),
+            ):
+                result = organize.organize(apply=True)
+
+            rendered = report.read_text(encoding="utf-8")
+            applied_entry = json.loads(history.read_text(encoding="utf-8"))
+            destination_exists = Path(applied_entry["destination"]).exists()
+
+        self.assertTrue(result)
+        self.assertFalse(source.exists())
+        self.assertTrue(destination_exists)
+        self.assertIn("0</strong><span>Pastas a mover", rendered)
+        self.assertIn("Nenhuma pasta precisa ser movida", rendered)
+        self.assertNotIn("Será movido", rendered)
+
     def test_case_only_folder_rename_is_not_a_conflict(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -143,6 +208,20 @@ class OrganizeTests(unittest.TestCase):
             conflicts = organize.detect_conflicts(plan)
 
             self.assertEqual([], conflicts)
+
+    def test_apply_handles_case_only_folder_rename(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "illusion"
+            destination = root / "Illusion"
+            source.mkdir()
+            item = plan_item(source, destination)
+
+            with patch("organize.DRY_RUN", False):
+                result = organize.apply_plan([item], [], [])
+
+            self.assertTrue(result)
+            self.assertEqual(["Illusion"], [path.name for path in root.iterdir()])
 
 
 if __name__ == "__main__":

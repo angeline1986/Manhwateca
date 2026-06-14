@@ -28,6 +28,7 @@ from manhwateca.library_organizer.planning import (
     determine_status,
 )
 from manhwateca.library_organizer.parser import parse_args
+from manhwateca.library_organizer.report import generate_report
 from manhwateca.reporting.files import write_report
 from manhwateca.shared.duplicates import detect_duplicates_organize
 from manhwateca.shared.paths import get_required_path_env
@@ -69,6 +70,17 @@ def get_current_group(path):
 
 
 def generate_html(plan, conflicts, duplicates, empty_legacy_folders=None):
+    return generate_report(
+        plan,
+        conflicts,
+        duplicates,
+        empty_legacy_folders or [],
+        REPORT_PATH,
+        DRY_RUN,
+    )
+
+
+def generate_html_legacy(plan, conflicts, duplicates, empty_legacy_folders=None):
     empty_legacy_folders = empty_legacy_folders or []
     total_detected = len(plan)
     total_correct = sum(1 for item in plan if item["is_correct"])
@@ -760,6 +772,16 @@ def organize(apply=False):
 
     generate_html(plan, conflicts, duplicates, empty_legacy_folders)
     applied = apply_plan(plan, conflicts, duplicates)
+    if apply and applied:
+        manga_folders = find_manga_folders(MANGA_ROOT)
+        empty_legacy_folders = find_empty_legacy_folders(MANGA_ROOT)
+        plan = build_plan(manga_folders)
+        conflicts = detect_conflicts(plan)
+        duplicates = detect_duplicates_organize(plan)
+        total_detected = len(plan)
+        total_correct = sum(1 for item in plan if item["is_correct"])
+        total_to_move = total_detected - total_correct
+        generate_html(plan, conflicts, duplicates, empty_legacy_folders)
 
     print(f"Pasta raiz: {MANGA_ROOT}")
     print(f"Modo simulação: {DRY_RUN}")

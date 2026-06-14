@@ -42,7 +42,10 @@ def apply_plan(
     pending = [
         item
         for item in plan
-        if not item["is_correct"] and not item["exists"]
+        if not item["is_correct"] and (
+            not item["exists"]
+            or _same_physical_path(item["source"], item["destination"])
+        )
     ]
     missing_sources = [
         item for item in pending if not item["source"].exists()
@@ -86,6 +89,13 @@ def apply_plan(
                 "movido",
             )
     return True
+
+
+def _same_physical_path(source, destination):
+    try:
+        return source.samefile(destination)
+    except FileNotFoundError:
+        return False
 
 
 def _move_item(item):
