@@ -149,9 +149,9 @@
             <div class="catalog-table-wrap">
               <table class="catalog-table">
                 <thead><tr>
-                  <th>Obra</th><th>Último lido</th><th>Próximo</th>
+                  <th>Obra</th><th>Último lido</th>
                   <th>Disponível</th><th>Tamanho</th><th>Arquivos</th>
-                  <th>Side stories</th><th>Situação</th>
+                  <th>Situação</th>
                 </tr></thead>
                 <tbody id="catalogList"></tbody>
               </table>
@@ -204,24 +204,26 @@
         </section>
 
         <section class="page" id="page-mangaupdates">
-          <section class="panel">
-            <div class="section-heading">
+          <details class="panel collapsible-panel">
+            <summary>
               <div>
                 <span class="eyebrow">AÇÕES MANGAUPDATES</span>
                 <h2>Buscar e enriquecer dados</h2>
                 <p>Consulte em lotes, revise IDs e atualize o CSV.</p>
               </div>
-            </div>
+            </summary>
             <div class="action-grid" id="mangaActionGrid"></div>
-          </section>
+          </details>
 
-          <section class="panel mangaupdates-panel">
-            <div class="catalog-heading">
+          <details class="panel collapsible-panel mangaupdates-panel">
+            <summary>
               <div>
                 <span class="eyebrow">REVISÃO DE IDS</span>
                 <h2>Correspondências pendentes</h2>
                 <p>Selecione um candidato ou informe o ID correto.</p>
               </div>
+            </summary>
+            <div class="catalog-heading collapsible-toolbar">
               <input id="reviewSearch" type="search" placeholder="Buscar obra pendente">
             </div>
             <div class="catalog-summary" id="reviewSummary"></div>
@@ -230,43 +232,85 @@
               <span id="decisionFeedback" aria-live="polite"></span>
             </div>
             <div class="review-list" id="idReviewList"></div>
-          </section>
+          </details>
+
+          <details class="panel collapsible-panel">
+            <summary>
+              <div>
+                <span class="eyebrow">PESQUISA AVULSA</span>
+                <h2>Buscar obra no MangaUpdates</h2>
+                <p>Consulta a API sem alterar o catálogo, o CSV ou o Notion.</p>
+              </div>
+            </summary>
+            <form class="api-search-form" id="apiSearchForm">
+              <label for="apiSearchQuery">Nome da obra</label>
+              <div>
+                <input id="apiSearchQuery" type="search"
+                       placeholder="Ex.: Flip the Script" required minlength="2">
+                <button type="submit">Buscar na API</button>
+              </div>
+              <span id="apiSearchFeedback" aria-live="polite"></span>
+            </form>
+            <div class="api-search-results" id="apiSearchResults"></div>
+          </details>
         </section>
 
         <section class="page" id="page-notion">
-          <section class="panel">
-            <div class="section-heading">
+          <details class="panel collapsible-panel">
+            <summary>
               <div>
                 <span class="eyebrow">AÇÕES NOTION</span>
                 <h2>Simular e sincronizar</h2>
                 <p>Criações e alterações exigem confirmação explícita.</p>
               </div>
-            </div>
+            </summary>
             <div class="action-grid" id="notionActionGrid"></div>
-          </section>
+          </details>
 
-          <section class="panel notion-panel">
-            <div class="section-heading">
+          <details class="panel collapsible-panel notion-panel">
+            <summary>
               <div>
                 <span class="eyebrow">CATÁLOGO → NOTION</span>
                 <h2>Páginas importadas</h2>
                 <p>Criações acontecem em lotes de até 25 obras.</p>
               </div>
-              <button class="ghost-button" id="refreshNotion" type="button">Atualizar</button>
+            </summary>
+            <div class="section-heading">
+              <span></span>
+              <button class="refresh-icon" id="refreshNotion" type="button"
+                      title="Recarregar dados" aria-label="Recarregar dados">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 6v5h-5"></path>
+                  <path d="M4 18v-5h5"></path>
+                  <path d="M18.5 9a7 7 0 0 0-11.7-2.6L4 9"></path>
+                  <path d="M5.5 15a7 7 0 0 0 11.7 2.6L20 15"></path>
+                </svg>
+              </button>
             </div>
             <div class="catalog-summary" id="notionSummary"></div>
             <div class="notion-meta" id="notionMeta"></div>
             <div class="notion-lists" id="notionLists"></div>
-          </section>
+          </details>
 
-          <section class="panel metadata-panel">
-            <div class="section-heading">
+          <details class="panel collapsible-panel metadata-panel">
+            <summary>
               <div>
                 <span class="eyebrow">CSV → NOTION</span>
                 <h2>Atualização de metadados</h2>
                 <p>Prévia dos campos enviados às páginas existentes.</p>
               </div>
-              <button class="ghost-button" id="refreshMetadata" type="button">Atualizar</button>
+            </summary>
+            <div class="section-heading">
+              <span></span>
+              <button class="refresh-icon" id="refreshMetadata" type="button"
+                      title="Recarregar dados" aria-label="Recarregar dados">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 6v5h-5"></path>
+                  <path d="M4 18v-5h5"></path>
+                  <path d="M18.5 9a7 7 0 0 0-11.7-2.6L4 9"></path>
+                  <path d="M5.5 15a7 7 0 0 0 11.7 2.6L20 15"></path>
+                </svg>
+              </button>
             </div>
             <div class="catalog-summary" id="metadataSummary"></div>
             <div class="notion-meta" id="metadataMeta"></div>
@@ -274,7 +318,7 @@
               <div class="metadata-updates" id="metadataUpdates"></div>
               <div class="metadata-alerts" id="metadataAlerts"></div>
             </div>
-          </section>
+          </details>
         </section>
 
         <section class="page" id="page-automation">

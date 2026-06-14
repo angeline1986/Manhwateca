@@ -1,6 +1,8 @@
 from manhwateca.webapp.editorial import update_editorial
 from manhwateca.webapp.mangaupdates import apply_review_decisions
+from manhwateca.webapp.mangaupdates_search import search_payload
 from manhwateca.webapp.reviews import save_review_note
+from manhwateca.webapp.translation import translate_to_portuguese
 
 
 def handle_direct_post(path, payload, project_root, workflow_manager=None):
@@ -23,6 +25,26 @@ def handle_direct_post(path, payload, project_root, workflow_manager=None):
             "backup": str(backup.relative_to(project_root)) if backup else None,
         }
         return result, 200 if not rejected else 422
+    if path == "/api/mangaupdates/search":
+        try:
+            return search_payload(payload.get("query")), 200
+        except ValueError as error:
+            return {"error": str(error)}, 400
+        except OSError:
+            return {"error": "Não foi possível consultar o MangaUpdates."}, 502
+    if path == "/api/translate":
+        try:
+            translated = translate_to_portuguese(payload.get("text"))
+        except ValueError as error:
+            return {"error": str(error)}, 400
+        except (ImportError, OSError, RuntimeError):
+            return {
+                "error": (
+                    "Não foi possível traduzir. Verifique a instalação do "
+                    "googletrans e a conexão com a internet."
+                )
+            }, 502
+        return {"translation": translated}, 200
     if path == "/api/editorial":
         return _save_editorial(payload, project_root)
     if path == "/api/workflow":

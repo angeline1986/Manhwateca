@@ -19,6 +19,10 @@ const idReviewList = document.getElementById("idReviewList");
 const reviewSearch = document.getElementById("reviewSearch");
 const applyDecisionsButton = document.getElementById("applyDecisions");
 const decisionFeedback = document.getElementById("decisionFeedback");
+const apiSearchForm = document.getElementById("apiSearchForm");
+const apiSearchQuery = document.getElementById("apiSearchQuery");
+const apiSearchFeedback = document.getElementById("apiSearchFeedback");
+const apiSearchResults = document.getElementById("apiSearchResults");
 const notionSummary = document.getElementById("notionSummary");
 const notionMeta = document.getElementById("notionMeta");
 const notionLists = document.getElementById("notionLists");
@@ -48,6 +52,7 @@ let lastMangaUpdatesTask;
 let lastNotionTask;
 let lastMetadataTask;
 let reviewItems = [];
+let apiSearchItems = [];
 const decisions = new Map();
 let editorialWorks = [];
 let editorialOptions = {};
@@ -219,17 +224,38 @@ async function loadDiagnostics() {
 refreshDiagnostics.addEventListener("click", loadDiagnostics);
 
 async function loadActions() {
-  const response = await fetch("/api/actions");
+  const actionHelp = {
+    organization_preview: ["Analisa a organização alfabética das pastas.", "Gera um preview sem mover pastas."],
+    rename_preview: ["Analisa nomes de capítulos, capas e títulos.", "Gera um preview sem renomear arquivos."],
+    chapter_audit: ["Verifica capítulos e arquivos que precisam de conferência.", "Gera um relatório sem alterar a biblioteca."],
+    catalog_scan: ["Lê novamente todas as pastas e capítulos.", "Atualiza o catálogo local data/mangas.json."],
+    apply_organization: ["Move as obras para os grupos alfabéticos corretos.", "Altera as pastas após confirmação."],
+    apply_renaming: ["Padroniza os nomes de capítulos e capas.", "Renomeia os arquivos após confirmação."],
+    run_tests: ["Verifica automaticamente as regras principais do sistema.", "Mostra os resultados no histórico."],
+    mangaupdates_search: ["Pesquisa obras ainda sem ID confirmado.", "Atualiza buscaIds.json com candidatos."],
+    mangaupdates_refresh: ["Completa candidatos sem link ou descrição.", "Atualiza os candidatos já pesquisados."],
+    mangaupdates_details: ["Consulta detalhes dos IDs confirmados.", "Atualiza o cache local do MangaUpdates."],
+    mangaupdates_csv: ["Usa os dados já salvos, sem consultar a API.", "Atualiza o CSV preservando campos manuais."],
+    notion_simulate_batch: ["Compara o catálogo com as páginas do Notion.", "Mostra o próximo lote sem alterar o Notion."],
+    notion_apply_batch: ["Cria as próximas páginas ausentes.", "Publica até 25 obras após confirmação."],
+    notion_update_existing: ["Envia novas contagens para páginas existentes.", "Atualiza o Notion sem criar páginas."],
+    notion_csv_preview: ["Compara o CSV com as páginas existentes.", "Simula as alterações sem escrever no Notion."],
+    notion_csv_apply: ["Envia os metadados enriquecidos do CSV.", "Atualiza páginas após confirmação."],
+  };
+  const response = await fetch("/api/actions", { cache: "no-store" });
   const actions = await response.json();
-  const render = entries => entries.map(([id, action]) => `
+  const render = entries => entries.map(([id, action]) => {
+    const fallback = actionHelp[id] || ["Ação disponível no sistema.", "O resultado aparecerá no histórico."];
+    return `
     <button class="action-button ${action.requires_confirmation ? "destructive" : ""}"
             type="button" data-action="${id}"
             data-confirmation="${action.requires_confirmation}">
-      <strong>${escapeHtml(action.label)}</strong>
-      <span>${escapeHtml(action.description)}</span>
-      <small>${escapeHtml(action.result)}</small>
+      <strong>${escapeHtml(action.label || id)}</strong>
+      <span>${escapeHtml(action.description || fallback[0])}</span>
+      <small>${escapeHtml(action.result || fallback[1])}</small>
     </button>
-  `).join("");
+  `;
+  }).join("");
   const entries = Object.entries(actions);
   const organizationIds = new Set([
     "organization_preview", "rename_preview", "chapter_audit",
@@ -364,11 +390,9 @@ function renderCatalog(items) {
         <td><strong>${escapeHtml(manga.nome || "")}</strong>
           ${aliases ? `<small>${escapeHtml(aliases)}</small>` : ""}</td>
         <td>${manga.ultimo_lido}</td>
-        <td>${manga.proximo_a_ler}</td>
         <td>${manga.main_caps}</td>
         <td>${escapeHtml(manga.tamanho)}</td>
         <td>${manga.chapters_found}</td>
-        <td>${manga.side_stories_found}</td>
         <td>${issues.length
           ? `<button class="issue-button" type="button"
                data-issue-target="${detailsId}" aria-expanded="false">
@@ -378,38 +402,55 @@ function renderCatalog(items) {
       </tr>
       ${issues.length ? `
         <tr class="issue-details" id="${detailsId}" hidden>
-          <td colspan="8">
+          <td colspan="6">
             <div>
-              <strong>O que precisa ser conferido em ${escapeHtml(manga.nome)}:</strong>
-              <ul>${issues.map(issue => `<li>${explainIssue(issue)}</li>`).join("")}</ul>
-              <p>
-                Gere uma auditoria atualizada para ver os arquivos envolvidos.
-                A auditoria apenas analisa; ela não altera a biblioteca.
-              </p>
+              <strong>Como decidir o que fazer em ${escapeHtml(manga.nome)}:</strong>
+              <div class="issue-guidance">
+                ${issues.map(issue => explainIssue(issue)).join("")}
+              </div>
               <button type="button" data-action="chapter_audit">
-                Gerar auditoria de capítulos
+                Identificar arquivos envolvidos
               </button>
               <a href="/reports/audits/chapter_audit.html" target="_blank">
-                Abrir último relatório
+                Consultar última auditoria
               </a>
             </div>
           </td>
         </tr>` : ""}
     `;
-  }).join("") : '<tr><td colspan="8" class="empty">Nenhuma obra encontrada.</td></tr>';
+  }).join("") : '<tr><td colspan="6" class="empty">Nenhuma obra encontrada.</td></tr>';
 }
 
 function explainIssue(issue) {
-  const labels = {
-    "lacunas": "Há intervalos entre os capítulos encontrados. Isso pode ser normal se capítulos já lidos foram apagados.",
-    "MangaUpdates divergente": "O último capítulo local difere da referência salva do MangaUpdates.",
-    "somente side stories": "A pasta contém apenas arquivos identificados como side stories.",
+  const guidance = {
+    "lacunas": [
+      "Intervalos entre capítulos",
+      "Se você apagou capítulos já lidos, nenhuma correção é necessária. Caso contrário, confira se há arquivos ausentes."
+    ],
+    "sobreposições": [
+      "Capítulos repetidos em mais de um arquivo",
+      "Compare os intervalos indicados na auditoria. Mantenha ambos se forem versões diferentes; caso contrário, remova o duplicado."
+    ],
+    "MangaUpdates divergente": [
+      "Contagem local diferente do MangaUpdates",
+      "Confira se a obra está atualizada na fonte. Se o Drive estiver correto, mantenha o catálogo local; não é necessário renomear arquivos."
+    ],
+    "somente side stories": [
+      "A pasta contém apenas histórias extras",
+      "Mantenha assim se a obra principal já foi lida ou removida. Revise apenas se capítulos principais deveriam estar presentes."
+    ],
   };
-  if (labels[issue]) return escapeHtml(labels[issue]);
-  if (String(issue).toLowerCase().endsWith(".pdf")) {
-    return `O arquivo ${escapeHtml(issue)} não pôde ser interpretado automaticamente.`;
+  if (guidance[issue]) {
+    return `<article><strong>${guidance[issue][0]}</strong><p>${guidance[issue][1]}</p></article>`;
   }
-  return escapeHtml(issue);
+  if (String(issue).toLowerCase().endsWith(".pdf")) {
+    return `<article><strong>Nome de arquivo não reconhecido</strong>
+      <p>Revise <code>${escapeHtml(issue)}</code>. Padronize o nome somente se o capítulo ou intervalo não estiver claro.</p>
+    </article>`;
+  }
+  return `<article><strong>${escapeHtml(issue)}</strong>
+    <p>Abra a auditoria para identificar os arquivos envolvidos antes de alterar a biblioteca.</p>
+  </article>`;
 }
 
 function renderChanges(changes) {
@@ -798,6 +839,106 @@ reviewSearch.addEventListener("input", () => {
   renderReview(reviewItems.filter(item =>
     item.nome.toLocaleLowerCase("pt-BR").includes(query)
   ));
+});
+
+apiSearchForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const query = apiSearchQuery.value.trim();
+  if (query.length < 2) return;
+  const submit = apiSearchForm.querySelector("button");
+  submit.disabled = true;
+  apiSearchFeedback.textContent = "Consultando o MangaUpdates...";
+  apiSearchResults.innerHTML = "";
+  try {
+    const response = await fetch("/api/mangaupdates/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      apiSearchFeedback.textContent = response.status === 404
+        ? "O servidor local precisa ser reiniciado para habilitar esta pesquisa."
+        : (payload.error || "Não foi possível pesquisar.");
+      return;
+    }
+    apiSearchFeedback.textContent = payload.results.length
+      ? `${payload.results.length} resultado(s) encontrado(s).`
+      : "Nenhuma obra encontrada.";
+    apiSearchItems = payload.results;
+    apiSearchResults.innerHTML = payload.results.map((item, index) => `
+      <details class="api-result" ${index === 0 ? "open" : ""}>
+        <summary>
+          <strong>${escapeHtml(item.title)}</strong>
+          <strong class="api-result-id">ID ${escapeHtml(item.series_id)}</strong>
+        </summary>
+        <div class="api-result-content">
+          <p data-api-description="${index}">${escapeHtml(item.description || "Descrição não disponível.")}</p>
+          <div class="api-result-actions">
+            ${item.url ? `<a class="result-action" href="${escapeHtml(item.url)}"
+              target="_blank" rel="noopener noreferrer" title="Detalhes"
+              aria-label="Abrir detalhes no MangaUpdates">
+              <span class="result-action-icon details-icon" aria-hidden="true"></span>
+            </a>` : ""}
+            ${item.description ? `<button type="button"
+              class="result-action text-button" data-translate-result="${index}"
+              title="Traduzir descrição" aria-label="Traduzir descrição">
+              <span class="result-action-icon translation-icon" aria-hidden="true"></span>
+            </button>` : ""}
+          </div>
+        </div>
+      </details>
+    `).join("");
+  } catch {
+    apiSearchFeedback.textContent = "Não foi possível conectar ao servidor local.";
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+apiSearchResults.addEventListener("click", async event => {
+  const button = event.target.closest("[data-translate-result]");
+  if (!button) return;
+  const index = Number(button.dataset.translateResult);
+  const item = apiSearchItems[index];
+  const paragraph = apiSearchResults.querySelector(
+    `[data-api-description="${index}"]`
+  );
+  if (!item || !paragraph) return;
+  if (button.dataset.translated === "true") {
+    paragraph.textContent = item.description;
+    button.title = "Traduzir descrição";
+    button.setAttribute("aria-label", "Traduzir descrição");
+    button.dataset.translated = "false";
+    button.classList.remove("translated");
+    return;
+  }
+  button.disabled = true;
+  button.title = "Traduzindo...";
+  try {
+    const response = await fetch("/api/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: item.description }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      button.title = "Tentar traduzir novamente";
+      apiSearchFeedback.textContent = payload.error || "Não foi possível traduzir.";
+      return;
+    }
+    paragraph.textContent = payload.translation;
+    button.title = "Ver texto original";
+    button.setAttribute("aria-label", "Ver texto original");
+    button.dataset.translated = "true";
+    button.classList.add("translated");
+    apiSearchFeedback.textContent = "Descrição traduzida para português.";
+  } catch {
+    button.title = "Tentar traduzir novamente";
+    apiSearchFeedback.textContent = "Não foi possível conectar ao servidor local.";
+  } finally {
+    button.disabled = false;
+  }
 });
 
 applyDecisionsButton.addEventListener("click", async () => {
