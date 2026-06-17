@@ -414,6 +414,87 @@ class MangaUpdatesTests(unittest.TestCase):
             self.assertEqual(0, pending)
             get_series.assert_called_once_with(2)
 
+    def test_fetch_confirmed_details_records_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ids_path = directory / "ids.json"
+            cache_path = directory / "cache.json"
+            state_path = directory / "mangaupdates_state.json"
+            ids_path.write_text(
+                json.dumps([{
+                    "Nome": "Pendente",
+                    "Status": "Confirmado automaticamente",
+                    "ID": 2,
+                }]),
+                encoding="utf-8",
+            )
+            cache_path.write_text("{}", encoding="utf-8")
+
+            with mock.patch(
+                "mangaupdates.get_series",
+                return_value={"series_id": 2, "title": "Pendente"},
+            ):
+                processed, pending = mangaupdates.fetch_confirmed_details(
+                    ids_path,
+                    delay=0,
+                    cache_path=cache_path,
+                    state_path=state_path,
+                )
+
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(1, processed)
+            self.assertEqual(0, pending)
+            self.assertEqual("cache_valido", state["series"]["2"]["status"])
+            self.assertIn("last_checked_at", state["series"]["2"])
+
+    def test_fetch_confirmed_details_refreshes_expired_cache(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ids_path = directory / "ids.json"
+            cache_path = directory / "cache.json"
+            state_path = directory / "mangaupdates_state.json"
+            ids_path.write_text(
+                json.dumps([{
+                    "Nome": "Expirada",
+                    "Status": "Confirmado automaticamente",
+                    "ID": 7,
+                }]),
+                encoding="utf-8",
+            )
+            cache_path.write_text(
+                json.dumps({"7": {"series_id": 7, "title": "Antiga"}}),
+                encoding="utf-8",
+            )
+            state_path.write_text(
+                json.dumps({
+                    "series": {
+                        "7": {
+                            "last_checked_at": "2020-01-01T00:00:00+00:00",
+                            "status": "cache_valido",
+                        }
+                    }
+                }),
+                encoding="utf-8",
+            )
+
+            with mock.patch(
+                "mangaupdates.get_series",
+                return_value={"series_id": 7, "title": "Nova"},
+            ) as get_series:
+                processed, pending = mangaupdates.fetch_confirmed_details(
+                    ids_path,
+                    delay=0,
+                    cache_path=cache_path,
+                    state_path=state_path,
+                    ttl_days=30,
+                )
+
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+            self.assertEqual(1, processed)
+            self.assertEqual(0, pending)
+            self.assertEqual("Nova", cache["7"]["title"])
+            get_series.assert_called_once_with(7)
+
     def test_update_csv_from_confirmed_ids_preserves_editorial_fields(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)

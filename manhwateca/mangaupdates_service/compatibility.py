@@ -61,6 +61,7 @@ MAPPINGS_FILE = Path("config/mangaupdates.json")
 CACHE_FILE = Path("data/mangaupdates.json")
 CATALOG_FILE = Path("data/mangas.json")
 CSV_FILE = Path("reports/integrations/manhwateca_import.csv")
+STATE_FILE = Path("reports/integrations/mangaupdates_state.json")
 PROGRESS_FILE = Path("data/mangaupdates_progress.json")
 METADATA_FILE = Path("config/catalog_metadata.json")
 def add_catalog_titles_to_id_searches(items, catalog_path=CATALOG_FILE):
@@ -183,6 +184,8 @@ def fetch_confirmed_details(
     delay=3.0,
     limit=None,
     cache_path=CACHE_FILE,
+    state_path=STATE_FILE,
+    ttl_days=30,
 ):
     return _fetch_confirmed_details(
         ids_path,
@@ -192,6 +195,8 @@ def fetch_confirmed_details(
         delay=delay,
         limit=limit,
         cache_path=cache_path,
+        state_path=state_path,
+        ttl_days=ttl_days,
     )
 
 

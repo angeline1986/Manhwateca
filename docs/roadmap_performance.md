@@ -229,6 +229,15 @@ Mostrar na interface exatamente o que precisa ser feito.
 
 ## Milestone 4: Cache Inteligente do MangaUpdates
 
+**Status:** em andamento.
+
+Primeira fatia entregue:
+
+- criação de `reports/integrations/mangaupdates_state.json`;
+- registro de `last_checked_at` por ID consultado;
+- atualização de cache expirado conforme validade padrão;
+- testes unitários sem chamadas externas.
+
 ### Objetivo
 
 Evitar chamadas repetidas à API e permitir atualização controlada.

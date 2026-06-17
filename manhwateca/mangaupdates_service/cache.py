@@ -6,6 +6,12 @@ from manhwateca.mangaupdates_service.repository import (
     load_json_object,
     save_json,
 )
+from manhwateca.mangaupdates_service.state import (
+    load_mangaupdates_state,
+    mark_series_checked,
+    save_mangaupdates_state,
+    should_fetch_series,
+)
 
 
 def enrich_catalog(
@@ -69,6 +75,8 @@ def fetch_confirmed_details(
     delay=3.0,
     limit=None,
     cache_path=None,
+    state_path=None,
+    ttl_days=30,
 ):
     items = load_id_searches(ids_path)
     confirmed = [
@@ -77,8 +85,10 @@ def fetch_confirmed_details(
         if item.get("Status") in CONFIRMED_STATUSES and item.get("ID")
     ]
     cache = load_json_object(cache_path)
+    state = load_mangaupdates_state(state_path) if state_path else {}
     pending = [
-        item for item in confirmed if str(item["ID"]) not in cache
+        item for item in confirmed
+        if should_fetch_series(item["ID"], cache, state, ttl_days=ttl_days)
     ]
     selected = pending[:limit] if limit is not None else pending
 
@@ -89,6 +99,9 @@ def fetch_confirmed_details(
             detail_function(series_id)
         )
         save_json(cache_path, cache)
+        if state_path:
+            mark_series_checked(state, series_id)
+            save_mangaupdates_state(state_path, state)
         wait_function(delay)
 
     return len(selected), len(pending) - len(selected)
