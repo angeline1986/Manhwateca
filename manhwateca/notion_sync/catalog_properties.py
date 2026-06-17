@@ -17,7 +17,7 @@ def build_properties(manga):
                 "text": {"content": ", ".join(manga["alias"])}
             }]
         }
-    if manga.get("ultimo_lido", 0) > 0:
+    if manga.get("ultimo_lido") is not None:
         properties["Último lido"] = {"number": manga["ultimo_lido"]}
     _add_external_fields(properties, manga)
     _add_classification_fields(properties, manga)

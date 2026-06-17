@@ -3,6 +3,9 @@ from pathlib import Path
 from manhwateca.shared.chapters import scan_chapters
 
 
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
+
+
 GROUP_FOLDERS = {
     "0-9", "A", "BC", "DE", "FG", "HIJ",
     "KLM", "NO", "PQR", "ST", "UVW", "XYZ",
@@ -31,6 +34,10 @@ def is_manga_folder(path: Path) -> bool:
     return (
         chapter_data["chapter_files"] > 0
         or chapter_data["side_files"] > 0
+        or any(
+            file.is_file() and file.suffix.lower() in IMAGE_EXTENSIONS
+            for file in path.iterdir()
+        )
     )
 
 

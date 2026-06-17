@@ -10,13 +10,16 @@ import notion_csv
 
 
 class FakeDatabases:
+    def __init__(self, properties=None):
+        self.properties = properties or {
+            "Nome": {"title": [{"plain_text": "Alpha"}]}
+        }
+
     def query(self, **_kwargs):
         return {
             "results": [{
                 "id": "page-1",
-                "properties": {
-                    "Nome": {"title": [{"plain_text": "Alpha"}]}
-                },
+                "properties": self.properties,
             }],
             "has_more": False,
         }
@@ -76,6 +79,49 @@ class NotionCsvTests(unittest.TestCase):
         self.assertIn("Alias", summary["updates"][0]["properties"])
         self.assertFalse(pages.updated)
 
+    def test_update_from_csv_skips_unchanged_page(self):
+        pages = FakePages()
+        notion = SimpleNamespace(
+            databases=FakeDatabases({
+                "Nome": {"title": [{"plain_text": "Alpha"}]},
+                "Alias": {"type": "rich_text", "rich_text": []},
+                "Último cap disponível": {"type": "number", "number": 10},
+                "Caps encontrados": {"type": "number", "number": 8},
+                "Side stories": {"type": "number", "number": 0},
+                "Status da contagem": {
+                    "type": "select",
+                    "select": {"name": "OK"},
+                },
+                "Cap MangaUpdates": {"type": "number", "number": None},
+                "MangaUpdates": {"type": "url", "url": None},
+                "ID da obra": {"type": "number", "number": None},
+                "Último lido": {"type": "number", "number": 0},
+            }),
+            pages=pages,
+        )
+
+        summary = notion_csv.update_from_csv(
+            notion,
+            "database",
+            [{
+                "Nome": "Alpha",
+                "Alias": "",
+                "Último capítulo disponível": "10",
+                "Capítulos encontrados": "8",
+                "Side stories": "0",
+                "Status da contagem": "OK",
+                "Capítulo MangaUpdates": "",
+                "MangaUpdates": "",
+                "ID da obra": "",
+                "Último lido": "0",
+            }],
+            apply=True,
+        )
+
+        self.assertEqual(0, summary["updated"])
+        self.assertEqual(["Alpha"], summary["unchanged"])
+        self.assertFalse(pages.updated)
+
     def test_update_matches_existing_page_by_portuguese_alias(self):
         pages = FakePages()
         notion = SimpleNamespace(databases=FakeDatabases(), pages=pages)
@@ -129,10 +175,12 @@ class NotionCsvTests(unittest.TestCase):
             properties["Tamanho"]["select"],
         )
 
-    def test_last_read_is_mapped_only_when_positive(self):
-        self.assertNotIn(
-            "Último lido",
-            notion_csv.build_properties({"Último lido": "0"}),
+    def test_last_read_is_mapped_when_zero_or_positive(self):
+        self.assertEqual(
+            {"number": 0},
+            notion_csv.build_properties(
+                {"Último lido": "0"}
+            )["Último lido"],
         )
         self.assertEqual(
             {"number": 17},

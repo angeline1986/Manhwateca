@@ -1,15 +1,51 @@
 import json
+import os
 import subprocess
 import tempfile
 import threading
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from manhwateca.webapp.tasks import TaskManager
 
 
 class WebTaskTests(unittest.TestCase):
+    def test_notion_batch_is_blocked_when_drive_has_uncataloged_work(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            status = root / "reports/integrations/notion_import_status.json"
+            status.parent.mkdir(parents=True)
+            status.write_text(
+                json.dumps({
+                    "resumo": {
+                        "total_catalogo": 1,
+                        "total_importadas": 1,
+                        "total_pendentes": 0,
+                    },
+                }),
+                encoding="utf-8",
+            )
+            catalog = root / "data/mangas.json"
+            catalog.parent.mkdir()
+            catalog.write_text(
+                json.dumps([{"nome": "Alpha"}]),
+                encoding="utf-8",
+            )
+            library = root / "library"
+            for name in ("Alpha", "Beta"):
+                work = library / "A" / name
+                work.mkdir(parents=True)
+                (work / f"{name} cap 1.pdf").touch()
+            manager = TaskManager(root)
+
+            with (
+                patch.dict(os.environ, {"MANGA_ROOT": str(library)}),
+                self.assertRaisesRegex(RuntimeError, "Catalogar biblioteca"),
+            ):
+                manager.start("notion_simulate_batch")
+
     def test_task_captures_output_and_persists_history(self):
         result = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="Tudo certo\n", stderr=""

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from manhwateca.webapp.actions import SAFE_ACTIONS, build_command
 from manhwateca.webapp.catalog import compare_catalogs, load_catalog
+from manhwateca.webapp.notion import notion_status
 
 class TaskManager:
     def __init__(self, project_root, history_path=None, process_runner=None):
@@ -20,6 +21,14 @@ class TaskManager:
     def start(self, action, confirmation=None, parameters=None):
         if action not in SAFE_ACTIONS:
             raise KeyError(action)
+        if action in {"notion_simulate_batch", "notion_apply_batch"}:
+            uncataloged = notion_status(self.project_root)["summary"]["uncataloged"]
+            if uncataloged:
+                raise RuntimeError(
+                    f"Existem {uncataloged} obra(s) no Drive ainda não "
+                    "catalogada(s). Execute “Catalogar biblioteca” antes "
+                    "de sincronizar com o Notion."
+                )
         if (
             SAFE_ACTIONS[action].get("requires_confirmation")
             and confirmation != "APLICAR"

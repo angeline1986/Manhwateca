@@ -239,6 +239,13 @@ button:not(.nav-link):not(.menu-toggle):hover { background: var(--rose-dark); tr
   color: var(--rose); font-size: 12px; line-height: 1.4;
 }
 .action-button:hover { border-color: var(--rose-border) !important; background: var(--soft-2) !important; }
+.action-button:disabled {
+  cursor: not-allowed; opacity: .58; filter: grayscale(.15);
+  transform: none !important;
+}
+.action-button:disabled:hover {
+  border-color: var(--border) !important; background: #faf7f8 !important;
+}
 .action-button.destructive { color: var(--danger) !important; background: #fff6f6 !important; }
 .review-form { margin-top: 20px; padding: 20px; border: 1px solid var(--rose-border); border-radius: 15px; background: var(--soft-2); }
 .review-form label { display: block; margin-bottom: 9px; font-weight: 800; }
@@ -377,6 +384,23 @@ input:focus, select:focus { border-color: var(--rose); box-shadow: 0 0 0 4px rgb
 .manual-decision input { width: 190px; }
 
 .notion-meta { display: flex; justify-content: space-between; gap: 14px; margin: 14px 0; color: var(--muted); }
+.notion-sync-status {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center; gap: 14px; width: 100%; margin-bottom: 24px;
+  padding: 17px 19px; border: 1px solid var(--border); border-radius: 15px;
+  color: var(--text) !important; background: #fff !important;
+  text-align: left; box-shadow: var(--shadow);
+}
+.notion-sync-status:hover { background: #fff !important; transform: none !important; }
+.notion-sync-status strong, .notion-sync-status small { display: block; color: var(--text); }
+.notion-sync-status small { margin-top: 3px; color: var(--muted); font-weight: 600; }
+.notion-sync-indicator { width: 11px; height: 11px; border-radius: 50%; background: var(--muted); }
+.notion-sync-action { color: var(--rose); font-size: 13px; font-weight: 800; }
+.notion-sync-status.ok .notion-sync-indicator { background: var(--rose); }
+.notion-sync-status.warning { border-color: #e8cf9f; background: #fffaf0 !important; }
+.notion-sync-status.warning:hover { background: #fffaf0 !important; }
+.notion-sync-status.warning .notion-sync-indicator { background: var(--warning); }
+.notion-sync-status.unavailable { background: var(--soft-2); }
 .notion-lists { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .notion-list { max-height: 250px; overflow: auto; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: #fcfbfb; }
 .notion-list.warning { background: #fffaf1; }
@@ -449,6 +473,21 @@ input:focus, select:focus { border-color: var(--rose); box-shadow: 0 0 0 4px rgb
 .task-toast.completed .task-progress span,
 .task-toast.failed .task-progress span { width: 100%; animation: none; }
 .task-toast.failed .task-progress span { background: var(--danger); }
+.confirmation-dialog {
+  width: min(470px, calc(100% - 32px)); padding: 0;
+  border: 1px solid var(--rose-border); border-radius: 18px;
+  color: var(--text); background: #fff;
+  box-shadow: 0 26px 75px rgba(82,42,56,.24);
+}
+.confirmation-dialog::backdrop {
+  background: rgba(57,43,48,.36); backdrop-filter: blur(3px);
+}
+.confirmation-dialog form { padding: 26px; }
+.confirmation-dialog h2 { margin: 7px 0 10px; }
+.confirmation-dialog p { margin-bottom: 24px; color: var(--muted); }
+.confirmation-actions {
+  display: flex; justify-content: flex-end; gap: 10px;
+}
 @keyframes task-progress {
   from { transform: translateX(-110%); }
   to { transform: translateX(275%); }

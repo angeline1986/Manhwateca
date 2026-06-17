@@ -47,7 +47,7 @@ def build_properties(row):
         "ID da obra": {"number": optional_number(row.get("ID da obra"))},
     }
     last_read = optional_number(row.get("Último lido"))
-    if last_read is not None and last_read > 0:
+    if last_read is not None:
         properties["Último lido"] = {"number": last_read}
     _add_optional_fields(properties, row)
     return properties

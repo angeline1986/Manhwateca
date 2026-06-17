@@ -2,10 +2,12 @@ import csv
 
 from manhwateca.mangaupdates_service.candidates import (
     CONFIRMED_STATUSES,
+    load_catalog,
     load_id_searches,
 )
 from manhwateca.mangaupdates_service.csv_export import (
     CSV_COLUMNS,
+    build_csv_row,
     join_values,
 )
 from manhwateca.mangaupdates_service.matching import normalize_title
@@ -17,6 +19,7 @@ def update_csv_from_confirmed_ids(
     csv_path,
     cache_path,
     metadata_path,
+    catalog_path=None,
     limit=None,
 ):
     items = load_id_searches(ids_path)
@@ -31,10 +34,13 @@ def update_csv_from_confirmed_ids(
         )
 
     rows, fieldnames = _read_csv(csv_path)
+    fieldnames = _complete_fieldnames(fieldnames)
     row_index = _build_row_index(rows)
-    _add_metadata_names(row_index, metadata_path)
+    metadata = load_json_object(metadata_path)
+    _add_metadata_names(row_index, metadata)
 
     cache = load_json_object(cache_path)
+    catalog = _build_catalog_index(catalog_path, metadata)
     processed = 0
     updated = 0
     uncached = []
@@ -51,11 +57,23 @@ def update_csv_from_confirmed_ids(
 
         name = item["Nome"].strip()
         position = row_index.get(normalize_title(name))
+        summary = cache.get(str(series_id))
         if position is None:
+            manga = catalog.get(normalize_title(name))
+            if manga and summary:
+                row = _new_row_from_catalog(item, manga, summary, metadata)
+                rows.append(_normalize_row(row, fieldnames))
+                position = len(rows) - 1
+                _index_row(row_index, rows[position], position)
+                processed += 1
+                updated += 1
+                continue
+            if manga and not summary:
+                uncached.append(name)
+                continue
             missing_from_csv.append(name)
             continue
 
-        summary = cache.get(str(series_id))
         if not summary:
             uncached.append(name)
             continue
@@ -83,16 +101,19 @@ def _read_csv(path):
 def _build_row_index(rows):
     row_index = {}
     for position, row in enumerate(rows):
-        for value in (row.get("Nome"), row.get("Alias")):
-            if not value:
-                continue
-            for title in value.split("|"):
-                row_index.setdefault(normalize_title(title.strip()), position)
+        _index_row(row_index, row, position)
     return row_index
 
 
-def _add_metadata_names(row_index, metadata_path):
-    metadata = load_json_object(metadata_path)
+def _index_row(row_index, row, position):
+    for value in (row.get("Nome"), row.get("Alias")):
+        if not value:
+            continue
+        for title in value.split("|"):
+            row_index.setdefault(normalize_title(title.strip()), position)
+
+
+def _add_metadata_names(row_index, metadata):
     for local_title, values in metadata.items():
         candidates = [values.get("nome_oficial"), values.get("alias")]
         position = next(
@@ -108,6 +129,60 @@ def _add_metadata_names(row_index, metadata_path):
             row_index.setdefault(normalize_title(local_title), position)
 
 
+def _build_catalog_index(catalog_path, metadata):
+    if not catalog_path or not catalog_path.exists():
+        return {}
+    index = {}
+    for manga in load_catalog(catalog_path):
+        names = {manga.get("nome", "")}
+        names.update(manga.get("alias", []))
+        configured = metadata.get(manga.get("nome", ""), {})
+        names.update(
+            value
+            for value in (
+                configured.get("nome_oficial"),
+                configured.get("alias"),
+            )
+            if value
+        )
+        for name in names:
+            if name:
+                index.setdefault(normalize_title(name), manga)
+    return index
+
+
+def _new_row_from_catalog(item, manga, summary, metadata):
+    configured = metadata.get(manga.get("nome", ""), {})
+    row = build_csv_row(
+        manga,
+        external=summary,
+        progress={"match_status": _match_status(item)},
+        metadata=configured,
+    )
+    row.update(_external_values(item, row, summary, item["ID"]))
+    return row
+
+
+def _match_status(item):
+    return (
+        "ID confirmado manualmente"
+        if item["Status"] == "Confirmado manualmente"
+        else "ID confirmado automaticamente"
+    )
+
+
+def _complete_fieldnames(fieldnames):
+    completed = list(fieldnames or [])
+    for field in CSV_COLUMNS:
+        if field not in completed:
+            completed.append(field)
+    return completed
+
+
+def _normalize_row(row, fieldnames):
+    return {field: row.get(field, "") for field in fieldnames}
+
+
 def _external_values(item, row, summary, series_id):
     return {
         "ID da obra": summary.get("series_id", series_id),
@@ -116,11 +191,7 @@ def _external_values(item, row, summary, series_id):
         "Temática": join_values(summary.get("genres", [])),
         "Formato": summary.get("format") or row.get("Formato", ""),
         "Universo": join_values(summary.get("universe", [])),
-        "Correspondência API": (
-            "ID confirmado manualmente"
-            if item["Status"] == "Confirmado manualmente"
-            else "ID confirmado automaticamente"
-        ),
+        "Correspondência API": _match_status(item),
     }
 
 

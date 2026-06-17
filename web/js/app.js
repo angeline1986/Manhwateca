@@ -26,6 +26,8 @@ const apiSearchResults = document.getElementById("apiSearchResults");
 const notionSummary = document.getElementById("notionSummary");
 const notionMeta = document.getElementById("notionMeta");
 const notionLists = document.getElementById("notionLists");
+const notionSyncStatus = document.getElementById("notionSyncStatus");
+const notionCatalogPanel = document.getElementById("notionCatalogPanel");
 const refreshNotion = document.getElementById("refreshNotion");
 const metadataSummary = document.getElementById("metadataSummary");
 const metadataMeta = document.getElementById("metadataMeta");
@@ -46,9 +48,14 @@ const taskToast = document.getElementById("taskToast");
 const viewTaskProgress = document.getElementById("viewTaskProgress");
 const taskProgress = document.getElementById("taskProgress");
 const taskResultLink = document.getElementById("taskResultLink");
+const confirmationDialog = document.getElementById("confirmationDialog");
+const confirmationTitle = document.getElementById("confirmationTitle");
+const confirmationText = document.getElementById("confirmationText");
 const sidebar = document.getElementById("sidebar");
 const sidebarToggle = document.getElementById("sidebarToggle");
 let taskTimer;
+let notionUncataloged = 0;
+let notionStatusStale = false;
 let catalog = [];
 let lastCatalogTask;
 let lastMangaUpdatesTask;
@@ -276,14 +283,32 @@ async function loadActions() {
   supportActionGrid.innerHTML = render(entries.filter(([id]) => id === "run_tests"));
 }
 
+function confirmTask(action) {
+  const notionWrite = [
+    "notion_apply_batch",
+    "notion_update_existing",
+    "notion_csv_apply",
+  ].includes(action);
+  confirmationTitle.textContent = notionWrite
+    ? "Confirmar alteração no Notion"
+    : "Confirmar alteração na biblioteca";
+  confirmationText.textContent = notionWrite
+    ? "Esta ação enviará alterações ao Notion. Deseja continuar?"
+    : "Esta ação alterará arquivos ou pastas da biblioteca. Deseja continuar?";
+  confirmationDialog.showModal();
+  return new Promise(resolve => {
+    confirmationDialog.addEventListener("close", () => {
+      resolve(confirmationDialog.returnValue === "confirm");
+    }, { once: true });
+  });
+}
+
 async function startTask(action, requiresConfirmation) {
   let confirmation = null;
   let parameters = {};
   if (requiresConfirmation) {
-    confirmation = window.prompt(
-      "Esta ação altera arquivos da biblioteca. Digite APLICAR para confirmar."
-    );
-    if (confirmation !== "APLICAR") return;
+    if (!await confirmTask(action)) return;
+    confirmation = "APLICAR";
   }
   if (action === "mangaupdates_search") {
     const initials = window.prompt(
@@ -376,7 +401,11 @@ async function loadTasks() {
   );
   if (catalogTask && catalogTask.id !== lastCatalogTask) {
     lastCatalogTask = catalogTask.id;
-    await loadCatalog();
+    await Promise.all([
+      loadCatalog(),
+      loadStatus(),
+      loadNotionStatus(),
+    ]);
   }
   const mangaUpdatesTask = data.tasks.find(task =>
     task.group === "mangaupdates" && task.status === "completed"
@@ -596,12 +625,25 @@ async function loadNotionStatus() {
   try {
     const response = await fetch("/api/notion/status", { cache: "no-store" });
     const data = await response.json();
+    const libraryTotal = Number.isFinite(data.summary.library)
+      ? data.summary.library
+      : data.summary.catalog;
+    const currentCatalogTotal = Number.isFinite(data.summary.current_catalog)
+      ? data.summary.current_catalog
+      : data.summary.catalog;
+    const uncatalogedTotal = Number.isFinite(data.summary.uncataloged)
+      ? data.summary.uncataloged
+      : Math.max(0, libraryTotal - data.summary.catalog);
+    data.summary.library = libraryTotal;
+    data.summary.current_catalog = currentCatalogTotal;
+    data.summary.uncataloged = uncatalogedTotal;
+    data.uncataloged = Array.isArray(data.uncataloged) ? data.uncataloged : [];
     notionSummary.innerHTML = [
-      summaryCard("Catálogo", data.summary.catalog),
+      summaryCard("Biblioteca no Drive", data.summary.library),
+      summaryCard("Catálogo", data.summary.current_catalog),
       summaryCard("Importadas", data.summary.imported),
-      summaryCard("No último lote", data.summary.current_batch),
       summaryCard("Pendentes", data.summary.pending),
-      summaryCard("Duplicadas", data.summary.duplicates),
+      summaryCard("Não catalogadas", data.summary.uncataloged),
     ].join("");
     notionMeta.innerHTML = data.available
       ? `<strong>${escapeHtml(data.mode || "Status")}</strong>
@@ -609,13 +651,89 @@ async function loadNotionStatus() {
       : `<span>${escapeHtml(data.error || "Execute uma simulação para gerar o status.")}</span>`;
     notionLists.innerHTML = [
       notionList("Último lote", data.current_batch),
+      notionList("Não catalogadas", data.uncataloged, "warning"),
       notionList("Pendentes", data.pending, "warning"),
       notionList("Duplicadas", data.duplicates, "danger"),
     ].join("");
+    renderNotionSyncStatus(data);
   } finally {
     refreshNotion.disabled = false;
   }
 }
+
+function renderNotionSyncStatus(data) {
+  const pending = data.summary.pending;
+  const uncataloged = data.summary.uncataloged;
+  notionUncataloged = uncataloged;
+  notionStatusStale = Boolean(data.stale);
+  updateNotionActionAvailability();
+  const title = notionSyncStatus.querySelector("strong");
+  const detail = notionSyncStatus.querySelector("small");
+  notionSyncStatus.classList.remove("ok", "warning", "unavailable");
+  if (!data.available) {
+    notionSyncStatus.classList.add("unavailable");
+    title.textContent = "Situação das importações ainda não verificada";
+    detail.textContent = "Execute “Simular próximo lote” para comparar o catálogo com o Notion.";
+    return;
+  }
+  if (uncataloged > 0) {
+    notionSyncStatus.classList.add("warning");
+    title.textContent = `${uncataloged} obra${uncataloged === 1 ? "" : "s"} do Drive ainda não ${uncataloged === 1 ? "foi catalogada" : "foram catalogadas"}`;
+    detail.textContent = "Execute “Catalogar biblioteca”. Depois simule o próximo lote do Notion.";
+    return;
+  }
+  if (data.stale) {
+    notionSyncStatus.classList.add("warning");
+    title.textContent = "O catálogo mudou desde a última verificação do Notion";
+    detail.textContent = `O último status avaliou ${data.summary.catalog} obras; o catálogo atual possui ${data.summary.current_catalog}. Execute “Simular próximo lote”.`;
+    return;
+  }
+  if (pending > 0) {
+    notionSyncStatus.classList.add("warning");
+    title.textContent = `${pending} obra${pending === 1 ? "" : "s"} ainda não ${pending === 1 ? "foi incluída" : "foram incluídas"} no Notion`;
+    detail.textContent = String(data.mode || "").includes("SIMULAÇÃO")
+      ? "A simulação apenas identificou as páginas. Execute “Importar próximo lote” e confirme a operação."
+      : `Status da última verificação: ${data.updated_at || "data não informada"}.`;
+    return;
+  }
+  notionSyncStatus.classList.add("ok");
+  title.textContent = "Todas as obras catalogadas estão no Notion";
+  detail.textContent = `Nenhuma inclusão pendente na última verificação${data.updated_at ? ` de ${data.updated_at}` : ""}.`;
+}
+
+function updateNotionActionAvailability() {
+  ["notion_simulate_batch", "notion_apply_batch"].forEach(action => {
+    const button = notionActionGrid.querySelector(`[data-action="${action}"]`);
+    if (!button) return;
+    const blockedByCatalog = notionUncataloged > 0;
+    const blockedByStaleStatus =
+      action === "notion_apply_batch" && notionStatusStale;
+    button.disabled = blockedByCatalog || blockedByStaleStatus;
+    button.title = blockedByCatalog
+      ? "Catalogue as obras novas antes de sincronizar com o Notion."
+      : blockedByStaleStatus
+        ? "Simule o próximo lote antes de importar novas páginas."
+        : "";
+  });
+}
+
+notionSyncStatus.addEventListener("click", () => {
+  if (notionUncataloged > 0) {
+    showPage("organization");
+    window.setTimeout(() => {
+      const catalogButton = actionGrid.querySelector('[data-action="catalog_scan"]');
+      catalogButton?.scrollIntoView({ behavior: "smooth", block: "center" });
+      catalogButton?.classList.add("task-highlight");
+      window.setTimeout(
+        () => catalogButton?.classList.remove("task-highlight"),
+        1800,
+      );
+    }, 120);
+  } else {
+    notionCatalogPanel.open = true;
+    notionCatalogPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+});
 
 refreshNotion.addEventListener("click", loadNotionStatus);
 
@@ -642,6 +760,7 @@ async function loadMetadataStatus() {
     const data = await response.json();
     metadataSummary.innerHTML = [
       summaryCard("Atualizações", data.summary.updates),
+      summaryCard("Sem alteração", data.summary.unchanged),
       summaryCard("Ausentes", data.summary.missing),
       summaryCard("Duplicadas", data.summary.duplicates),
       summaryCard("CSV disponível", data.csv_available ? "Sim" : "Não"),

@@ -10,10 +10,12 @@ def write_csv_status(summary, applied, path):
         "modo": "APLICAÇÃO" if applied else "SIMULAÇÃO",
         "resumo": {
             "atualizacoes": summary["updated"],
+            "sem_alteracao": len(summary.get("unchanged", [])),
             "ausentes": len(summary["missing"]),
             "duplicadas": len(summary["duplicates"]),
         },
         "atualizacoes": summary.get("updates", []),
+        "sem_alteracao": summary.get("unchanged", []),
         "ausentes": summary["missing"],
         "duplicadas": summary["duplicates"],
     }

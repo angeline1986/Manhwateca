@@ -529,6 +529,76 @@ class MangaUpdatesTests(unittest.TestCase):
             self.assertEqual(["Sem cache"], uncached)
             self.assertEqual(["Fora do CSV"], missing_from_csv)
 
+    def test_update_csv_appends_catalog_row_when_confirmed_id_is_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ids_path = directory / "busca_ids.json"
+            csv_path = directory / "catalog.csv"
+            cache_path = directory / "cache.json"
+            catalog_path = directory / "mangas.json"
+            metadata_path = directory / "metadata.json"
+            ids_path.write_text(
+                json.dumps([{
+                    "Nome": "The Trapped Beast",
+                    "Status": "Confirmado manualmente",
+                    "ID": 15541779211,
+                }]),
+                encoding="utf-8",
+            )
+            cache_path.write_text(
+                json.dumps({
+                    "15541779211": {
+                        "series_id": 15541779211,
+                        "latest_chapter": 28,
+                        "url": "https://example.test/the-trapped-beast",
+                        "format": "Manhua",
+                        "genres": ["Yaoi"],
+                        "universe": [],
+                    },
+                }),
+                encoding="utf-8",
+            )
+            catalog_path.write_text(
+                json.dumps([{
+                    "nome": "The Trapped Beast",
+                    "alias": [],
+                    "status": "Quero ler",
+                    "nota": "Ok",
+                    "main_caps": 28,
+                    "chapters_found": 30,
+                    "side_stories_found": 0,
+                    "count_status": "OK",
+                }]),
+                encoding="utf-8",
+            )
+            metadata_path.write_text("{}", encoding="utf-8")
+            with csv_path.open("w", encoding="utf-8-sig", newline="") as file:
+                writer = csv.DictWriter(
+                    file,
+                    fieldnames=mangaupdates.CSV_COLUMNS,
+                )
+                writer.writeheader()
+
+            updated, checked, uncached, missing_from_csv = (
+                mangaupdates.update_csv_from_confirmed_ids(
+                    ids_path,
+                    csv_path=csv_path,
+                    cache_path=cache_path,
+                    catalog_path=catalog_path,
+                    delay=0,
+                )
+            )
+
+            with csv_path.open(encoding="utf-8-sig", newline="") as file:
+                row = next(csv.DictReader(file))
+            self.assertEqual(1, updated)
+            self.assertEqual(1, checked)
+            self.assertEqual([], uncached)
+            self.assertEqual([], missing_from_csv)
+            self.assertEqual("The Trapped Beast", row["Nome"])
+            self.assertEqual("15541779211", row["ID da obra"])
+            self.assertEqual("28", row["Capítulo MangaUpdates"])
+
     def test_manual_confirmation_is_exported_to_csv(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)

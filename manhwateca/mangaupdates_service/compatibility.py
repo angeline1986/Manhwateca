@@ -166,12 +166,14 @@ def update_csv_from_confirmed_ids(
     delay=3.0,
     limit=None,
     cache_path=CACHE_FILE,
+    catalog_path=CATALOG_FILE,
 ):
     return _update_csv(
         ids_path,
         csv_path=csv_path,
         cache_path=cache_path,
         metadata_path=METADATA_FILE,
+        catalog_path=catalog_path,
         limit=limit,
     )
 

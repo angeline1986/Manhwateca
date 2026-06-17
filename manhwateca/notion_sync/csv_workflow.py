@@ -75,6 +75,7 @@ def main():
     print()
     print(f"Modo: {'APLICAÇÃO' if args.apply else 'SIMULAÇÃO'}")
     print(f"Atualizações: {summary['updated']}")
+    print(f"Sem alteração: {len(summary.get('unchanged', []))}")
     print(f"Ausentes no Notion: {len(summary['missing'])}")
     print(f"Duplicados bloqueados: {len(summary['duplicates'])}")
     print(f"Log da atualização: {STATUS_FILE}")

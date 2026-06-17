@@ -101,7 +101,7 @@ class SyncTests(unittest.TestCase):
         properties = sync.build_properties(manga("Alpha"))
 
         self.assertNotIn("Alias", properties)
-        self.assertNotIn("Último lido", properties)
+        self.assertEqual({"number": 0}, properties["Último lido"])
         self.assertNotIn("Temática", properties)
         self.assertNotIn("Formato", properties)
         self.assertNotIn("Universo", properties)

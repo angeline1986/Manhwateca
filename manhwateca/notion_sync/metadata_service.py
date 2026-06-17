@@ -1,6 +1,7 @@
 from manhwateca.notion_sync.csv_properties import build_properties, split_values
 from manhwateca.notion_sync.matching import csv_equivalent_names
 from manhwateca.notion_sync.pages import load_existing_pages
+from manhwateca.notion_sync.property_diff import changed_properties
 from manhwateca.notion_sync.repositories import load_metadata
 
 
@@ -10,6 +11,7 @@ def update_from_csv(notion, database_id, rows, apply=False, metadata=None):
     summary = {
         "updated": 0,
         "updates": [],
+        "unchanged": [],
         "missing": [],
         "duplicates": [],
     }
@@ -23,8 +25,13 @@ def update_from_csv(notion, database_id, rows, apply=False, metadata=None):
             summary["duplicates"].append(name)
             print(f"[DUPLICADO NO NOTION] {name}")
         else:
+            expected = build_properties(row)
+            properties = changed_properties(matches[0], expected)
+            if not properties:
+                summary["unchanged"].append(name)
+                print(f"[SEM ALTERAÇÃO] {name}")
+                continue
             summary["updated"] += 1
-            properties = build_properties(row)
             summary["updates"].append({
                 "name": name,
                 "properties": sorted(properties),

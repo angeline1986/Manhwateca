@@ -256,6 +256,15 @@
         </section>
 
         <section class="page" id="page-notion">
+          <button class="notion-sync-status" id="notionSyncStatus" type="button">
+            <span class="notion-sync-indicator" aria-hidden="true"></span>
+            <span>
+              <strong>Verificando obras pendentes...</strong>
+              <small>Consultando o último status da sincronização.</small>
+            </span>
+            <span class="notion-sync-action">Ver detalhes</span>
+          </button>
+
           <details class="panel collapsible-panel">
             <summary>
               <div>
@@ -267,7 +276,7 @@
             <div class="action-grid" id="notionActionGrid"></div>
           </details>
 
-          <details class="panel collapsible-panel notion-panel">
+          <details class="panel collapsible-panel notion-panel" id="notionCatalogPanel">
             <summary>
               <div>
                 <span class="eyebrow">CATÁLOGO → NOTION</span>
@@ -399,6 +408,19 @@
     <a id="taskResultLink" href="#" target="_blank" hidden>Abrir relatório</a>
     <button type="button" id="viewTaskProgress">Ver andamento</button>
   </div>
+  <dialog class="confirmation-dialog" id="confirmationDialog">
+    <form method="dialog">
+      <span class="eyebrow">CONFIRMAÇÃO</span>
+      <h2 id="confirmationTitle">Confirmar operação</h2>
+      <p id="confirmationText"></p>
+      <div class="confirmation-actions">
+        <button class="ghost-button" type="submit" value="cancel">
+          Cancelar
+        </button>
+        <button type="submit" value="confirm">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
   <script src="/js/app.js"></script>
 </body>
 </html>
