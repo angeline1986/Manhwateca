@@ -186,6 +186,16 @@ Guardar um histórico simples para saber o que já foi sincronizado.
 
 ## Milestone 3: Fila de Pendências Reais na Web
 
+**Status:** concluído em 17 de junho de 2026.
+
+Primeira versão entregue com:
+
+- endpoint `/api/pending`;
+- consolidação de pendências do catálogo, MangaUpdates, CSV e Notion;
+- cards acionáveis na visão geral;
+- atualização da fila após tarefas concluídas;
+- testes unitários focados, sem chamadas externas.
+
 ### Objetivo
 
 Mostrar na interface exatamente o que precisa ser feito.

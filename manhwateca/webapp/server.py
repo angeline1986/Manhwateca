@@ -11,6 +11,7 @@ from manhwateca.webapp.diagnostics import build_diagnostics
 from manhwateca.webapp.mangaupdates import review_payload
 from manhwateca.webapp.notion import notion_status
 from manhwateca.webapp.notion_metadata import metadata_status
+from manhwateca.webapp.pending_actions import pending_payload
 from manhwateca.webapp.post_routes import handle_direct_post
 from manhwateca.webapp.status import build_status
 from manhwateca.webapp.tasks import TaskManager
@@ -43,6 +44,9 @@ def create_handler(project_root, task_manager, workflow_manager=None):
                 return
             if path == "/api/actions":
                 self._send_json(public_actions())
+                return
+            if path == "/api/pending":
+                self._send_json(pending_payload(project_root))
                 return
             if path == "/api/catalog":
                 self._send_json(

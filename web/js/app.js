@@ -1,5 +1,6 @@
 const grid = document.getElementById("statusGrid");
 const refreshButton = document.getElementById("refresh");
+const pendingList = document.getElementById("pendingList");
 const diagnosticGrid = document.getElementById("diagnosticGrid");
 const refreshDiagnostics = document.getElementById("refreshDiagnostics");
 const actionGrid = document.getElementById("actionGrid");
@@ -167,6 +168,7 @@ function card(title, detail, available, label) {
 
 async function loadStatus() {
   grid.innerHTML = '<article class="status-card loading">Consultando o ambiente...</article>';
+  pendingList.innerHTML = '<article class="pending-card loading">Calculando pendências...</article>';
   refreshButton.disabled = true;
   try {
     const response = await fetch("/api/status", { cache: "no-store" });
@@ -201,6 +203,7 @@ async function loadStatus() {
         data.notion.configured ? "Configurado" : "Não configurado"
       ),
     ].join("");
+    await loadPendingActions();
   } catch (error) {
     grid.innerHTML = card(
       "Falha ao consultar status",
@@ -208,12 +211,53 @@ async function loadStatus() {
       false,
       "Servidor indisponível"
     );
+    pendingList.innerHTML = `
+      <article class="pending-card warning">
+        <strong>Não foi possível calcular pendências</strong>
+        <span>${escapeHtml(error.message)}</span>
+      </article>
+    `;
   } finally {
     refreshButton.disabled = false;
   }
 }
 
 refreshButton.addEventListener("click", loadStatus);
+
+async function loadPendingActions() {
+  const response = await fetch("/api/pending", { cache: "no-store" });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const payload = await response.json();
+  if (!payload.items.length) {
+    pendingList.innerHTML = `
+      <article class="pending-card success">
+        <strong>Tudo em dia</strong>
+        <span>${escapeHtml(payload.empty_message || "Nenhuma pendência acionável encontrada.")}</span>
+      </article>
+    `;
+    return;
+  }
+  pendingList.innerHTML = payload.items.map(item => `
+    <button type="button"
+            class="pending-card ${escapeHtml(item.severity || "info")}"
+            ${item.action ? `data-action="${escapeHtml(item.action)}"` : ""}
+            ${item.page ? `data-pending-page="${escapeHtml(item.page)}"` : ""}>
+      <span class="pending-kind">${escapeHtml(pendingKindLabel(item.kind))}</span>
+      <strong>${escapeHtml(item.title)}</strong>
+      <span>${escapeHtml(item.detail)}</span>
+      <em>${escapeHtml(item.action ? "Executar próxima etapa" : "Abrir seção")}</em>
+    </button>
+  `).join("");
+}
+
+function pendingKindLabel(kind) {
+  return {
+    catalog: "Catálogo",
+    csv: "CSV",
+    mangaupdates: "MangaUpdates",
+    notion: "Notion",
+  }[kind] || "Ação";
+}
 
 async function loadDiagnostics() {
   refreshDiagnostics.disabled = true;
@@ -405,6 +449,7 @@ async function loadTasks() {
       loadCatalog(),
       loadStatus(),
       loadNotionStatus(),
+      loadPendingActions(),
     ]);
   }
   const mangaUpdatesTask = data.tasks.find(task =>
@@ -412,14 +457,14 @@ async function loadTasks() {
   );
   if (mangaUpdatesTask && mangaUpdatesTask.id !== lastMangaUpdatesTask) {
     lastMangaUpdatesTask = mangaUpdatesTask.id;
-    await loadIdReview();
+    await Promise.all([loadIdReview(), loadPendingActions()]);
   }
   const notionTask = data.tasks.find(task =>
     task.group === "notion" && !["queued", "running"].includes(task.status)
   );
   if (notionTask && notionTask.id !== lastNotionTask) {
     lastNotionTask = notionTask.id;
-    await loadNotionStatus();
+    await Promise.all([loadNotionStatus(), loadPendingActions()]);
   }
   const metadataTask = data.tasks.find(task =>
     ["notion_csv_preview", "notion_csv_apply"].includes(task.action)
@@ -427,7 +472,7 @@ async function loadTasks() {
   );
   if (metadataTask && metadataTask.id !== lastMetadataTask) {
     lastMetadataTask = metadataTask.id;
-    await loadMetadataStatus();
+    await Promise.all([loadMetadataStatus(), loadPendingActions()]);
   }
   clearTimeout(taskTimer);
   taskTimer = setTimeout(loadTasks, hasRunning ? 1000 : 5000);
@@ -1190,6 +1235,27 @@ document.querySelector(".quick-guide").addEventListener("click", event => {
   const action = event.target.closest("[data-action]");
   if (action) handleActionClick(event);
 });
+
+pendingList.addEventListener("click", event => {
+  const card = event.target.closest(".pending-card");
+  if (!card || !pendingList.contains(card)) return;
+  const action = card.dataset.action;
+  if (action) {
+    startTask(action, pendingRequiresConfirmation(action));
+    return;
+  }
+  if (card.dataset.pendingPage) showPage(card.dataset.pendingPage);
+});
+
+function pendingRequiresConfirmation(action) {
+  return [
+    "apply_organization",
+    "apply_renaming",
+    "notion_apply_batch",
+    "notion_update_existing",
+    "notion_csv_apply",
+  ].includes(action);
+}
 
 catalogList.addEventListener("click", event => {
   const issueButton = event.target.closest("[data-issue-target]");
