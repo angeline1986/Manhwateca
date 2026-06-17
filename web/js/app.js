@@ -767,7 +767,8 @@ async function loadMetadataStatus() {
     ].join("");
     metadataMeta.innerHTML = data.available
       ? `<strong>${escapeHtml(data.mode || "Status")}</strong>
-         <span>Atualizado em ${escapeHtml(data.updated_at || "-")}</span>`
+         <span>Atualizado em ${escapeHtml(data.updated_at || "-")}</span>
+         ${renderSyncStateSummary(data.sync_state)}`
       : `<span>${escapeHtml(data.error || "Execute a simulação dos metadados.")}</span>`;
     renderMetadataUpdates(data.updates);
     metadataAlerts.innerHTML = [
@@ -777,6 +778,17 @@ async function loadMetadataStatus() {
   } finally {
     refreshMetadata.disabled = false;
   }
+}
+
+function renderSyncStateSummary(state) {
+  if (!state || !state.available) {
+    return "";
+  }
+  const synced = state.statuses?.sincronizado || 0;
+  const pending = state.statuses?.pendente || 0;
+  return `<span>Estado: ${synced}/${state.total} sincronizadas${
+    pending ? `, ${pending} pendente(s)` : ""
+  }</span>`;
 }
 
 refreshMetadata.addEventListener("click", loadMetadataStatus);

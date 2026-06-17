@@ -119,7 +119,8 @@ class NotionCsvTests(unittest.TestCase):
         )
 
         self.assertEqual(0, summary["updated"])
-        self.assertEqual(["Alpha"], summary["unchanged"])
+        self.assertEqual("Alpha", summary["unchanged"][0]["name"])
+        self.assertEqual("page-1", summary["unchanged"][0]["page_id"])
         self.assertFalse(pages.updated)
 
     def test_update_matches_existing_page_by_portuguese_alias(self):

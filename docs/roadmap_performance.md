@@ -145,6 +145,16 @@ Evitar que `CSV -> Notion` atualize todas as páginas quando só poucas mudaram.
 
 ## Milestone 2: Estado de Sincronização por Obra
 
+**Status:** concluído em 17 de junho de 2026.
+
+Primeira versão entregue em `reports/integrations/sync_state.json`, com:
+
+- ID da página do Notion;
+- hash da linha do CSV;
+- hash do item no catálogo local;
+- status por obra;
+- resumo exposto na API/web de metadados.
+
 ### Objetivo
 
 Guardar um histórico simples para saber o que já foi sincronizado.

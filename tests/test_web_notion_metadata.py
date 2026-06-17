@@ -27,6 +27,17 @@ class WebNotionMetadataTests(unittest.TestCase):
                 root / "reports/integrations/notion_csv_status.json"
             )
             write_csv_status(summary, False, status_path)
+            sync_path = root / "reports/integrations/sync_state.json"
+            sync_path.write_text(
+                json.dumps({
+                    "updated_at": "2026-06-17T10:00:00-03:00",
+                    "works": {
+                        "Alpha": {"status": "sincronizado"},
+                        "Beta": {"status": "pendente"},
+                    },
+                }),
+                encoding="utf-8",
+            )
 
             payload = metadata_status(root)
 
@@ -38,6 +49,12 @@ class WebNotionMetadataTests(unittest.TestCase):
         self.assertEqual(
             ["Alias", "ID da obra", "MangaUpdates"],
             payload["updates"][0]["properties"],
+        )
+        self.assertTrue(payload["sync_state"]["available"])
+        self.assertEqual(2, payload["sync_state"]["total"])
+        self.assertEqual(
+            1,
+            payload["sync_state"]["statuses"]["sincronizado"],
         )
 
     def test_invalid_status_has_safe_empty_response(self):

@@ -28,12 +28,16 @@ def update_from_csv(notion, database_id, rows, apply=False, metadata=None):
             expected = build_properties(row)
             properties = changed_properties(matches[0], expected)
             if not properties:
-                summary["unchanged"].append(name)
+                summary["unchanged"].append({
+                    "name": name,
+                    "page_id": matches[0]["id"],
+                })
                 print(f"[SEM ALTERAÇÃO] {name}")
                 continue
             summary["updated"] += 1
             summary["updates"].append({
                 "name": name,
+                "page_id": matches[0]["id"],
                 "properties": sorted(properties),
             })
             print(f"[ATUALIZAR] {name}")

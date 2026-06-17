@@ -4,6 +4,7 @@ from pathlib import Path
 
 STATUS_PATH = Path("reports/integrations/notion_csv_status.json")
 CSV_PATH = Path("reports/integrations/manhwateca_import.csv")
+SYNC_STATE_PATH = Path("reports/integrations/sync_state.json")
 
 
 def metadata_status(project_root):
@@ -31,6 +32,7 @@ def metadata_status(project_root):
         "unchanged": data.get("sem_alteracao", []),
         "missing": data.get("ausentes", []),
         "duplicates": data.get("duplicadas", []),
+        "sync_state": _sync_state(root),
         "error": None,
     }
 
@@ -51,5 +53,37 @@ def _empty(root, error=None):
         "unchanged": [],
         "missing": [],
         "duplicates": [],
+        "sync_state": _sync_state(root),
         "error": error,
+    }
+
+
+def _sync_state(root):
+    path = root / SYNC_STATE_PATH
+    if not path.is_file():
+        return {
+            "available": False,
+            "updated_at": None,
+            "total": 0,
+            "statuses": {},
+        }
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {
+            "available": False,
+            "updated_at": None,
+            "total": 0,
+            "statuses": {},
+        }
+    works = data.get("works", {})
+    statuses = {}
+    for item in works.values():
+        status = item.get("status", "desconhecido")
+        statuses[status] = statuses.get(status, 0) + 1
+    return {
+        "available": True,
+        "updated_at": data.get("updated_at"),
+        "total": len(works),
+        "statuses": statuses,
     }
