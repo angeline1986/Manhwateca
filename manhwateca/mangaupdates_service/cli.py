@@ -101,6 +101,7 @@ def _fetch_details(args, operations):
         args.fetch_details_from_ids,
         delay=args.delay,
         limit=args.limit,
+        force_refresh=getattr(args, "force_refresh", False),
     )
     print()
     print(f"Detalhes consultados nesta execução: {processed}")

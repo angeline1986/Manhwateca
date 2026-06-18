@@ -23,6 +23,11 @@ def build_parser():
         help="Consulta detalhes dos IDs confirmados e atualiza o cache.",
     )
     parser.add_argument(
+        "--force-refresh",
+        action="store_true",
+        help="Reconsulta IDs confirmados mesmo quando já existe cache válido.",
+    )
+    parser.add_argument(
         "--delay",
         type=float,
         default=3.0,

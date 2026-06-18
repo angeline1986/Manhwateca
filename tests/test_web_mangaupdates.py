@@ -7,6 +7,7 @@ from manhwateca.webapp.mangaupdates import (
     apply_review_decisions,
     review_payload,
 )
+from manhwateca.webapp.mangaupdates_status import mangaupdates_status
 
 
 class WebMangaUpdatesTests(unittest.TestCase):
@@ -52,6 +53,47 @@ class WebMangaUpdatesTests(unittest.TestCase):
         self.assertEqual(99, saved[0]["ID"])
         self.assertEqual("Confirmado manualmente", saved[0]["Status"])
         self.assertNotIn("IDs", saved[0])
+
+    def test_status_counts_predicted_api_calls_without_network(self):
+        items = [
+            {
+                "Nome": "Cached",
+                "Status": "Confirmado automaticamente",
+                "ID": 1,
+            },
+            {
+                "Nome": "Missing",
+                "Status": "Confirmado manualmente",
+                "ID": 2,
+            },
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._project(directory, items)
+            (root / "data").mkdir()
+            (root / "data/mangaupdates.json").write_text(
+                json.dumps({"1": {"series_id": 1}}),
+                encoding="utf-8",
+            )
+            (root / "reports/integrations/mangaupdates_state.json").write_text(
+                json.dumps({
+                    "series": {
+                        "1": {
+                            "last_checked_at": "2099-01-01T00:00:00+00:00",
+                            "status": "cache_valido",
+                        }
+                    }
+                }),
+                encoding="utf-8",
+            )
+            payload = mangaupdates_status(root, batch_size=10)
+
+        self.assertEqual(2, payload["summary"]["confirmed_ids"])
+        self.assertEqual(1, payload["summary"]["cached_ids"])
+        self.assertEqual(1, payload["summary"]["calls_needed"])
+        self.assertEqual(2, payload["summary"]["force_refresh_calls"])
+        self.assertEqual(["Missing"], [
+            item["name"] for item in payload["next_batch"]
+        ])
 
     def _project(self, directory, items):
         root = Path(directory)

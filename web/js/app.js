@@ -20,6 +20,9 @@ const idReviewList = document.getElementById("idReviewList");
 const reviewSearch = document.getElementById("reviewSearch");
 const applyDecisionsButton = document.getElementById("applyDecisions");
 const decisionFeedback = document.getElementById("decisionFeedback");
+const mangaCacheSummary = document.getElementById("mangaCacheSummary");
+const mangaCacheLists = document.getElementById("mangaCacheLists");
+const refreshMangaUpdatesStatus = document.getElementById("refreshMangaUpdatesStatus");
 const apiSearchForm = document.getElementById("apiSearchForm");
 const apiSearchQuery = document.getElementById("apiSearchQuery");
 const apiSearchFeedback = document.getElementById("apiSearchFeedback");
@@ -289,6 +292,7 @@ async function loadActions() {
     mangaupdates_search: ["Pesquisa obras ainda sem ID confirmado.", "Atualiza buscaIds.json com candidatos."],
     mangaupdates_refresh: ["Completa candidatos sem link ou descrição.", "Atualiza os candidatos já pesquisados."],
     mangaupdates_details: ["Consulta detalhes dos IDs confirmados.", "Atualiza o cache local do MangaUpdates."],
+    mangaupdates_force_refresh: ["Reconsulta IDs confirmados mesmo com cache.", "Use somente quando quiser atualizar dados antigos."],
     mangaupdates_csv: ["Usa os dados já salvos, sem consultar a API.", "Atualiza o CSV preservando campos manuais."],
     notion_simulate_batch: ["Compara o catálogo com as páginas do Notion.", "Mostra o próximo lote sem alterar o Notion."],
     notion_apply_batch: ["Cria as próximas páginas ausentes.", "Publica até 25 obras após confirmação."],
@@ -333,10 +337,15 @@ function confirmTask(action) {
     "notion_update_existing",
     "notion_csv_apply",
   ].includes(action);
-  confirmationTitle.textContent = notionWrite
+  const externalRefresh = action === "mangaupdates_force_refresh";
+  confirmationTitle.textContent = externalRefresh
+    ? "Confirmar consultas externas"
+    : notionWrite
     ? "Confirmar alteração no Notion"
     : "Confirmar alteração na biblioteca";
-  confirmationText.textContent = notionWrite
+  confirmationText.textContent = externalRefresh
+    ? "Esta ação reconsulta o MangaUpdates mesmo quando já existe cache. Deseja continuar?"
+    : notionWrite
     ? "Esta ação enviará alterações ao Notion. Deseja continuar?"
     : "Esta ação alterará arquivos ou pastas da biblioteca. Deseja continuar?";
   confirmationDialog.showModal();
@@ -457,7 +466,11 @@ async function loadTasks() {
   );
   if (mangaUpdatesTask && mangaUpdatesTask.id !== lastMangaUpdatesTask) {
     lastMangaUpdatesTask = mangaUpdatesTask.id;
-    await Promise.all([loadIdReview(), loadPendingActions()]);
+    await Promise.all([
+      loadIdReview(),
+      loadPendingActions(),
+      loadMangaUpdatesStatus(),
+    ]);
   }
   const notionTask = data.tasks.find(task =>
     task.group === "notion" && !["queued", "running"].includes(task.status)
@@ -653,6 +666,49 @@ async function loadIdReview() {
   ].join("");
   renderReview(reviewItems);
 }
+
+async function loadMangaUpdatesStatus() {
+  const response = await fetch("/api/mangaupdates/status", { cache: "no-store" });
+  const payload = await response.json();
+  const summary = payload.summary || {};
+  mangaCacheSummary.innerHTML = [
+    summaryCard("IDs confirmados", summary.confirmed_ids || 0),
+    summaryCard("Com cache", summary.cached_ids || 0),
+    summaryCard("Chamadas necessárias", summary.calls_needed || 0),
+    summaryCard(`Próximo lote (${summary.batch_size || 10})`, summary.next_batch || 0),
+    summaryCard("Forçar atualização", summary.force_refresh_calls || 0),
+  ].join("");
+  mangaCacheLists.innerHTML = [
+    cacheList(
+      "Próximas chamadas",
+      payload.next_batch,
+      "Nenhuma chamada necessária."
+    ),
+    cacheList(
+      "Forçar atualização",
+      payload.force_refresh_batch,
+      "Nenhum ID confirmado."
+    ),
+    `<article class="notion-list">
+      <strong>Política do cache</strong>
+      <p>Cache válido por ${escapeHtml(summary.ttl_days || 30)} dias.
+      A opção normal consulta apenas ausentes ou expirados.</p>
+    </article>`,
+  ].join("");
+}
+
+function cacheList(title, items, emptyText) {
+  const entries = (items || []).map(item =>
+    `<li><strong>${escapeHtml(item.name || item.title || "")}</strong>
+      <small>ID ${escapeHtml(item.id || "")}</small></li>`
+  ).join("");
+  return `<article class="notion-list">
+    <strong>${escapeHtml(title)}</strong>
+    ${entries ? `<ul>${entries}</ul>` : `<p>${escapeHtml(emptyText)}</p>`}
+  </article>`;
+}
+
+refreshMangaUpdatesStatus.addEventListener("click", loadMangaUpdatesStatus);
 
 function notionList(title, items, tone = "") {
   return `
@@ -1254,6 +1310,7 @@ function pendingRequiresConfirmation(action) {
     "notion_apply_batch",
     "notion_update_existing",
     "notion_csv_apply",
+    "mangaupdates_force_refresh",
   ].includes(action);
 }
 
@@ -1290,6 +1347,6 @@ reviewForm.addEventListener("submit", async event => {
 
 Promise.all([
   loadStatus(), loadDiagnostics(), loadActions(), loadCatalog(),
-  loadIdReview(), loadTasks()
+  loadIdReview(), loadMangaUpdatesStatus(), loadTasks()
   , loadNotionStatus(), loadMetadataStatus(), loadEditorial(), loadWorkflow()
 ]);

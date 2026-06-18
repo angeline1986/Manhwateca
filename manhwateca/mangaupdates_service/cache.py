@@ -77,6 +77,7 @@ def fetch_confirmed_details(
     cache_path=None,
     state_path=None,
     ttl_days=30,
+    force_refresh=False,
 ):
     items = load_id_searches(ids_path)
     confirmed = [
@@ -88,7 +89,8 @@ def fetch_confirmed_details(
     state = load_mangaupdates_state(state_path) if state_path else {}
     pending = [
         item for item in confirmed
-        if should_fetch_series(item["ID"], cache, state, ttl_days=ttl_days)
+        if force_refresh
+        or should_fetch_series(item["ID"], cache, state, ttl_days=ttl_days)
     ]
     selected = pending[:limit] if limit is not None else pending
 

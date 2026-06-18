@@ -186,6 +186,7 @@ def fetch_confirmed_details(
     cache_path=CACHE_FILE,
     state_path=STATE_FILE,
     ttl_days=30,
+    force_refresh=False,
 ):
     return _fetch_confirmed_details(
         ids_path,
@@ -197,6 +198,7 @@ def fetch_confirmed_details(
         cache_path=cache_path,
         state_path=state_path,
         ttl_days=ttl_days,
+        force_refresh=force_refresh,
     )
 
 

@@ -94,6 +94,19 @@ SAFE_ACTIONS = {
         "reports": [],
         "group": "mangaupdates",
     },
+    "mangaupdates_force_refresh": {
+        "label": "Forçar atualização do cache",
+        "description": "Reconsulta IDs confirmados mesmo quando já existe cache válido.",
+        "result": "Consome chamadas externas de propósito e respeita o delay.",
+        "command": [
+            "scripts/mangaupdates.py", "--fetch-details-from-ids",
+            "reports/integrations/buscaIds.json",
+            "--delay", "3", "--limit", "10", "--force-refresh",
+        ],
+        "reports": [],
+        "group": "mangaupdates",
+        "requires_confirmation": True,
+    },
     "mangaupdates_csv": {
         "label": "Atualizar CSV com dados salvos",
         "description": "Usa IDs e detalhes já salvos, sem chamar a API.",

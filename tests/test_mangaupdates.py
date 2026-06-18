@@ -495,6 +495,54 @@ class MangaUpdatesTests(unittest.TestCase):
             self.assertEqual("Nova", cache["7"]["title"])
             get_series.assert_called_once_with(7)
 
+    def test_fetch_confirmed_details_force_refreshes_cached_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ids_path = directory / "ids.json"
+            cache_path = directory / "cache.json"
+            state_path = directory / "mangaupdates_state.json"
+            ids_path.write_text(
+                json.dumps([{
+                    "Nome": "Cache existente",
+                    "Status": "Confirmado automaticamente",
+                    "ID": 8,
+                }]),
+                encoding="utf-8",
+            )
+            cache_path.write_text(
+                json.dumps({"8": {"series_id": 8, "title": "Antiga"}}),
+                encoding="utf-8",
+            )
+            state_path.write_text(
+                json.dumps({
+                    "series": {
+                        "8": {
+                            "last_checked_at": "2099-01-01T00:00:00+00:00",
+                            "status": "cache_valido",
+                        }
+                    }
+                }),
+                encoding="utf-8",
+            )
+
+            with mock.patch(
+                "mangaupdates.get_series",
+                return_value={"series_id": 8, "title": "Forçada"},
+            ) as get_series:
+                processed, pending = mangaupdates.fetch_confirmed_details(
+                    ids_path,
+                    delay=0,
+                    cache_path=cache_path,
+                    state_path=state_path,
+                    force_refresh=True,
+                )
+
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+            self.assertEqual(1, processed)
+            self.assertEqual(0, pending)
+            self.assertEqual("Forçada", cache["8"]["title"])
+            get_series.assert_called_once_with(8)
+
     def test_update_csv_from_confirmed_ids_preserves_editorial_fields(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)

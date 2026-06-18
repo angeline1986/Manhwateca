@@ -229,13 +229,16 @@ Mostrar na interface exatamente o que precisa ser feito.
 
 ## Milestone 4: Cache Inteligente do MangaUpdates
 
-**Status:** em andamento.
+**Status:** concluído em 18 de junho de 2026.
 
-Primeira fatia entregue:
+Entregue:
 
 - criação de `reports/integrations/mangaupdates_state.json`;
 - registro de `last_checked_at` por ID consultado;
 - atualização de cache expirado conforme validade padrão;
+- endpoint `/api/mangaupdates/status` para prever chamadas externas;
+- resumo visual na página MangaUpdates antes de consultar a API;
+- opção explícita para forçar atualização do cache;
 - testes unitários sem chamadas externas.
 
 ### Objetivo

@@ -39,6 +39,13 @@ def mark_series_checked(state, series_id, *, cache_hash=None, now=None):
     return state
 
 
+def mark_series_for_refresh(state, series_id):
+    entry = state.setdefault("series", {}).setdefault(str(series_id), {})
+    entry["force_refresh"] = True
+    entry["status"] = "atualizacao_forcada"
+    return state
+
+
 def load_mangaupdates_state(path):
     return load_json_object(path)
 

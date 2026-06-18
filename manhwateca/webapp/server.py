@@ -9,6 +9,7 @@ from manhwateca.webapp.catalog import catalog_payload
 from manhwateca.webapp.editorial import dashboard_payload
 from manhwateca.webapp.diagnostics import build_diagnostics
 from manhwateca.webapp.mangaupdates import review_payload
+from manhwateca.webapp.mangaupdates_status import mangaupdates_status
 from manhwateca.webapp.notion import notion_status
 from manhwateca.webapp.notion_metadata import metadata_status
 from manhwateca.webapp.pending_actions import pending_payload
@@ -61,6 +62,9 @@ def create_handler(project_root, task_manager, workflow_manager=None):
                 return
             if path == "/api/mangaupdates/review":
                 self._send_json(review_payload(project_root))
+                return
+            if path == "/api/mangaupdates/status":
+                self._send_json(mangaupdates_status(project_root))
                 return
             if path == "/api/notion/status":
                 self._send_json(notion_status(project_root))
