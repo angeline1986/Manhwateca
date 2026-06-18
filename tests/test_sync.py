@@ -97,6 +97,34 @@ class SyncTests(unittest.TestCase):
             properties["Picância"]["select"],
         )
 
+    def test_build_progress_properties_excludes_metadata_fields(self):
+        item = manga("Alpha")
+        item.update({
+            "alias": ["Alfa"],
+            "tematica": ["Regressão"],
+            "formato": "Manhwa",
+            "universo": ["Omegaverse"],
+            "nivel_picancia": "🔥 Alta",
+            "mangaupdates_latest_chapter": 40,
+            "mangaupdates_url": "https://example.test/alpha",
+        })
+
+        properties = sync.build_progress_properties(item)
+
+        self.assertIn("Último lido", properties)
+        self.assertIn("Caps encontrados", properties)
+        self.assertIn("Status da contagem", properties)
+        self.assertNotIn("Nome", properties)
+        self.assertNotIn("Status", properties)
+        self.assertNotIn("Nota", properties)
+        self.assertNotIn("Alias", properties)
+        self.assertNotIn("MangaUpdates", properties)
+        self.assertNotIn("Cap MangaUpdates", properties)
+        self.assertNotIn("Temática", properties)
+        self.assertNotIn("Formato", properties)
+        self.assertNotIn("Universo", properties)
+        self.assertNotIn("Picância", properties)
+
     def test_build_properties_preserves_unmanaged_classification_fields(self):
         properties = sync.build_properties(manga("Alpha"))
 
@@ -257,6 +285,31 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(1, summary["pending"])
         self.assertEqual(0, summary["updated"])
         self.assertFalse(notion.pages.updated)
+
+    def test_sync_uses_custom_property_builder_for_existing_pages(self):
+        notion = SimpleNamespace(
+            databases=FakeDatabases([{
+                "results": [page("1", "Alpha")],
+                "has_more": False,
+            }]),
+            pages=FakePages(),
+        )
+
+        summary = sync.sync(
+            notion,
+            "database",
+            [manga("Alpha")],
+            apply=True,
+            property_builder=lambda item: {
+                "Último lido": {"number": item["ultimo_lido"]}
+            },
+        )
+
+        self.assertEqual(1, summary["updated"])
+        self.assertEqual(
+            {"Último lido": {"number": 0}},
+            notion.pages.updated[0]["properties"],
+        )
 
     def test_import_status_records_imported_and_pending_titles(self):
         summary = {

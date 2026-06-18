@@ -286,6 +286,28 @@ tudo nem perder campos manuais.
 
 ## Milestone 6: Lotes Mais Granulares no Notion
 
+**Status:** concluído em 18 de junho de 2026.
+
+Primeira fatia entregue:
+
+- `--update-existing` passa a atualizar somente progresso e contagens locais;
+- metadados externos e classificação ficam fora desse lote;
+- criação de páginas continua usando propriedades completas;
+- testes unitários garantem o builder separado.
+
+Segunda fatia entregue:
+
+- `CSV -> Notion` passa a atualizar somente metadados e campos editoriais;
+- progresso local, contagens e tamanho ficam fora do lote de metadados;
+- o builder completo foi preservado para compatibilidade interna;
+- testes unitários validam a separação dos escopos.
+
+Terceira fatia entregue:
+
+- o lote de contagem deixou de enviar `Nome`, `Status`, `Nota` e `Alias`;
+- campos editoriais ficam protegidos durante atualização de progresso;
+- criação de páginas continua preenchendo o registro completo.
+
 ### Objetivo
 
 Separar melhor criação, contagem e metadados.
@@ -305,6 +327,27 @@ Separar melhor criação, contagem e metadados.
 - É possível atualizar só metadados sem tocar progresso de leitura.
 
 ## Milestone 7: Histórico e Diagnóstico de Performance
+
+**Status:** concluído em 18 de junho de 2026.
+
+Primeira fatia entregue:
+
+- tarefas da web passam a registrar `duration_seconds`;
+- o histórico salva métricas extraídas da saída dos scripts;
+- Notion registra criações, atualizações, ausentes, duplicados e sem alteração;
+- MangaUpdates registra uma estimativa de chamadas externas;
+- a tela de histórico exibe chips com duração e principais contadores.
+
+Segunda fatia entregue:
+
+- o histórico associa obras afetadas às tarefas quando a saída traz marcadores;
+- itens criados, atualizados, ausentes, duplicados e com erro ficam no JSON;
+- a interface resume a quantidade de itens afetados sem esconder as mensagens.
+
+Terceira fatia entregue:
+
+- Notion registra estimativa de escritas externas por tarefa;
+- simulações continuam registrando impacto sem indicar escrita real.
 
 ### Objetivo
 

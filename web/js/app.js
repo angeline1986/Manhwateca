@@ -401,6 +401,7 @@ function renderTask(task) {
     </a>
   `).join("");
   const messages = (task.messages || []).join("\n");
+  const metrics = renderTaskMetrics(task);
   return `
     <article class="task-item" data-task-id="${escapeHtml(task.id)}">
       <div class="task-head">
@@ -410,11 +411,40 @@ function renderTask(task) {
         </span>
       </div>
       <p>${task.started_at || task.created_at}${task.finished_at ? ` → ${task.finished_at}` : ""}</p>
+      ${metrics}
       ${reports ? `<div class="task-links">${reports}</div>` : ""}
       ${messages ? `<pre>${escapeHtml(messages)}</pre>` : ""}
       ${running ? "<p>Executando em segundo plano...</p>" : ""}
     </article>
   `;
+}
+
+function renderTaskMetrics(task) {
+  const chips = [];
+  if (typeof task.duration_seconds === "number") {
+    chips.push(`Duração: ${task.duration_seconds.toFixed(2)}s`);
+  }
+  const notion = task.metrics?.notion || {};
+  if (typeof notion.created === "number") chips.push(`Criadas: ${notion.created}`);
+  if (typeof notion.updated === "number") chips.push(`Atualizadas: ${notion.updated}`);
+  if (typeof notion.unchanged === "number") chips.push(`Sem alteração: ${notion.unchanged}`);
+  if (typeof notion.missing === "number") chips.push(`Ausentes: ${notion.missing}`);
+  const external = task.metrics?.external_calls || {};
+  if (typeof external.notion_writes === "number") {
+    chips.push(`Escritas Notion: ${external.notion_writes}`);
+  }
+  if (typeof external.mangaupdates === "number") {
+    chips.push(`Chamadas MangaUpdates: ${external.mangaupdates}`);
+  }
+  const items = task.metrics?.items || {};
+  if (items.created?.length) chips.push(`Obras criadas: ${items.created.length}`);
+  if (items.updated?.length) chips.push(`Obras atualizadas: ${items.updated.length}`);
+  if (items.missing?.length) chips.push(`Obras ausentes: ${items.missing.length}`);
+  if (items.duplicates?.length) chips.push(`Duplicadas: ${items.duplicates.length}`);
+  if (items.errors?.length) chips.push(`Erros: ${items.errors.length}`);
+  return chips.length
+    ? `<div class="task-metrics">${chips.map(item => `<span>${escapeHtml(item)}</span>`).join("")}</div>`
+    : "";
 }
 
 viewTaskProgress.addEventListener("click", () => {

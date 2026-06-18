@@ -141,8 +141,8 @@ SAFE_ACTIONS = {
     },
     "notion_update_existing": {
         "label": "Atualizar páginas já importadas",
-        "description": "Envia novas contagens e dados locais para páginas existentes.",
-        "result": "Não cria páginas novas; altera páginas após confirmação.",
+        "description": "Envia progresso local e contagens para páginas existentes.",
+        "result": "Não cria páginas novas e não altera metadados externos.",
         "command": ["scripts/sync.py", "--update-existing"],
         "reports": [],
         "group": "notion",

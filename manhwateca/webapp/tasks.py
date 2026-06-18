@@ -1,4 +1,4 @@
-import json, subprocess, sys, threading, uuid
+import json, re, subprocess, sys, threading, time, uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -67,6 +67,7 @@ class TaskManager:
             task = self.tasks[task_id]
             task["status"] = "running"
             task["started_at"] = _now()
+            task["_started_monotonic"] = time.perf_counter()
             self._save_history()
         config = SAFE_ACTIONS[task["action"]]
         command = [
@@ -90,8 +91,15 @@ class TaskManager:
             return_code = None
         with self.lock:
             task = self.tasks[task_id]
-            task.update(status=status, finished_at=_now(),
-                        return_code=return_code, messages=messages)
+            duration = _duration_seconds(task.pop("_started_monotonic", None))
+            task.update(
+                status=status,
+                finished_at=_now(),
+                duration_seconds=duration,
+                return_code=return_code,
+                messages=messages,
+                metrics=_performance_metrics(task["action"], messages),
+            )
             if task["action"] == "catalog_scan" and status == "completed":
                 task["catalog_changes"] = compare_catalogs(
                     task.pop("_catalog_before", []),
@@ -112,7 +120,9 @@ class TaskManager:
             "created_at": _now(),
             "started_at": None,
             "finished_at": None,
+            "duration_seconds": None,
             "return_code": None,
+            "metrics": {},
             "messages": [],
             "reports": config["reports"],
             "destructive": config.get("requires_confirmation", False),
@@ -174,6 +184,88 @@ def _messages(stdout, stderr):
     for content in (stdout, stderr):
         lines.extend(line for line in (content or "").splitlines() if line.strip())
     return lines[-200:]
+
+def _duration_seconds(started):
+    if started is None:
+        return None
+    return round(max(0, time.perf_counter() - started), 3)
+
+def _performance_metrics(action, messages):
+    text = "\n".join(messages)
+    metrics = {}
+    notion = _extract_counts(text, {
+        "created": "Criações",
+        "updated": "Atualizações",
+        "unchanged": "Sem alteração",
+        "missing": "Ausentes no Notion",
+        "duplicates": "Duplicados bloqueados",
+        "pending": "Obras restantes para próximos lotes",
+    })
+    if notion:
+        metrics["notion"] = notion
+
+    mangaupdates = _extract_counts(text, {
+        "processed": "Processadas nesta execução",
+        "details": "Detalhes consultados nesta execução",
+        "updated": "Obras atualizadas nesta execução",
+        "confirmed": "IDs confirmados",
+        "review": "Para revisão",
+        "pending": "Pendentes",
+    })
+    if mangaupdates:
+        metrics["mangaupdates"] = mangaupdates
+    external_calls = _external_calls(action, notion, mangaupdates)
+    if external_calls:
+        metrics["external_calls"] = external_calls
+    items = _tagged_items(text)
+    if items:
+        metrics["items"] = items
+    return metrics
+
+def _extract_counts(text, labels):
+    counts = {}
+    for key, label in labels.items():
+        match = re.search(rf"^{re.escape(label)}:\s*(\d+)", text, re.MULTILINE)
+        if match:
+            counts[key] = int(match.group(1))
+    return counts
+
+def _external_calls(action, notion, mangaupdates):
+    calls = {}
+    notion_writes = notion.get("created", 0) + notion.get("updated", 0)
+    if notion_writes:
+        calls["notion_writes"] = notion_writes
+    if action.startswith("mangaupdates_") and mangaupdates:
+        manga_calls = max(
+            mangaupdates.get("processed", 0),
+            mangaupdates.get("details", 0),
+            mangaupdates.get("updated", 0),
+        )
+        if manga_calls:
+            calls["mangaupdates"] = manga_calls
+    return calls
+
+def _tagged_items(text):
+    tags = {
+        "created": "CRIAR",
+        "updated": "ATUALIZAR",
+        "missing": "AUSENTE NO NOTION",
+        "duplicates": "DUPLICADO NO NOTION",
+        "errors": "ERRO",
+    }
+    items = {}
+    for key, tag in tags.items():
+        names = [
+            match.group(1).strip()
+            for match in re.finditer(
+                rf"^\[{re.escape(tag)}\]\s+(.+)$",
+                text,
+                re.MULTILINE,
+            )
+        ][:50]
+        if names:
+            items[key] = names
+    return items
 
 def _public_task(task):
     return {key: value for key, value in task.items() if not key.startswith("_")}

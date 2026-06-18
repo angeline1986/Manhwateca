@@ -3,6 +3,21 @@ def build_properties(manga):
         "Nome": {"title": [{"text": {"content": manga["nome"]}}]},
         "Status": {"select": {"name": manga["status"]}},
         "Nota": {"select": {"name": manga["nota"]}},
+    }
+    if manga.get("alias"):
+        properties["Alias"] = {
+            "rich_text": [{
+                "text": {"content": ", ".join(manga["alias"])}
+            }]
+        }
+    properties.update(build_progress_properties(manga))
+    _add_external_fields(properties, manga)
+    _add_classification_fields(properties, manga)
+    return properties
+
+
+def build_progress_properties(manga):
+    properties = {
         "Último cap disponível": {"number": manga.get("main_caps", 0)},
         "Tamanho": {"select": {"name": manga["tamanho"]}},
         "Caps encontrados": {"number": manga.get("chapters_found", 0)},
@@ -11,16 +26,8 @@ def build_properties(manga):
             "select": {"name": manga.get("count_status", "Revisar")}
         },
     }
-    if manga.get("alias"):
-        properties["Alias"] = {
-            "rich_text": [{
-                "text": {"content": ", ".join(manga["alias"])}
-            }]
-        }
     if manga.get("ultimo_lido") is not None:
         properties["Último lido"] = {"number": manga["ultimo_lido"]}
-    _add_external_fields(properties, manga)
-    _add_classification_fields(properties, manga)
     return properties
 
 

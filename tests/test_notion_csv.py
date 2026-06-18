@@ -76,7 +76,7 @@ class NotionCsvTests(unittest.TestCase):
         self.assertEqual(1, summary["updated"])
         self.assertEqual(["Beta"], summary["missing"])
         self.assertEqual("Alpha", summary["updates"][0]["name"])
-        self.assertIn("Alias", summary["updates"][0]["properties"])
+        self.assertNotIn("Alias", summary["updates"][0]["properties"])
         self.assertFalse(pages.updated)
 
     def test_update_from_csv_skips_unchanged_page(self):
@@ -168,6 +168,11 @@ class NotionCsvTests(unittest.TestCase):
             properties["Interesse"]["select"],
         )
 
+    def test_empty_alias_is_not_sent_to_metadata_update(self):
+        properties = notion_csv.build_metadata_properties({"Alias": ""})
+
+        self.assertNotIn("Alias", properties)
+
     def test_tamanho_is_mapped_when_present(self):
         properties = notion_csv.build_properties({"Tamanho": "Longo"})
 
@@ -175,6 +180,67 @@ class NotionCsvTests(unittest.TestCase):
             {"name": "Longo"},
             properties["Tamanho"]["select"],
         )
+
+    def test_metadata_properties_exclude_progress_fields(self):
+        properties = notion_csv.build_metadata_properties({
+            "Alias": "Nome em portugues",
+            "Último capítulo disponível": "10",
+            "Capítulos encontrados": "8",
+            "Side stories": "1",
+            "Status da contagem": "OK",
+            "Último lido": "7",
+            "Tamanho": "Curto",
+            "Capítulo MangaUpdates": "12",
+            "MangaUpdates": "https://example.com",
+            "ID da obra": "123",
+            "Temática": "Drama|Romance",
+            "Formato": "Manhwa",
+            "Universo": "Omegaverse",
+            "Picância": "Média",
+            "Interesse": "Fila de Espera",
+        })
+
+        self.assertIn("Alias", properties)
+        self.assertIn("Cap MangaUpdates", properties)
+        self.assertIn("MangaUpdates", properties)
+        self.assertIn("ID da obra", properties)
+        self.assertIn("Temática", properties)
+        self.assertIn("Formato", properties)
+        self.assertIn("Universo", properties)
+        self.assertIn("Picância", properties)
+        self.assertIn("Interesse", properties)
+        self.assertNotIn("Último cap disponível", properties)
+        self.assertNotIn("Caps encontrados", properties)
+        self.assertNotIn("Side stories", properties)
+        self.assertNotIn("Status da contagem", properties)
+        self.assertNotIn("Último lido", properties)
+        self.assertNotIn("Tamanho", properties)
+
+    def test_update_from_csv_uses_metadata_only_by_default(self):
+        pages = FakePages()
+        notion = SimpleNamespace(
+            databases=FakeDatabases({
+                "Nome": {"title": [{"plain_text": "Alpha"}]},
+                "Alias": {"type": "rich_text", "rich_text": []},
+                "Último lido": {"type": "number", "number": 0},
+            }),
+            pages=pages,
+        )
+
+        summary = notion_csv.update_from_csv(
+            notion,
+            "database",
+            [{
+                "Nome": "Alpha",
+                "Alias": "Alfa",
+                "Último lido": "17",
+            }],
+            apply=False,
+        )
+
+        self.assertEqual(1, summary["updated"])
+        self.assertIn("Alias", summary["updates"][0]["properties"])
+        self.assertNotIn("Último lido", summary["updates"][0]["properties"])
 
     def test_last_read_is_mapped_when_zero_or_positive(self):
         self.assertEqual(

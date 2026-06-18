@@ -34,6 +34,8 @@ normalize_title = matching.normalize_title
 split_values = csv_properties.split_values
 optional_number = csv_properties.optional_number
 build_properties = csv_properties.build_properties
+build_metadata_properties = csv_properties.build_metadata_properties
+build_progress_properties = csv_properties.build_progress_properties
 load_existing_pages = pages.load_existing_pages
 
 
@@ -49,11 +51,25 @@ def equivalent_names(row, metadata):
     return matching.csv_equivalent_names(row, metadata, split_values)
 
 
-def update_from_csv(notion, database_id, rows, apply=False, metadata=None):
+def update_from_csv(
+    notion,
+    database_id,
+    rows,
+    apply=False,
+    metadata=None,
+    property_builder=None,
+):
     if metadata is None:
         metadata = load_metadata()
+    if property_builder is None:
+        property_builder = build_metadata_properties
     return update_metadata(
-        notion, database_id, rows, apply=apply, metadata=metadata
+        notion,
+        database_id,
+        rows,
+        apply=apply,
+        metadata=metadata,
+        property_builder=property_builder,
     )
 
 

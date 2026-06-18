@@ -18,12 +18,13 @@ def optional_number(value):
 
 
 def build_properties(row):
+    properties = build_progress_properties(row)
+    properties.update(build_metadata_properties(row))
+    return properties
+
+
+def build_progress_properties(row):
     properties = {
-        "Alias": {
-            "rich_text": [{
-                "text": {"content": ", ".join(split_values(row.get("Alias")))}
-            }]
-        },
         "Último cap disponível": {
             "number": optional_number(row.get("Último capítulo disponível"))
         },
@@ -40,34 +41,55 @@ def build_properties(row):
                 else None
             )
         },
+    }
+    last_read = optional_number(row.get("Último lido"))
+    if last_read is not None:
+        properties["Último lido"] = {"number": last_read}
+    _add_select_fields(properties, row, {"Tamanho": "Tamanho"})
+    return properties
+
+
+def build_metadata_properties(row):
+    properties = {
         "Cap MangaUpdates": {
             "number": optional_number(row.get("Capítulo MangaUpdates"))
         },
         "MangaUpdates": {"url": row.get("MangaUpdates") or None},
         "ID da obra": {"number": optional_number(row.get("ID da obra"))},
     }
-    last_read = optional_number(row.get("Último lido"))
-    if last_read is not None:
-        properties["Último lido"] = {"number": last_read}
-    _add_optional_fields(properties, row)
+    aliases = split_values(row.get("Alias"))
+    if aliases:
+        properties["Alias"] = {
+            "rich_text": [{"text": {"content": ", ".join(aliases)}}]
+        }
+    _add_multi_select_fields(
+        properties,
+        row,
+        {"Temática": "Temática", "Universo": "Universo"},
+    )
+    _add_select_fields(
+        properties,
+        row,
+        {
+            "Formato": "Formato",
+            "Picância": "Picância",
+            "Interesse": "Interesse",
+        },
+    )
     return properties
 
 
-def _add_optional_fields(properties, row):
-    multi_selects = {"Temática": "Temática", "Universo": "Universo"}
-    selects = {
-        "Formato": "Formato",
-        "Tamanho": "Tamanho",
-        "Picância": "Picância",
-        "Interesse": "Interesse",
-    }
-    for source, target in multi_selects.items():
+def _add_multi_select_fields(properties, row, fields):
+    for source, target in fields.items():
         if row.get(source):
             properties[target] = {
                 "multi_select": [
                     {"name": value} for value in split_values(row[source])
                 ]
             }
-    for source, target in selects.items():
+
+
+def _add_select_fields(properties, row, fields):
+    for source, target in fields.items():
         if row.get(source):
             properties[target] = {"select": {"name": row[source]}}

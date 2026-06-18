@@ -65,7 +65,86 @@ class WebTaskTests(unittest.TestCase):
 
         self.assertEqual("completed", completed["status"])
         self.assertEqual(["Tudo certo"], completed["messages"])
+        self.assertIsInstance(completed["duration_seconds"], float)
         self.assertEqual(task["id"], saved[0]["id"])
+
+    def test_task_records_performance_metrics_from_output(self):
+        output = "\n".join([
+            "Criações: 2",
+            "Atualizações: 3",
+            "Sem alteração: 4",
+            "Ausentes no Notion: 1",
+            "Duplicados bloqueados: 0",
+        ])
+        result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=output, stderr=""
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            manager = TaskManager(
+                directory,
+                process_runner=lambda *_args, **_kwargs: result,
+            )
+
+            task = manager.start("notion_csv_preview")
+            completed = self._wait(manager, task["id"])
+
+        self.assertEqual(2, completed["metrics"]["notion"]["created"])
+        self.assertEqual(3, completed["metrics"]["notion"]["updated"])
+        self.assertEqual(4, completed["metrics"]["notion"]["unchanged"])
+        self.assertEqual(1, completed["metrics"]["notion"]["missing"])
+        self.assertEqual(
+            5,
+            completed["metrics"]["external_calls"]["notion_writes"],
+        )
+
+    def test_mangaupdates_task_records_external_call_estimate(self):
+        output = "\n".join([
+            "Processadas nesta execução: 5",
+            "IDs confirmados: 8",
+            "Para revisão: 2",
+            "Pendentes: 0",
+        ])
+        result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=output, stderr=""
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            manager = TaskManager(
+                directory,
+                process_runner=lambda *_args, **_kwargs: result,
+            )
+
+            task = manager.start("mangaupdates_search")
+            completed = self._wait(manager, task["id"])
+
+        self.assertEqual(5, completed["metrics"]["mangaupdates"]["processed"])
+        self.assertEqual(
+            5,
+            completed["metrics"]["external_calls"]["mangaupdates"],
+        )
+
+    def test_task_records_affected_items_from_tagged_output(self):
+        output = "\n".join([
+            "[CRIAR] Alpha",
+            "[ATUALIZAR] Beta",
+            "[AUSENTE NO NOTION] Gamma",
+            "[DUPLICADO NO NOTION] Delta",
+        ])
+        result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=output, stderr=""
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            manager = TaskManager(
+                directory,
+                process_runner=lambda *_args, **_kwargs: result,
+            )
+
+            task = manager.start("notion_simulate_batch")
+            completed = self._wait(manager, task["id"])
+
+        self.assertEqual(["Alpha"], completed["metrics"]["items"]["created"])
+        self.assertEqual(["Beta"], completed["metrics"]["items"]["updated"])
+        self.assertEqual(["Gamma"], completed["metrics"]["items"]["missing"])
+        self.assertEqual(["Delta"], completed["metrics"]["items"]["duplicates"])
 
     def test_same_group_cannot_run_twice(self):
         release = threading.Event()

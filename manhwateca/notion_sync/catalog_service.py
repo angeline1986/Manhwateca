@@ -15,6 +15,7 @@ def sync(
     create_limit=None,
     update_existing=True,
     print_actions=True,
+    property_builder=build_properties,
 ):
     existing = load_existing_pages(notion, database_id)
     title_aliases = title_aliases or {}
@@ -31,6 +32,7 @@ def sync(
             create_limit,
             update_existing,
             print_actions,
+            property_builder,
         )
     return summary
 
@@ -64,6 +66,7 @@ def _sync_manga(
     create_limit,
     update_existing,
     print_actions,
+    property_builder,
 ):
     name = manga["nome"].strip()
     matches = _find_matches(manga, existing, title_aliases)
@@ -76,7 +79,7 @@ def _sync_manga(
     if matches:
         _update_match(
             notion, manga, name, matches[0], summary, apply,
-            update_existing, print_actions
+            update_existing, print_actions, property_builder
         )
         return
     _create_or_defer(
@@ -94,7 +97,15 @@ def _find_matches(manga, existing, title_aliases):
 
 
 def _update_match(
-    notion, manga, name, page, summary, apply, update_existing, print_actions
+    notion,
+    manga,
+    name,
+    page,
+    summary,
+    apply,
+    update_existing,
+    print_actions,
+    property_builder,
 ):
     summary["matched_titles"].append(name)
     if not update_existing:
@@ -105,7 +116,7 @@ def _update_match(
     if apply:
         notion.pages.update(
             page_id=page["id"],
-            properties=build_properties(manga),
+            properties=property_builder(manga),
         )
 
 

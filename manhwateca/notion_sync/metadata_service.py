@@ -5,7 +5,14 @@ from manhwateca.notion_sync.property_diff import changed_properties
 from manhwateca.notion_sync.repositories import load_metadata
 
 
-def update_from_csv(notion, database_id, rows, apply=False, metadata=None):
+def update_from_csv(
+    notion,
+    database_id,
+    rows,
+    apply=False,
+    metadata=None,
+    property_builder=build_properties,
+):
     existing = load_existing_pages(notion, database_id)
     metadata = {} if metadata is None else metadata
     summary = {
@@ -25,7 +32,7 @@ def update_from_csv(notion, database_id, rows, apply=False, metadata=None):
             summary["duplicates"].append(name)
             print(f"[DUPLICADO NO NOTION] {name}")
         else:
-            expected = build_properties(row)
+            expected = property_builder(row)
             properties = changed_properties(matches[0], expected)
             if not properties:
                 summary["unchanged"].append({

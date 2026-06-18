@@ -22,6 +22,7 @@ TITLE_PROPERTY = "Nome"
 
 normalize_title = matching.normalize_title
 build_properties = catalog_properties.build_properties
+build_progress_properties = catalog_properties.build_progress_properties
 extract_title = pages.extract_title
 load_existing_pages = pages.load_existing_pages
 
@@ -129,7 +130,12 @@ def _run_selected_mode(args, notion, database_id, mangas, aliases):
     elif args.apply:
         options["apply"] = True
     elif args.update_existing:
-        options.update(apply=True, create_limit=0, update_existing=True)
+        options.update(
+            apply=True,
+            create_limit=0,
+            update_existing=True,
+            property_builder=build_progress_properties,
+        )
     elif args.simulate_batch:
         options.update(create_limit=args.batch_size, update_existing=False)
     return sync(notion, database_id, mangas, **options)

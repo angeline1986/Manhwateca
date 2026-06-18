@@ -470,6 +470,16 @@ input:focus, select:focus { border-color: var(--rose); box-shadow: 0 0 0 4px rgb
 }
 .task-head { display: flex; justify-content: space-between; gap: 15px; }
 .task-item p { color: var(--muted); }
+.task-metrics { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.task-metrics span {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--rose);
+  background: var(--soft);
+  font-size: 12px;
+  font-weight: 800;
+}
 .task-item pre { max-height: 180px; overflow: auto; margin: 12px 0 0; padding: 12px; border-radius: 9px; color: #f7e9ed; background: #493b3f; white-space: pre-wrap; font-size: 12px; }
 .task-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .task-links a { color: var(--rose); font-size: 13px; font-weight: 750; }
