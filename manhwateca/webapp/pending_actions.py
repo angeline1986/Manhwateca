@@ -85,17 +85,32 @@ def _mangaupdates_pending(root):
 
 def _csv_pending(root):
     catalog_names = _catalog_names(root / CATALOG_PATH)
-    csv_names = _csv_names(root / CSV_PATH)
+    csv_rows = _csv_rows(root / CSV_PATH)
+    csv_names = _csv_names_from_rows(csv_rows)
     missing = catalog_names - csv_names
+    orphaned = [
+        row for row in csv_rows
+        if row.get("Correspondência API") == "Fora do catálogo local"
+    ]
+    items = []
     if missing:
-        return [_item(
+        items.append(_item(
             "csv",
             "Atualizar CSV",
             f"{len(missing)} obra(s) catalogadas ainda não aparecem no CSV.",
             "mangaupdates_csv",
             "mangaupdates",
-        )]
-    return []
+        ))
+    if orphaned:
+        items.append(_item(
+            "csv",
+            "Revisar obras fora do catálogo",
+            f"{len(orphaned)} linha(s) do CSV não aparecem mais no catálogo local.",
+            None,
+            "mangaupdates",
+            severity="warning",
+        ))
+    return items
 
 
 def _notion_pending(root):
@@ -204,16 +219,20 @@ def _catalog_names(path):
     }
 
 
-def _csv_names(path):
+def _csv_rows(path):
     if not path.is_file():
-        return set()
-    names = set()
+        return []
     with path.open(encoding="utf-8-sig", newline="") as file:
-        for row in csv.DictReader(file):
-            for value in (row.get("Nome"), row.get("Alias")):
-                for title in (value or "").split("|"):
-                    if title.strip():
-                        names.add(normalize_title(title))
+        return list(csv.DictReader(file))
+
+
+def _csv_names_from_rows(rows):
+    names = set()
+    for row in rows:
+        for value in (row.get("Nome"), row.get("Alias")):
+            for title in (value or "").split("|"):
+                if title.strip():
+                    names.add(normalize_title(title))
     return names
 
 

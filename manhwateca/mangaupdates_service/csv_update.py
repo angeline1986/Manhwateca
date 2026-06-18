@@ -14,6 +14,9 @@ from manhwateca.mangaupdates_service.matching import normalize_title
 from manhwateca.mangaupdates_service.repository import load_json_object
 
 
+ORPHAN_STATUS = "Fora do catálogo local"
+
+
 def update_csv_from_confirmed_ids(
     ids_path,
     csv_path,
@@ -46,6 +49,7 @@ def update_csv_from_confirmed_ids(
     uncached = []
     missing_from_csv = []
     handled_ids = set()
+    active_names = {normalize_title(item["Nome"]) for item in confirmed}
 
     for item in confirmed:
         if limit is not None and processed >= limit:
@@ -88,6 +92,7 @@ def update_csv_from_confirmed_ids(
         processed += 1
         updated += int(changed)
 
+    updated += _mark_orphan_rows(rows, catalog, active_names)
     _write_csv(csv_path, rows, fieldnames)
     return updated, processed, uncached, missing_from_csv
 
@@ -149,6 +154,36 @@ def _build_catalog_index(catalog_path, metadata):
             if name:
                 index.setdefault(normalize_title(name), manga)
     return index
+
+
+def _mark_orphan_rows(rows, catalog, active_names):
+    if not catalog:
+        return 0
+    changed = 0
+    for row in rows:
+        if _row_in_catalog(row, catalog):
+            continue
+        if _row_in_names(row, active_names):
+            continue
+        if row.get("Correspondência API") == ORPHAN_STATUS:
+            continue
+        row["Correspondência API"] = ORPHAN_STATUS
+        changed += 1
+    return changed
+
+
+def _row_in_catalog(row, catalog):
+    return _row_in_names(row, catalog)
+
+
+def _row_in_names(row, names):
+    for value in (row.get("Nome"), row.get("Alias")):
+        if not value:
+            continue
+        for title in value.split("|"):
+            if normalize_title(title.strip()) in names:
+                return True
+    return False
 
 
 def _new_row_from_catalog(item, manga, summary, metadata):

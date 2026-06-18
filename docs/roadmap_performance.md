@@ -265,6 +265,17 @@ Evitar chamadas repetidas à API e permitir atualização controlada.
 
 ## Milestone 5: CSV Incremental e Autorreparável
 
+**Status:** concluído em 18 de junho de 2026.
+
+Entregue:
+
+- IDs confirmados ausentes no CSV podem criar linhas a partir do catálogo;
+- campos manuais e editoriais continuam preservados;
+- linhas sem detalhes no cache permanecem pendentes para outro lote;
+- linhas do CSV fora do catálogo são marcadas como `Fora do catálogo local`;
+- a fila de pendências da web exibe obras catalogadas fora do CSV e linhas
+  órfãs para revisão.
+
 ### Objetivo
 
 Manter `manhwateca_import.csv` sempre alinhado ao catálogo local sem regenerar

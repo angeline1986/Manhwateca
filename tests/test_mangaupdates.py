@@ -903,6 +903,63 @@ class MangaUpdatesTests(unittest.TestCase):
             self.assertEqual([], uncached)
             self.assertEqual([], missing)
 
+    def test_update_csv_marks_rows_missing_from_catalog_as_orphan(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ids_path = directory / "ids.json"
+            csv_path = directory / "catalog.csv"
+            cache_path = directory / "cache.json"
+            catalog_path = directory / "mangas.json"
+            ids_path.write_text("[]", encoding="utf-8")
+            cache_path.write_text("{}", encoding="utf-8")
+            catalog_path.write_text(
+                json.dumps([{"nome": "Alpha", "alias": []}]),
+                encoding="utf-8",
+            )
+            with csv_path.open("w", encoding="utf-8-sig", newline="") as file:
+                writer = csv.DictWriter(
+                    file,
+                    fieldnames=mangaupdates.CSV_COLUMNS,
+                )
+                writer.writeheader()
+                writer.writerow({
+                    "Nome": "Alpha",
+                    "Correspondência API": "ID confirmado manualmente",
+                })
+                writer.writerow({
+                    "Nome": "Removed Work",
+                    "Correspondência API": "ID confirmado manualmente",
+                })
+
+            updated, checked, uncached, missing = (
+                mangaupdates.update_csv_from_confirmed_ids(
+                    ids_path,
+                    csv_path=csv_path,
+                    cache_path=cache_path,
+                    catalog_path=catalog_path,
+                    delay=0,
+                )
+            )
+
+            with csv_path.open(
+                "r",
+                encoding="utf-8-sig",
+                newline="",
+            ) as file:
+                rows = list(csv.DictReader(file))
+            self.assertEqual(1, updated)
+            self.assertEqual(0, checked)
+            self.assertEqual([], uncached)
+            self.assertEqual([], missing)
+            self.assertEqual(
+                "ID confirmado manualmente",
+                rows[0]["Correspondência API"],
+            )
+            self.assertEqual(
+                "Fora do catálogo local",
+                rows[1]["Correspondência API"],
+            )
+
     def test_write_csv_uses_notion_columns_and_id(self):
         manga = {
             "nome": "Alpha",

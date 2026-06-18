@@ -28,6 +28,26 @@ class PendingActionsTests(unittest.TestCase):
         self.assertEqual("Atualizar CSV", payload["items"][0]["title"])
         self.assertEqual("mangaupdates_csv", payload["items"][0]["action"])
 
+    def test_detects_orphaned_csv_rows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_json(root / "data/mangas.json", [{"nome": "Alpha"}])
+            _write_csv(root / "reports/integrations/manhwateca_import.csv", [
+                {
+                    "Nome": "Alpha",
+                    "Correspondência API": "ID confirmado manualmente",
+                },
+                {
+                    "Nome": "Removed",
+                    "Correspondência API": "Fora do catálogo local",
+                },
+            ])
+            with patch.dict("os.environ", {}, clear=True):
+                payload = pending_payload(root)
+
+        self.assertEqual("Revisar obras fora do catálogo", payload["items"][0]["title"])
+        self.assertEqual("warning", payload["items"][0]["severity"])
+
     def test_detects_review_and_uncached_confirmed_ids(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -73,7 +93,7 @@ def _write_json(path, data):
 
 def _write_csv(path, rows):
     path.parent.mkdir(parents=True, exist_ok=True)
-    fields = ["Nome", "Alias"]
+    fields = ["Nome", "Alias", "Correspondência API"]
     with path.open("w", encoding="utf-8-sig", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=fields)
         writer.writeheader()
