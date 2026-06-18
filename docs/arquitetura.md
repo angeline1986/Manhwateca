@@ -16,6 +16,26 @@ tests/         Testes automatizados
 Os comandos conhecidos continuam em `scripts/`, mas a aplicação web poderá
 importar diretamente os serviços de `manhwateca/` sem executar subprocessos.
 
+## Estado atual
+
+A refatoração do núcleo e os ajustes de performance já deixaram o projeto em
+um formato reutilizável pelo terminal e pela interface web local.
+
+Hoje o sistema possui:
+
+- fachadas CLI estáveis em `scripts/`;
+- regras de negócio importáveis em `manhwateca/`;
+- interface web local em `server.py` e `web/`;
+- sincronização incremental com o Notion;
+- atualização de CSV com preservação de campos manuais;
+- cache e estado para reduzir chamadas ao MangaUpdates;
+- relatórios HTML gerados por módulos compartilhados;
+- logs e arquivos de estado em `reports/`.
+
+O próximo ciclo recomendado é de estabilização operacional: observar o uso real,
+ajustar mensagens, reduzir cliques repetitivos e melhorar diagnósticos antes de
+adicionar grandes funcionalidades novas.
+
 ## Módulos
 
 | Pacote | Responsabilidade |
@@ -61,6 +81,20 @@ usar os serviços posteriormente por uma API web.
 4. Adicione testes com clientes falsos; não dependa da API real.
 5. Registre arquivos gerados em `README.md` e no guia do menu.
 6. Use `manhwateca.reporting` para escrita de relatórios HTML.
+
+## Próxima fase
+
+Antes de iniciar outra grande frente, use esta ordem:
+
+1. Validar um fluxo real completo pela interface web.
+2. Conferir se `reports/integrations/pending_actions.json` reflete pendências
+   acionáveis.
+3. Confirmar que simulações não geram alterações falsas no Notion.
+4. Revisar textos, botões e confirmações que ainda pareçam ambíguos.
+5. Só então planejar novas telas ou automações.
+
+Essa fase deve priorizar clareza e confiabilidade. A arquitetura já permite
+evoluir a aplicação web sem reescrever o núcleo.
 
 ## Limite de tamanho
 
