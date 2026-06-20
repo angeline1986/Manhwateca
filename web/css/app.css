@@ -457,7 +457,24 @@ input:focus, select:focus { border-color: var(--rose); box-shadow: 0 0 0 4px rgb
 .workflow-step label input { width: 18px; height: 18px; }
 .workflow-step small { display: block; color: var(--muted); }
 .workflow-step p, .workflow-step details { grid-column: 1 / -1; margin: 0; color: var(--muted); }
-.workflow-step button { grid-column: 1 / -1; justify-self: start; }
+.workflow-step button { justify-self: start; }
+.workflow-manual-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.workflow-manual-actions .secondary {
+  color: var(--rose);
+  background: #fff;
+  border: 1px solid var(--rose-border);
+}
+.workflow-manual-actions .secondary:hover,
+.workflow-manual-actions .secondary:focus-visible {
+  color: #fff;
+  background: var(--rose);
+}
 .workflow-status { align-self: center; color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; }
 .workflow-step pre { max-height: 150px; overflow: auto; white-space: pre-wrap; }
 .workflow-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
@@ -479,6 +496,23 @@ input:focus, select:focus { border-color: var(--rose); box-shadow: 0 0 0 4px rgb
   background: var(--soft);
   font-size: 12px;
   font-weight: 800;
+}
+.task-next-step {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 12px;
+  align-items: center;
+  margin: 12px 0;
+  padding: 13px 14px;
+  border: 1px solid var(--rose-border);
+  border-radius: 12px;
+  background: #fffafa;
+}
+.task-next-step strong { color: var(--rose-dark); }
+.task-next-step span { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.task-next-step button {
+  grid-row: span 2;
+  padding: 10px 13px;
 }
 .task-item pre { max-height: 180px; overflow: auto; margin: 12px 0 0; padding: 12px; border-radius: 9px; color: #f7e9ed; background: #493b3f; white-space: pre-wrap; font-size: 12px; }
 .task-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }

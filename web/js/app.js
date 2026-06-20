@@ -395,6 +395,7 @@ async function startTask(action, requiresConfirmation) {
 
 function renderTask(task) {
   const running = ["queued", "running"].includes(task.status);
+  const next = taskNextStep(task);
   const reports = (task.reports || []).map(path => `
     <a href="/reports/${path.replace(/^reports\//, "")}" target="_blank">
       Abrir ${path.split("/").pop()}
@@ -412,6 +413,17 @@ function renderTask(task) {
       </div>
       <p>${task.started_at || task.created_at}${task.finished_at ? ` → ${task.finished_at}` : ""}</p>
       ${metrics}
+      ${next ? `
+        <div class="task-next-step">
+          <strong>Próximo passo</strong>
+          <span>${escapeHtml(next.text)}</span>
+          <button type="button"
+                  data-next-page="${escapeHtml(next.page)}"
+                  data-next-panel="${escapeHtml(next.panel || "")}">
+            ${escapeHtml(next.label)}
+          </button>
+        </div>
+      ` : ""}
       ${reports ? `<div class="task-links">${reports}</div>` : ""}
       ${messages ? `<pre>${escapeHtml(messages)}</pre>` : ""}
       ${running ? "<p>Executando em segundo plano...</p>" : ""}
@@ -436,6 +448,13 @@ function renderTaskMetrics(task) {
   if (typeof external.mangaupdates === "number") {
     chips.push(`Chamadas MangaUpdates: ${external.mangaupdates}`);
   }
+  const mangaupdates = task.metrics?.mangaupdates || {};
+  if (typeof mangaupdates.actionable_review === "number") {
+    chips.push(`A revisar na tela: ${mangaupdates.actionable_review}`);
+  }
+  if (typeof mangaupdates.not_found === "number") {
+    chips.push(`Não encontradas: ${mangaupdates.not_found}`);
+  }
   const items = task.metrics?.items || {};
   if (items.created?.length) chips.push(`Obras criadas: ${items.created.length}`);
   if (items.updated?.length) chips.push(`Obras atualizadas: ${items.updated.length}`);
@@ -447,7 +466,145 @@ function renderTaskMetrics(task) {
     : "";
 }
 
+function taskNextStep(task) {
+  if (task.status !== "completed") return null;
+  const manga = task.metrics?.mangaupdates || {};
+  const notion = task.metrics?.notion || {};
+  const items = task.metrics?.items || {};
+
+  if (["mangaupdates_search", "mangaupdates_refresh"].includes(task.action)) {
+    const actionableReview = manga.actionable_review ?? manga.review ?? 0;
+    if (actionableReview > 0) {
+      return {
+        label: "Revisar IDs pendentes",
+        page: "mangaupdates",
+        panel: "idReviewPanel",
+        text: `${actionableReview} correspondência(s) aparecem na seção de revisão e precisam de decisão antes de atualizar detalhes e CSV.`,
+      };
+    }
+    if ((manga.pending || 0) > 0) {
+      return {
+        label: "Buscar próximo lote",
+        page: "mangaupdates",
+        panel: "mangaActionsPanel",
+        text: `${manga.pending} obra(s) ainda não foram pesquisadas. Execute somente “Buscar próximo lote de IDs”.`,
+      };
+    }
+    if ((manga.not_found || 0) > 0) {
+      return {
+        label: "Pesquisar manualmente",
+        page: "mangaupdates",
+        panel: "apiSearchPanel",
+        text: `${manga.not_found} obra(s) já foram pesquisadas e não tiveram candidato útil. Use a pesquisa avulsa ou ajuste nomes de busca.`,
+      };
+    }
+  }
+
+  if (task.action === "mangaupdates_details") {
+    if ((manga.pending || 0) > 0) {
+      return {
+        label: "Consultar próximo lote",
+        page: "mangaupdates",
+        panel: "mangaActionsPanel",
+        text: `${manga.pending} ID(s) confirmado(s) ainda aguardam detalhes da API.`,
+      };
+    }
+    return {
+      label: "Atualizar CSV",
+      page: "mangaupdates",
+      panel: "mangaActionsPanel",
+      text: "Os detalhes consultados já podem ser exportados para o CSV.",
+    };
+  }
+
+  if (task.action === "mangaupdates_csv" && (manga.pending || 0) > 0) {
+    return {
+      label: "Consultar detalhes",
+      page: "mangaupdates",
+      panel: "mangaActionsPanel",
+      text: `${manga.pending} obra(s) confirmadas ainda precisam de detalhes antes de entrar no CSV.`,
+    };
+  }
+
+  if (task.action === "catalog_scan") {
+    return {
+      label: "Ver pendências",
+      page: "overview",
+      panel: "",
+      text: "Confira as pendências acionáveis para decidir se o próximo passo é organização, MangaUpdates ou Notion.",
+    };
+  }
+
+  if (task.action === "notion_simulate_batch" && (notion.pending || 0) > 0) {
+    return {
+      label: "Importar lote",
+      page: "notion",
+      panel: "notionActionsPanel",
+      text: `${notion.pending} página(s) ainda precisam ser criadas. Aplique somente após revisar a simulação.`,
+    };
+  }
+
+  if (task.action === "notion_apply_batch") {
+    if ((notion.pending || 0) > 0) {
+      return {
+        label: "Importar próximo lote",
+        page: "notion",
+        panel: "notionActionsPanel",
+        text: `${notion.pending} página(s) continuam pendentes para o próximo lote.`,
+      };
+    }
+    return {
+      label: "Simular metadados",
+      page: "notion",
+      panel: "notionActionsPanel",
+      text: "O catálogo foi importado. Agora simule a atualização dos metadados do CSV.",
+    };
+  }
+
+  if (task.action === "notion_csv_preview") {
+    if ((notion.updated || 0) > 0 || (notion.missing || 0) > 0 || (notion.duplicates || 0) > 0) {
+      return {
+        label: "Revisar metadados",
+        page: "notion",
+        panel: "metadataPanel",
+        text: "Revise ausentes, duplicadas e alterações antes de aplicar os metadados.",
+      };
+    }
+  }
+
+  if (task.action === "notion_csv_apply" && items.missing?.length) {
+    return {
+      label: "Ver ausentes",
+      page: "notion",
+      panel: "metadataPanel",
+      text: `${items.missing.length} obra(s) do CSV não foram encontradas no Notion.`,
+    };
+  }
+
+  return null;
+}
+
+function goToNextStep(page, panel) {
+  showPage(page || "overview");
+  window.setTimeout(() => {
+    const target = panel ? document.getElementById(panel) : null;
+    if (target?.tagName === "DETAILS") target.open = true;
+    (target || document.getElementById(`page-${page}`) || document.body).scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+    taskToast.hidden = true;
+  }, 120);
+}
+
 viewTaskProgress.addEventListener("click", () => {
+  if (viewTaskProgress.dataset.nextPage) {
+    goToNextStep(
+      viewTaskProgress.dataset.nextPage,
+      viewTaskProgress.dataset.nextPanel
+    );
+    return;
+  }
   showPage("automation");
   window.setTimeout(() => {
     const task = taskList.querySelector(
@@ -463,6 +620,12 @@ viewTaskProgress.addEventListener("click", () => {
     }
     taskToast.hidden = true;
   }, 120);
+});
+
+taskList.addEventListener("click", event => {
+  const button = event.target.closest("[data-next-page]");
+  if (!button) return;
+  goToNextStep(button.dataset.nextPage, button.dataset.nextPanel);
 });
 
 function escapeHtml(value) {
@@ -540,18 +703,84 @@ function updateTaskToast(tasks) {
     completed ? "Tarefa concluída" : "Tarefa encerrada com erro"
   );
   text.textContent = completed
-    ? "Tarefa concluída com sucesso."
+    ? taskCompletionSummary(task)
     : "A tarefa não foi concluída. Consulte o resultado para entender o motivo.";
+  const next = completed ? taskNextStep(task) : null;
   const report = (task.reports || [])[0];
-  if (completed && report) {
+  if (next) {
+    taskResultLink.hidden = true;
+    viewTaskProgress.hidden = false;
+    viewTaskProgress.textContent = next.label;
+    viewTaskProgress.dataset.nextPage = next.page;
+    viewTaskProgress.dataset.nextPanel = next.panel || "";
+  } else if (completed && report) {
     taskResultLink.href = `/reports/${report.replace(/^reports\//, "")}`;
     taskResultLink.hidden = false;
     viewTaskProgress.hidden = true;
+    delete viewTaskProgress.dataset.nextPage;
+    delete viewTaskProgress.dataset.nextPanel;
   } else {
     taskResultLink.hidden = true;
     viewTaskProgress.hidden = false;
     viewTaskProgress.textContent = "Ver resultado";
+    delete viewTaskProgress.dataset.nextPage;
+    delete viewTaskProgress.dataset.nextPanel;
   }
+}
+
+function taskCompletionSummary(task) {
+  const parts = [];
+  const mangaupdates = task.metrics?.mangaupdates || {};
+  if (typeof mangaupdates.processed === "number") {
+    parts.push(`Processadas: ${mangaupdates.processed}`);
+  }
+  if (typeof mangaupdates.details === "number") {
+    parts.push(`Detalhes consultados: ${mangaupdates.details}`);
+  }
+  if (typeof mangaupdates.review === "number") {
+    parts.push(`Para revisar: ${mangaupdates.review}`);
+  }
+  if (typeof mangaupdates.actionable_review === "number") {
+    parts.push(`A revisar na tela: ${mangaupdates.actionable_review}`);
+  }
+  if (typeof mangaupdates.pending === "number") {
+    parts.push(`Pendentes: ${mangaupdates.pending}`);
+  }
+  if (typeof mangaupdates.not_found === "number") {
+    parts.push(`Não encontradas: ${mangaupdates.not_found}`);
+  }
+
+  const notion = task.metrics?.notion || {};
+  if (typeof notion.created === "number") {
+    parts.push(`Criadas: ${notion.created}`);
+  }
+  if (typeof notion.updated === "number") {
+    parts.push(`Atualizadas: ${notion.updated}`);
+  }
+  if (typeof notion.unchanged === "number") {
+    parts.push(`Sem alteração: ${notion.unchanged}`);
+  }
+  if (typeof notion.pending === "number") {
+    parts.push(`Restantes: ${notion.pending}`);
+  }
+  if (typeof notion.missing === "number") {
+    parts.push(`Ausentes: ${notion.missing}`);
+  }
+  if (typeof notion.duplicates === "number") {
+    parts.push(`Duplicadas: ${notion.duplicates}`);
+  }
+
+  const items = task.metrics?.items || {};
+  if (items.missing?.length) {
+    parts.push(`Obras ausentes: ${items.missing.length}`);
+  }
+  if (items.errors?.length) {
+    parts.push(`Erros: ${items.errors.length}`);
+  }
+
+  return parts.length
+    ? `Tarefa concluída. ${parts.join(" · ")}.`
+    : "Tarefa concluída com sucesso.";
 }
 
 function summaryCard(label, value) {
@@ -1047,6 +1276,12 @@ function workflowStep(step, run) {
     interrupted: "Interrompida",
   };
   const checked = run.selected?.includes(step.id) ?? true;
+  const manualAction = status === "manual" && step.action_page
+    ? `<button type="button" class="secondary workflow-target"
+              data-workflow-page="${escapeHtml(step.action_page)}">
+         ${escapeHtml(step.action_label || "Ir para a ação")}
+       </button>`
+    : "";
   return `
     <article class="workflow-step ${status}">
       <label>
@@ -1061,9 +1296,12 @@ function workflowStep(step, run) {
         ? `<details><summary>Mensagens</summary><pre>${escapeHtml(result.messages.join("\n"))}</pre></details>`
         : ""}
       ${status === "manual"
-        ? `<button type="button" data-complete-manual="${step.id}">
-             Concluí esta etapa e quero continuar
-           </button>`
+        ? `<div class="workflow-manual-actions">
+             ${manualAction}
+             <button type="button" data-complete-manual="${step.id}">
+               Concluí esta etapa e quero continuar
+             </button>
+           </div>`
         : ""}
     </article>
   `;
@@ -1116,6 +1354,11 @@ async function runWorkflow(resume = false) {
 startWorkflow.addEventListener("click", () => runWorkflow(false));
 resumeWorkflow.addEventListener("click", () => runWorkflow(true));
 workflowSteps.addEventListener("click", async event => {
+  const target = event.target.closest("[data-workflow-page]");
+  if (target) {
+    showPage(target.dataset.workflowPage);
+    return;
+  }
   const button = event.target.closest("[data-complete-manual]");
   if (!button) return;
   const response = await fetch("/api/workflow/continue", {

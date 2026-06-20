@@ -51,13 +51,15 @@ def _fill_ids(args, operations):
     )
     confirmed = sum(bool(item.get("ID")) for item in items)
     review = sum(item.get("Status") == "Revisar" for item in items)
-    pending = len(items) - confirmed - review
+    pending = sum(not item.get("Status") for item in items)
+    not_found = sum(item.get("Status") == "Não encontrada" for item in items)
     print()
     print(f"Arquivo atualizado: {args.fill_ids}")
     print(f"Processadas nesta execução: {processed}")
     print(f"IDs confirmados: {confirmed}")
     print(f"Para revisão: {review}")
     print(f"Pendentes: {pending}")
+    print(f"Não encontradas: {not_found}")
 
 
 def _refresh_candidates(args, operations):

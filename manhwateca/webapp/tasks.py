@@ -4,6 +4,7 @@ from pathlib import Path
 
 from manhwateca.webapp.actions import SAFE_ACTIONS, build_command
 from manhwateca.webapp.catalog import compare_catalogs, load_catalog
+from manhwateca.webapp.mangaupdates import review_payload
 from manhwateca.webapp.notion import notion_status
 
 class TaskManager:
@@ -100,6 +101,10 @@ class TaskManager:
                 messages=messages,
                 metrics=_performance_metrics(task["action"], messages),
             )
+            if task["group"] == "mangaupdates" and status == "completed":
+                _add_mangaupdates_actionable_metrics(
+                    task["metrics"], self.project_root
+                )
             if task["action"] == "catalog_scan" and status == "completed":
                 task["catalog_changes"] = compare_catalogs(
                     task.pop("_catalog_before", []),
@@ -211,6 +216,7 @@ def _performance_metrics(action, messages):
         "confirmed": "IDs confirmados",
         "review": "Para revisão",
         "pending": "Pendentes",
+        "not_found": "Não encontradas",
     })
     if mangaupdates:
         metrics["mangaupdates"] = mangaupdates
@@ -221,6 +227,16 @@ def _performance_metrics(action, messages):
     if items:
         metrics["items"] = items
     return metrics
+
+def _add_mangaupdates_actionable_metrics(metrics, project_root):
+    try:
+        summary = review_payload(project_root)["summary"]
+    except Exception:
+        return
+    mangaupdates = metrics.setdefault("mangaupdates", {})
+    mangaupdates["actionable_review"] = summary.get("review", 0)
+    mangaupdates["confirmed_total"] = summary.get("confirmed", 0)
+    mangaupdates["pending_total"] = summary.get("pending", 0)
 
 def _extract_counts(text, labels):
     counts = {}

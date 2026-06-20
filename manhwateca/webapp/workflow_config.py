@@ -10,6 +10,8 @@ WORKFLOW_STEPS = [
         "id": "organize",
         "label": "Revisar e aplicar organização",
         "manual": True,
+        "action_page": "organization",
+        "action_label": "Ir para Organização",
         "instructions": (
             "Revise os relatórios. Use as ações individuais para aplicar "
             "organização e padronização quando estiver tudo correto."
@@ -29,6 +31,8 @@ WORKFLOW_STEPS = [
         "id": "review_ids",
         "label": "Revisar correspondências de IDs",
         "manual": True,
+        "action_page": "mangaupdates",
+        "action_label": "Ir para MangaUpdates",
         "instructions": (
             "Revise as obras pendentes no painel MangaUpdates e aplique "
             "as decisões antes de continuar."
@@ -48,6 +52,8 @@ WORKFLOW_STEPS = [
         "id": "notion_catalog_apply",
         "label": "Aplicar sincronização do catálogo",
         "manual": True,
+        "action_page": "notion",
+        "action_label": "Ir para Notion",
         "instructions": (
             "Revise a simulação e use Importar lote ou Atualizar páginas "
             "com a confirmação APLICAR."
@@ -62,6 +68,8 @@ WORKFLOW_STEPS = [
         "id": "notion_metadata_apply",
         "label": "Aplicar metadados no Notion",
         "manual": True,
+        "action_page": "notion",
+        "action_label": "Ir para Notion",
         "instructions": (
             "Revise ausentes, duplicadas e propriedades. Aplique os "
             "metadados separadamente com a confirmação APLICAR."
@@ -77,6 +85,8 @@ def public_steps():
             "label": step["label"],
             "manual": step.get("manual", False),
             "instructions": step.get("instructions"),
+            "action_page": step.get("action_page"),
+            "action_label": step.get("action_label"),
         }
         for step in WORKFLOW_STEPS
     ]
