@@ -61,21 +61,55 @@ Dados atuais:
 
 ### Diagnóstico Atual
 
-O projeto saiu da fase principal de modelagem e entrou na fase de migração
-operacional.
+A fase de modelagem está encerrada. A próxima fase é integração operacional.
 
 | Área | Estado |
 | ---- | ------ |
-| Modelagem de banco | praticamente concluída |
-| Infraestrutura PostgreSQL | majoritariamente implementada |
+| Banco de dados | praticamente concluído |
+| Modelo relacional | concluído |
+| Views principais | concluídas |
+| Sincronização preparada | concluída |
+| Decision queue | concluída |
+| Scanner | parcialmente integrado |
+| Editorial | parcialmente integrado |
+| MangaUpdates | parcialmente integrado |
+| Notion | parcialmente integrado |
 | Integração dos fluxos | parcial |
-| Desacoplamento de JSON/CSV | inicial |
+| Remoção do legado JSON/CSV | ainda não iniciada |
 
 O gargalo atual não é criar mais estrutura de banco. O gargalo é fazer os
 fluxos existentes adotarem as estruturas já criadas.
 
 Regra operacional: não criar novas tabelas até que `decision_queue` esteja
 sendo usada por pelo menos um fluxo real, como MangaUpdates ou revisão manual.
+
+Verdade operacional do projeto neste momento:
+
+| Papel | Implementação |
+| ----- | ------------- |
+| Fonte principal | PostgreSQL |
+| Fonte secundária | Notion |
+| Legado | JSON e CSV |
+| Fila de decisões | `decision_queue` |
+| Catálogo principal | `vw_mangas` |
+| Fila de leitura | `vw_next_reads` |
+| Dashboard | `vw_stats` |
+
+`decision_queue` é a peça central da próxima etapa. Ela deve receber uso real
+no caminho:
+
+```text
+MangaUpdates
+↓
+decision_queue
+↓
+resolução humana ou automática
+↓
+PostgreSQL
+```
+
+Se esse fluxo não for integrado, `decision_queue` corre o risco de virar apenas
+mais uma tabela sem uso.
 
 ## Decisões Arquiteturais
 
