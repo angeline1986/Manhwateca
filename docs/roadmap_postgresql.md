@@ -500,6 +500,8 @@ Fazer os dados enriquecidos do MangaUpdates atualizarem o banco diretamente.
 
 ## Milestone 6: Preparação Para Sync Notion
 
+Status: implementada como base técnica, sem alterar o sync atual.
+
 ### Objetivo
 
 Criar os mecanismos de segurança necessários antes de migrar a sincronização
