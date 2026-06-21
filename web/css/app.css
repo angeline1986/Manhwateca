@@ -363,6 +363,17 @@ input:focus, select:focus { border-color: var(--rose); box-shadow: 0 0 0 4px rgb
 .catalog-summary article { padding: 16px; border-radius: 13px; background: var(--soft-2); border: 1px solid rgba(231,203,211,.5); }
 .catalog-summary strong { display: block; color: var(--rose); font-size: 24px; }
 .catalog-summary span { color: var(--muted); font-size: 12px; }
+.data-source {
+  display: inline-flex;
+  margin-top: 10px;
+  padding: 7px 11px;
+  border: 1px solid rgba(169, 77, 107, .22);
+  border-radius: 999px;
+  color: var(--rose);
+  background: rgba(244, 228, 228, .65);
+  font-size: 12px;
+  font-weight: 800;
+}
 .catalog-changes { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; padding: 12px 14px; border-radius: 11px; background: #f8f5f6; color: var(--muted); }
 .catalog-changes p { margin: 0; }
 .catalog-table-wrap { overflow-x: auto; }

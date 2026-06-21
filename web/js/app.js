@@ -12,6 +12,7 @@ const reviewForm = document.getElementById("reviewForm");
 const reviewNote = document.getElementById("reviewNote");
 const reviewFeedback = document.getElementById("reviewFeedback");
 const catalogSummary = document.getElementById("catalogSummary");
+const catalogSource = document.getElementById("catalogSource");
 const catalogChanges = document.getElementById("catalogChanges");
 const catalogList = document.getElementById("catalogList");
 const catalogSearch = document.getElementById("catalogSearch");
@@ -1531,6 +1532,12 @@ async function loadCatalog() {
   const response = await fetch("/api/catalog", { cache: "no-store" });
   const data = await response.json();
   catalog = data.mangas;
+  if (catalogSource) {
+    catalogSource.textContent = data.source?.label
+      ? `Fonte: ${data.source.label}`
+      : "";
+    catalogSource.title = data.source?.detail || "";
+  }
   catalogSummary.innerHTML = [
     summaryCard("Obras", data.summary.total),
     summaryCard("Último cap. disponível", data.summary.main_caps),

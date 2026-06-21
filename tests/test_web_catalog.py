@@ -1,9 +1,41 @@
 import json
 import tempfile
 import unittest
+from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 
 from manhwateca.webapp.catalog import catalog_payload, compare_catalogs
+
+
+@dataclass
+class FakeMangaRecord:
+    id: int = 1
+    work_code: str = "1"
+    title: str = "Database Alpha"
+    alternative_title: str = "Alpha BR | Alpha Alias"
+    reading_status: str = "Quero Ler"
+    personal_rank: str = "Topzera"
+    score: Decimal | None = None
+    last_read_chapter: Decimal = Decimal("4")
+    latest_available_chapter: Decimal = Decimal("12")
+    size_label: str = "Curto"
+    count_status: str = "OK"
+    latest_mangaupdates_chapter: Decimal | None = Decimal("13")
+    mangaupdates_url: str | None = None
+    spice_level: str | None = None
+    format: str | None = "Manhwa"
+    themes: list[str] | None = None
+    notion_page_id: str | None = None
+    notion_last_synced_at: str | None = None
+    notion_sync_status: str | None = None
+
+
+class FakeRepository:
+    def list_mangas(self):
+        record = FakeMangaRecord()
+        record.themes = ["Drama", "Romance"]
+        return [record]
 
 
 class WebCatalogTests(unittest.TestCase):
@@ -33,10 +65,26 @@ class WebCatalogTests(unittest.TestCase):
             )
             payload = catalog_payload(root)
 
+        self.assertEqual("json", payload["source"]["kind"])
         self.assertEqual(2, payload["summary"]["total"])
         self.assertEqual(32, payload["summary"]["main_caps"])
         self.assertEqual(1, payload["summary"]["review"])
         self.assertNotIn("path", payload["mangas"][0])
+
+    def test_catalog_payload_can_read_from_database_repository(self):
+        payload = catalog_payload(
+            Path("."),
+            repository_factory=lambda: FakeRepository(),
+        )
+
+        self.assertEqual("postgresql", payload["source"]["kind"])
+        self.assertEqual("PostgreSQL", payload["source"]["label"])
+        self.assertEqual(1, payload["summary"]["total"])
+        self.assertEqual(12, payload["summary"]["main_caps"])
+        self.assertEqual("Database Alpha", payload["mangas"][0]["nome"])
+        self.assertEqual(["Alpha BR", "Alpha Alias"], payload["mangas"][0]["alias"])
+        self.assertEqual("Quero Ler", payload["mangas"][0]["reading_status"])
+        self.assertEqual(["Drama", "Romance"], payload["mangas"][0]["themes"])
 
     def test_expected_gaps_are_not_shown_as_operational_alerts(self):
         mangas = [{

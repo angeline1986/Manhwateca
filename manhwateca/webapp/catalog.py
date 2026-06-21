@@ -1,6 +1,12 @@
 import json
 from pathlib import Path
 
+from manhwateca.database.connection import (
+    DatabaseConfigurationError,
+    DatabaseConnectionError,
+)
+from manhwateca.database.manga_repository import MangaRepository
+
 
 CATALOG_PATH = Path("data/mangas.json")
 COMPARISON_FIELDS = (
@@ -14,6 +20,11 @@ COMPARISON_FIELDS = (
 )
 
 
+def load_database_catalog(repository_factory=MangaRepository):
+    repository = repository_factory()
+    return [_database_manga(record) for record in repository.list_mangas()]
+
+
 def load_catalog(project_root):
     path = Path(project_root) / CATALOG_PATH
     if not path.is_file():
@@ -22,9 +33,25 @@ def load_catalog(project_root):
     return data if isinstance(data, list) else []
 
 
-def catalog_payload(project_root, latest_changes=None):
-    mangas = load_catalog(project_root)
+def catalog_payload(project_root, latest_changes=None, repository_factory=MangaRepository):
+    source = {
+        "kind": "json",
+        "label": "JSON legado",
+        "detail": str(CATALOG_PATH),
+    }
+    try:
+        mangas = load_database_catalog(repository_factory)
+        source = {
+            "kind": "postgresql",
+            "label": "PostgreSQL",
+            "detail": "vw_mangas",
+        }
+    except (DatabaseConfigurationError, DatabaseConnectionError) as error:
+        mangas = load_catalog(project_root)
+        source["fallback_reason"] = str(error)
+
     return {
+        "source": source,
         "summary": build_summary(mangas),
         "changes": latest_changes or {"new": [], "updated": [], "removed": []},
         "mangas": [public_manga(manga) for manga in mangas],
@@ -81,6 +108,9 @@ def public_manga(manga):
         "mangaupdates_latest_chapter": manga.get(
             "mangaupdates_latest_chapter"
         ),
+        "reading_status": manga.get("reading_status"),
+        "personal_rank": manga.get("personal_rank"),
+        "themes": manga.get("themes", []),
     }
 
 
@@ -91,3 +121,41 @@ def _actionable_issues(manga):
         if issue not in ignored
     ]
     return issues
+
+
+def _database_manga(record):
+    last_read = _number(record.last_read_chapter, default=0)
+    latest = _number(record.latest_available_chapter, default=0)
+    return {
+        "nome": record.title,
+        "alias": _split_aliases(record.alternative_title),
+        "ultimo_lido": last_read,
+        "proximo_a_ler": last_read + 1 if latest else 1,
+        "main_caps": latest,
+        "tamanho": record.size_label or "Curto",
+        "chapters_found": latest,
+        "side_stories_found": 0,
+        "count_status": record.count_status or "OK",
+        "count_issues": [],
+        "unparsed_files": [],
+        "mangaupdates_latest_chapter": _number(
+            record.latest_mangaupdates_chapter,
+            default=None,
+        ),
+        "reading_status": record.reading_status,
+        "personal_rank": record.personal_rank,
+        "themes": record.themes or [],
+    }
+
+
+def _split_aliases(value):
+    if not value:
+        return []
+    return [item.strip() for item in str(value).split("|") if item.strip()]
+
+
+def _number(value, default=0):
+    if value is None:
+        return default
+    number = float(value)
+    return int(number) if number.is_integer() else number
