@@ -28,6 +28,26 @@ class PendingActionsTests(unittest.TestCase):
         self.assertEqual("Atualizar CSV", payload["items"][0]["title"])
         self.assertEqual("mangaupdates_csv", payload["items"][0]["action"])
 
+    def test_csv_gap_is_not_operational_pending_when_database_is_active(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_json(root / "data/mangas.json", [{"nome": "Alpha"}])
+            _write_csv(root / "reports/integrations/manhwateca_import.csv", [])
+            with patch(
+                "manhwateca.webapp.pending_actions.active_catalog_source",
+                return_value={
+                    "kind": "postgresql",
+                    "label": "PostgreSQL",
+                    "detail": "vw_mangas",
+                    "count": 1,
+                    "mangas": [],
+                },
+            ):
+                payload = pending_payload(root)
+
+        self.assertEqual(0, payload["total"])
+        self.assertEqual("postgresql", payload["source"]["kind"])
+
     def test_detects_orphaned_csv_rows(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

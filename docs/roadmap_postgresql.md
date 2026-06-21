@@ -587,6 +587,10 @@ Esta milestone só pode começar depois de existir:
 
 ## Milestone 8: Redução do Legado JSON/CSV
 
+Status: iniciada. A web já possui uma camada central para identificar a fonte
+ativa do catálogo e passa a preferir PostgreSQL em painéis de status, catálogo
+e reconciliação do Notion, mantendo JSON como fallback explícito.
+
 ### Objetivo
 
 Transformar JSON e CSV em exportações opcionais, não em fonte operacional.
@@ -626,6 +630,26 @@ claramente quando algum painel ainda estiver usando JSON/CSV legado.
 - Notion sync funciona sem depender do CSV.
 - README explica claramente o novo fluxo.
 - Arquivos legados continuam geráveis sob demanda.
+
+### Implementado
+
+- Criada uma camada de fonte ativa para a web decidir entre PostgreSQL e JSON
+  legado.
+- `/api/status` informa a fonte ativa do catálogo.
+- `/api/catalog` reutiliza a fonte ativa e remove detalhes internos antes de
+  responder à interface.
+- Painel Notion passa a comparar Drive x catálogo usando PostgreSQL quando
+  disponível.
+- Pendências de CSV deixam de ser tratadas como bloqueio operacional quando
+  PostgreSQL está ativo.
+
+### Próximos cortes
+
+- Migrar painéis MangaUpdates da web para ler estado do PostgreSQL quando as
+  decisões/cache saírem do JSON.
+- Criar caminho PostgreSQL para atualização de metadados no Notion sem passar
+  pelo CSV.
+- Atualizar textos do README e menu para marcar JSON/CSV como compatibilidade.
 
 ## Milestone 9: Limpeza e Documentação Final
 

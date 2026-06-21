@@ -178,11 +178,20 @@ async function loadStatus() {
     const response = await fetch("/api/status", { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
+    const catalogSourceInfo = data.catalog.source || {};
+    const catalogSourceLabel = catalogSourceInfo.label || "fonte local";
+    const catalogDetail = catalogSourceInfo.detail
+      ? ` Fonte: ${catalogSourceLabel} (${catalogSourceInfo.detail}).`
+      : ` Fonte: ${catalogSourceLabel}.`;
+    const fallbackDetail = catalogSourceInfo.fallback_reason
+      ? ` Usando fallback porque: ${catalogSourceInfo.fallback_reason}`
+      : "";
     grid.innerHTML = [
       card(
         "Catálogo local",
-        `${data.catalog.count} obra(s) catalogadas. É atualizado ao executar “Catalogar biblioteca”.`,
-        data.catalog.available
+        `${data.catalog.count} obra(s) catalogadas.${catalogDetail}${fallbackDetail}`,
+        data.catalog.available,
+        catalogSourceInfo.kind === "postgresql" ? "Banco ativo" : undefined
       ),
       card(
         "Biblioteca no Drive",

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from manhwateca.mangaupdates_service.candidates import CONFIRMED_STATUSES
 from manhwateca.notion_sync.matching import normalize_title
+from manhwateca.webapp.data_source import active_catalog_source
 from manhwateca.webapp.notion import notion_status
 from manhwateca.webapp.notion_metadata import metadata_status
 
@@ -16,13 +17,20 @@ SYNC_STATE_PATH = Path("reports/integrations/sync_state.json")
 
 def pending_payload(project_root):
     root = Path(project_root)
+    source = active_catalog_source(root)
     items = []
     items.extend(_catalog_pending(root))
     items.extend(_mangaupdates_pending(root))
-    items.extend(_csv_pending(root))
+    if source["kind"] != "postgresql":
+        items.extend(_csv_pending(root))
     items.extend(_notion_pending(root))
     return {
         "total": len(items),
+        "source": {
+            key: value
+            for key, value in source.items()
+            if key != "mangas"
+        },
         "items": items,
         "empty_message": (
             "Nenhuma pendência acionável encontrada."

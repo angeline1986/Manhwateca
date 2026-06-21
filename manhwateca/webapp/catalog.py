@@ -1,11 +1,8 @@
 import json
 from pathlib import Path
 
-from manhwateca.database.connection import (
-    DatabaseConfigurationError,
-    DatabaseConnectionError,
-)
 from manhwateca.database.manga_repository import MangaRepository
+from manhwateca.webapp.data_source import active_catalog_source
 
 
 CATALOG_PATH = Path("data/mangas.json")
@@ -34,27 +31,25 @@ def load_catalog(project_root):
 
 
 def catalog_payload(project_root, latest_changes=None, repository_factory=MangaRepository):
-    source = {
-        "kind": "json",
-        "label": "JSON legado",
-        "detail": str(CATALOG_PATH),
-    }
-    try:
-        mangas = load_database_catalog(repository_factory)
-        source = {
-            "kind": "postgresql",
-            "label": "PostgreSQL",
-            "detail": "vw_mangas",
-        }
-    except (DatabaseConfigurationError, DatabaseConnectionError) as error:
+    source = active_catalog_source(project_root, repository_factory)
+    if source["kind"] == "postgresql":
+        mangas = [_database_manga(record) for record in source.get("mangas", [])]
+    else:
         mangas = load_catalog(project_root)
-        source["fallback_reason"] = str(error)
 
     return {
-        "source": source,
+        "source": _public_source(source),
         "summary": build_summary(mangas),
         "changes": latest_changes or {"new": [], "updated": [], "removed": []},
         "mangas": [public_manga(manga) for manga in mangas],
+    }
+
+
+def _public_source(source):
+    return {
+        key: value
+        for key, value in source.items()
+        if key != "mangas"
     }
 
 

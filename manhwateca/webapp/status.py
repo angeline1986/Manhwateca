@@ -2,16 +2,24 @@ import json
 import os
 from pathlib import Path
 
+from manhwateca.webapp.data_source import active_catalog_source
+
 
 CATALOG_FILE = Path("data/mangas.json")
 MANGAUPDATES_FILE = Path("data/mangaupdates.json")
 CSV_FILE = Path("reports/integrations/manhwateca_import.csv")
 
 
-def build_status(project_root):
+def build_status(project_root, repository_factory=None):
     project_root = Path(project_root)
     catalog_path = project_root / CATALOG_FILE
+    source = (
+        active_catalog_source(project_root, repository_factory)
+        if repository_factory
+        else active_catalog_source(project_root)
+    )
     catalog_count, catalog_error = _catalog_info(catalog_path)
+    source_count = source.get("count", catalog_count)
     manga_root = os.getenv("MANGA_ROOT", "").strip()
     notion_ready = all(
         os.getenv(name, "").strip()
@@ -22,9 +30,18 @@ def build_status(project_root):
         "status": "ok",
         "version": "web-1.0",
         "catalog": {
-            "available": catalog_path.is_file() and catalog_error is None,
-            "count": catalog_count,
-            "path": str(CATALOG_FILE),
+            "available": (
+                source["kind"] == "postgresql"
+                or (catalog_path.is_file() and catalog_error is None)
+            ),
+            "count": source_count,
+            "path": source.get("detail", str(CATALOG_FILE)),
+            "source": {
+                "kind": source["kind"],
+                "label": source["label"],
+                "detail": source.get("detail"),
+                "fallback_reason": source.get("fallback_reason"),
+            },
             "error": catalog_error,
         },
         "library": {

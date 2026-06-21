@@ -11,6 +11,11 @@ from manhwateca.webapp.server import create_server
 from manhwateca.webapp.status import build_status
 
 
+class FakeRepository:
+    def list_mangas(self):
+        return [object(), object(), object()]
+
+
 class WebAppTests(unittest.TestCase):
     def test_status_counts_catalog_without_exposing_secrets(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -33,6 +38,14 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(2, status["catalog"]["count"])
         self.assertTrue(status["notion"]["configured"])
         self.assertNotIn("secret-token", json.dumps(status))
+
+    def test_status_prefers_database_catalog_when_available(self):
+        with tempfile.TemporaryDirectory() as directory:
+            status = build_status(Path(directory), repository_factory=FakeRepository)
+
+        self.assertEqual(3, status["catalog"]["count"])
+        self.assertEqual("postgresql", status["catalog"]["source"]["kind"])
+        self.assertEqual("PostgreSQL", status["catalog"]["source"]["label"])
 
     def test_http_server_serves_home_and_status(self):
         project_root = Path(__file__).resolve().parents[1]
