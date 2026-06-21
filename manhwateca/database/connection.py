@@ -1,4 +1,5 @@
 import os
+import re
 from contextlib import contextmanager
 
 
@@ -46,6 +47,8 @@ def connect(database_url=None, *, connect_fn=None, schema=DEFAULT_SCHEMA):
         connection = connect_fn(database_url)
         _set_search_path(connection, schema)
         return connection
+    except DatabaseConfigurationError:
+        raise
     except DatabaseConnectionError:
         raise
     except Exception as error:
@@ -59,7 +62,15 @@ def _set_search_path(connection, schema: str) -> None:
         return
 
     with connection.cursor() as cursor:
-        cursor.execute("SET search_path TO manhwateca, public")
+        cursor.execute(f"SET search_path TO {_quote_identifier(schema)}, public")
+
+
+def _quote_identifier(value: str) -> str:
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
+        raise DatabaseConfigurationError(
+            f"Schema PostgreSQL inválido: {value!r}"
+        )
+    return f'"{value}"'
 
 
 @contextmanager

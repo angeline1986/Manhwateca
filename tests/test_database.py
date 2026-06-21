@@ -205,6 +205,28 @@ class DatabaseConnectionTests(unittest.TestCase):
 
         self.assertIs(result, connection)
         self.assertIn("set search_path", connection.queries[0][0])
+        self.assertIn('"manhwateca"', connection.queries[0][0])
+
+    def test_connect_respects_configured_schema(self):
+        connection = FakeConnection()
+
+        connect(
+            "postgresql://local/test",
+            connect_fn=lambda _url: connection,
+            schema="sandbox_schema",
+        )
+
+        self.assertIn('"sandbox_schema"', connection.queries[0][0])
+
+    def test_connect_rejects_invalid_schema_name(self):
+        connection = FakeConnection()
+
+        with self.assertRaisesRegex(DatabaseConfigurationError, "Schema"):
+            connect(
+                "postgresql://local/test",
+                connect_fn=lambda _url: connection,
+                schema="unsafe;drop",
+            )
 
 
 class MangaRepositoryTests(unittest.TestCase):
