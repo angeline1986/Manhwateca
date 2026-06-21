@@ -5,6 +5,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from notion_client import Client
 
+from manhwateca.database.manga_repository import MangaRepository
 from manhwateca.notion_sync import catalog_properties, matching, pages
 from manhwateca.notion_sync.catalog_service import sync
 from manhwateca.notion_sync.repositories import (
@@ -106,7 +107,8 @@ def main():
     if args.batch_size < 1:
         raise SystemExit("--batch-size deve ser maior que zero.")
     database_id = require_env("NOTION_DATABASE_ID")
-    mangas = _load_catalog(args.catalog_source)
+    repository = _repository_for(args.catalog_source)
+    mangas = _load_catalog(args.catalog_source, repository)
     notion = Client(auth=require_env("NOTION_TOKEN"))
     aliases = load_title_aliases()
     full = sync(
@@ -115,7 +117,14 @@ def main():
     ratio = full["created"] / len(mangas) if mangas else 0
     applying = args.apply or args.apply_batch or args.update_existing
     _validate_application(args, full, mangas, ratio, applying)
-    summary = _run_selected_mode(args, notion, database_id, mangas, aliases)
+    summary = _run_selected_mode(
+        args,
+        notion,
+        database_id,
+        mangas,
+        aliases,
+        result_repository=repository if applying else None,
+    )
     mode = _mode_label(args)
     write_import_status(summary, mode, applied=applying)
     _print_summary(args, summary, mode, ratio)
@@ -139,13 +148,26 @@ def _validate_application(args, summary, mangas, ratio, applying):
         )
 
 
-def _load_catalog(source):
+def _repository_for(source):
     if source == "postgresql":
-        return load_mangas_from_database()
+        return MangaRepository()
+    return None
+
+
+def _load_catalog(source, repository=None):
+    if source == "postgresql":
+        return load_mangas_from_database(repository)
     return load_mangas()
 
 
-def _run_selected_mode(args, notion, database_id, mangas, aliases):
+def _run_selected_mode(
+    args,
+    notion,
+    database_id,
+    mangas,
+    aliases,
+    result_repository=None,
+):
     options = {"title_aliases": aliases}
     if args.apply_batch:
         options.update(apply=True, create_limit=args.batch_size, update_existing=False)
@@ -160,6 +182,8 @@ def _run_selected_mode(args, notion, database_id, mangas, aliases):
         )
     elif args.simulate_batch:
         options.update(create_limit=args.batch_size, update_existing=False)
+    if result_repository is not None:
+        options["result_repository"] = result_repository
     return sync(notion, database_id, mangas, **options)
 
 

@@ -75,6 +75,10 @@ class FakeCursor:
             self.connection.links.append(params)
             return
 
+        if normalized.startswith("insert into sync_events"):
+            self.connection.sync_events.append(params)
+            return
+
         if normalized.startswith("insert into mangas"):
             manga_id = len(self.connection.mangas) + 1
             self.connection.inserted.append(params)
@@ -114,6 +118,7 @@ class FakeConnection:
         self.deleted = []
         self.inserted = []
         self.updated = []
+        self.sync_events = []
 
     def cursor(self):
         return FakeCursor(self)
@@ -356,6 +361,58 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertIn((7, 1), connection.links)
         self.assertIn((7, 2), connection.links)
         self.assertIn((7, 3), connection.links)
+
+    def test_updates_notion_sync_fields_by_page_id(self):
+        connection = FakeConnection()
+        connection.mangas = [{
+            "id": 7,
+            "title": "Alpha",
+            "notion_page_id": "page-1",
+        }]
+        repository = MangaRepository(connection)
+
+        updated = repository.update_notion_sync_fields(
+            "Outro Nome",
+            page_id="page-1",
+            status="synced",
+        )
+
+        self.assertTrue(updated)
+        query, params = connection.updated[0]
+        self.assertIn("notion_page_id", query)
+        self.assertIn("notion_last_synced_at", query)
+        self.assertIn("notion_sync_status", query)
+        self.assertEqual("page-1", params[0])
+        self.assertEqual("synced", params[2])
+        self.assertEqual(7, params[3])
+
+    def test_records_sync_event_with_payload(self):
+        connection = FakeConnection()
+        connection.mangas = [{
+            "id": 7,
+            "title": "Alpha",
+            "notion_page_id": "page-1",
+        }]
+        repository = MangaRepository(connection)
+
+        recorded = repository.record_sync_event(
+            "Alpha",
+            event_type="update",
+            status="synced",
+            page_id="page-1",
+            message="ok",
+            payload={"nome": "Alpha"},
+        )
+
+        self.assertTrue(recorded)
+        self.assertEqual(1, len(connection.sync_events))
+        params = connection.sync_events[0]
+        self.assertEqual(7, params[0])
+        self.assertEqual("page-1", params[1])
+        self.assertEqual("update", params[2])
+        self.assertEqual("synced", params[3])
+        self.assertEqual("ok", params[4])
+        self.assertIn('"nome": "Alpha"', params[5])
 
 
 if __name__ == "__main__":

@@ -528,10 +528,11 @@ para PostgreSQL.
 
 ## Milestone 7: Notion Sync Usando PostgreSQL
 
-Status: iniciada incrementalmente. O sync já pode carregar catálogo do
-PostgreSQL sob opção explícita, mantendo JSON como padrão legado. Quando
-`notion_page_id` estiver disponível no catálogo, ele é usado antes da busca por
-título.
+Status: núcleo implementado. O sync já pode carregar catálogo do PostgreSQL sob
+opção explícita, mantendo JSON como padrão legado. Quando `notion_page_id`
+estiver disponível no catálogo, ele é usado antes da busca por título. Rodadas
+aplicadas com origem PostgreSQL persistem `notion_page_id`,
+`notion_last_synced_at`, `notion_sync_status` e eventos em `sync_events`.
 
 ### Objetivo
 
@@ -553,6 +554,23 @@ Esta milestone só pode começar depois de existir:
 - Manter CSV como modo legado temporário.
 - Registrar cada tentativa em `sync_log` ou `sync_events`.
 
+### Implementado
+
+- `scripts/sync.py --catalog-source postgresql` lê `vw_mangas` por meio do
+  repositório.
+- Páginas existentes podem ser localizadas por `notion_page_id` antes da busca
+  por título normalizado.
+- Criação, atualização, pendência, duplicidade e erro podem atualizar os campos
+  `notion_*` no PostgreSQL quando a execução é aplicada.
+- Eventos de sync são registrados em `sync_events` via `MangaRepository`.
+- Simulações não gravam eventos no PostgreSQL.
+
+### Pendência transferida para a Milestone 8
+
+- Remover a operação operacional CSV -> Notion. A base já permite publicar
+  metadados a partir do PostgreSQL, mas o fluxo legado de CSV deve continuar
+  disponível até a web/menu estarem totalmente orientados ao banco.
+
 ### Fora do escopo
 
 - Sincronização bidirecional completa.
@@ -573,10 +591,28 @@ Esta milestone só pode começar depois de existir:
 
 Transformar JSON e CSV em exportações opcionais, não em fonte operacional.
 
+Esta milestone também cobre a aplicação web acessada em:
+
+```text
+http://127.0.0.1:8000/
+```
+
+A web deve ficar orientada ao PostgreSQL de ponta a ponta: dashboards,
+Biblioteca, Organização, MangaUpdates, Notion, Automação e Configurações devem
+exibir a fonte ativa, consumir dados do banco quando disponíveis e sinalizar
+claramente quando algum painel ainda estiver usando JSON/CSV legado.
+
 ### Escopo
 
 - Marcar comandos legados no README.
 - Ajustar menu e web para mostrar a fonte ativa.
+- Atualizar a página web local para priorizar PostgreSQL em:
+  - visão geral;
+  - biblioteca;
+  - cards de ações;
+  - painéis de Notion;
+  - histórico/status de tarefas;
+  - mensagens de próximo passo.
 - Remover dependência operacional de:
   - `data/mangas.json`;
   - `reports/integrations/manhwateca_import.csv`.
@@ -585,6 +621,8 @@ Transformar JSON e CSV em exportações opcionais, não em fonte operacional.
 ### Critérios de aceite
 
 - Web funciona com PostgreSQL sem depender do JSON.
+- A página `http://127.0.0.1:8000/` deixa claro quando a fonte é PostgreSQL e
+  quando algum dado ainda é legado.
 - Notion sync funciona sem depender do CSV.
 - README explica claramente o novo fluxo.
 - Arquivos legados continuam geráveis sob demanda.
@@ -685,6 +723,47 @@ WHERE reading_status_v2 = 'Quero Ler';
 ```
 
 Pode ser desnecessária se `vw_next_reads` já cobrir o uso principal.
+
+## Mapeamento do Legado Removível Futuramente
+
+Esta seção é um inventário. Nada deve ser deletado automaticamente. A remoção
+só deve acontecer quando houver sinalização explícita de que o fluxo
+PostgreSQL substituiu completamente o uso correspondente.
+
+### Arquivos de dados legados
+
+| Item | Uso atual | Pode ser removido quando |
+| ---- | --------- | ------------------------ |
+| `data/mangas.json` | Catálogo local usado por fluxos antigos, relatórios e fallback web. | Scanner, web, Notion sync e automação lerem do PostgreSQL sem fallback obrigatório. |
+| `reports/integrations/manhwateca_import.csv` | Base enriquecida para atualização de metadados no Notion. | O sync de metadados ler diretamente de `vw_mangas`/repositório. |
+| `reports/integrations/buscaIds.json` | Revisão e confirmação de IDs MangaUpdates. | IDs confirmados, pendentes e decisões forem persistidos em tabelas do PostgreSQL. |
+| `data/mangaupdates.json` | Cache local de detalhes MangaUpdates. | Cache externo for migrado para tabela própria ou campos normalizados no banco. |
+| `data/mangaupdates_progress.json` | Progresso de execução dos lotes MangaUpdates. | Controle de lotes estiver em tabela de eventos/status. |
+| `reports/integrations/mangaupdates_state.json` | TTL e controle de consultas MangaUpdates. | Estado de consulta estiver no PostgreSQL. |
+| `reports/integrations/notion_import_status.json` | Status de importação Notion usado pela web. | `sync_events` e campos `notion_*` alimentarem a web. |
+
+### Scripts e fluxos legados
+
+| Item | Uso atual | Pode ser removido quando |
+| ---- | --------- | ------------------------ |
+| Fluxos que dependem de `scripts/sync.py` com JSON | Sincronização catálogo -> Notion em modo legado. | O sync via PostgreSQL virar padrão e cobrir criação, atualização e status. |
+| Fluxos CSV -> Notion | Atualização de metadados via `manhwateca_import.csv`. | Metadados forem publicados diretamente do banco. |
+| Export CSV obrigatório | Ponte entre MangaUpdates, revisão manual e Notion. | CSV virar apenas export manual opcional. |
+| Fallback JSON da web | Segurança quando `DATABASE_URL` ou banco falham. | O banco for requisito operacional aceito para a web. |
+
+### Campos legados
+
+| Campo | Motivo para manter agora | Pode ser removido quando |
+| ----- | ------------------------ | ------------------------ |
+| `interest_level` | Compatibilidade com importação inicial do Notion. | `reading_status_v2` e `personal_rank` estiverem totalmente validados. |
+| `reading_status` | Histórico/compatibilidade. | A coluna final de status estiver definida e todos os fluxos usarem o modelo novo. |
+| Nome físico `reading_status_v2` | Nome transitório criado para migração segura. | Uma migration futura renomear para `reading_status` sem conflito com legado. |
+
+### Relatórios legados
+
+Relatórios HTML continuam úteis para auditoria e revisão visual. Eles não são
+candidatos imediatos à remoção. A mudança esperada é trocar a fonte dos dados
+para PostgreSQL quando fizer sentido, mantendo a geração sob demanda.
 
 ## Ordem Recomendada
 

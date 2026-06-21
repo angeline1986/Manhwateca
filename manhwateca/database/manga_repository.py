@@ -1,5 +1,9 @@
+import json
+from datetime import datetime
+
 from manhwateca.database.connection import connect
 from manhwateca.database.models import MangaRecord, manga_from_row
+from manhwateca.notion_sync import statuses
 from manhwateca.notion_sync.matching import normalize_title
 
 
@@ -198,6 +202,73 @@ class MangaRepository:
 
         return True
 
+    def update_notion_sync_fields(
+        self,
+        name: str,
+        *,
+        page_id=None,
+        status=statuses.SYNCED,
+        synced_at=None,
+    ) -> bool:
+        statuses.validate_status(status)
+        manga = self._find_notion_match(name, page_id)
+        if manga is None:
+            return False
+
+        self._execute(
+            """
+            UPDATE mangas
+            SET
+                notion_page_id = COALESCE(%s, notion_page_id),
+                notion_last_synced_at = %s,
+                notion_sync_status = %s
+            WHERE id = %s
+            """,
+            (
+                _string_or_none(page_id),
+                synced_at or datetime.now().astimezone(),
+                status,
+                manga.id,
+            ),
+        )
+        return True
+
+    def record_sync_event(
+        self,
+        name: str,
+        *,
+        event_type: str,
+        status: str,
+        page_id=None,
+        message=None,
+        payload=None,
+    ) -> bool:
+        statuses.validate_status(status)
+        manga = self._find_notion_match(name, page_id)
+        manga_id = manga.id if manga else None
+        self._execute(
+            """
+            INSERT INTO sync_events (
+                manga_id,
+                notion_page_id,
+                event_type,
+                sync_status,
+                message,
+                payload
+            )
+            VALUES (%s, %s, %s, %s, %s, %s::jsonb)
+            """,
+            (
+                manga_id,
+                _string_or_none(page_id),
+                event_type,
+                status,
+                message,
+                json.dumps(payload or {}, ensure_ascii=False),
+            ),
+        )
+        return True
+
     def _fetch_all(self, query, params=None):
         with self._cursor() as cursor:
             cursor.execute(query, params or ())
@@ -227,6 +298,13 @@ class MangaRepository:
             if match:
                 return match
         return self.find_by_normalized_title(manga.get("nome", ""))
+
+    def _find_notion_match(self, name: str, page_id=None) -> MangaRecord | None:
+        if page_id:
+            match = self.find_by_notion_page_id(str(page_id))
+            if match:
+                return match
+        return self.find_by_normalized_title(name)
 
     def _insert_catalog_manga(self, manga: dict) -> int:
         row = self._fetch_one(

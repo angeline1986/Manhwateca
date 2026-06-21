@@ -4,6 +4,7 @@ from manhwateca.notion_sync.matching import (
     normalize_title,
 )
 from manhwateca.notion_sync.pages import load_existing_pages
+from manhwateca.notion_sync import statuses
 
 
 def sync(
@@ -16,6 +17,7 @@ def sync(
     update_existing=True,
     print_actions=True,
     property_builder=build_properties,
+    result_repository=None,
 ):
     existing = load_existing_pages(notion, database_id)
     title_aliases = title_aliases or {}
@@ -33,6 +35,7 @@ def sync(
             update_existing,
             print_actions,
             property_builder,
+            result_repository,
         )
     return summary
 
@@ -67,24 +70,38 @@ def _sync_manga(
     update_existing,
     print_actions,
     property_builder,
+    result_repository,
 ):
     name = manga["nome"].strip()
     matches = _find_matches(manga, existing, title_aliases)
     if len(matches) > 1:
         summary["duplicates"] += 1
         summary["duplicate_titles"].append(name)
+        _mark_status(
+            result_repository,
+            manga,
+            status=statuses.CONFLICT,
+        )
+        _record_event(
+            result_repository,
+            manga,
+            event_type="duplicate",
+            status=statuses.CONFLICT,
+            message=f"{len(matches)} páginas encontradas no Notion",
+        )
         if print_actions:
             print(f"[DUPLICADO] {name}: {len(matches)} páginas no Notion")
         return
     if matches:
         _update_match(
             notion, manga, name, matches[0], summary, apply,
-            update_existing, print_actions, property_builder
+            update_existing, print_actions, property_builder,
+            result_repository
         )
         return
     _create_or_defer(
         notion, database_id, manga, name, summary, apply,
-        create_limit, print_actions
+        create_limit, print_actions, result_repository
     )
 
 
@@ -120,34 +137,183 @@ def _update_match(
     update_existing,
     print_actions,
     property_builder,
+    result_repository,
 ):
     summary["matched_titles"].append(name)
     if not update_existing:
+        _mark_status(
+            result_repository,
+            manga,
+            status=statuses.SYNCED,
+            page_id=page["id"],
+        )
+        _record_event(
+            result_repository,
+            manga,
+            event_type="matched",
+            status=statuses.SYNCED,
+            page_id=page["id"],
+            message="Página existente reconhecida sem atualização.",
+        )
         return
     summary["updated"] += 1
     if print_actions:
         print(f"[ATUALIZAR] {name}")
     if apply:
-        notion.pages.update(
+        try:
+            notion.pages.update(
+                page_id=page["id"],
+                properties=property_builder(manga),
+            )
+            _mark_synced(
+                result_repository,
+                manga,
+                page_id=page["id"],
+                event_type="update",
+            )
+        except Exception as error:
+            _mark_error(
+                result_repository,
+                manga,
+                page_id=page["id"],
+                event_type="update",
+                error=error,
+            )
+            raise
+    else:
+        _record_event(
+            result_repository,
+            manga,
+            event_type="simulate_update",
+            status=statuses.PENDING,
             page_id=page["id"],
-            properties=property_builder(manga),
         )
 
 
 def _create_or_defer(
-    notion, database_id, manga, name, summary, apply, create_limit, print_actions
+    notion,
+    database_id,
+    manga,
+    name,
+    summary,
+    apply,
+    create_limit,
+    print_actions,
+    result_repository,
 ):
     can_create = create_limit is None or summary["created"] < create_limit
     if not can_create:
         summary["pending"] += 1
         summary["pending_titles"].append(name)
+        _mark_status(
+            result_repository,
+            manga,
+            status=statuses.PENDING,
+        )
+        _record_event(
+            result_repository,
+            manga,
+            event_type="defer_create",
+            status=statuses.PENDING,
+            message="Fora do limite do lote atual.",
+        )
         return
     summary["created"] += 1
     summary["created_titles"].append(name)
     if print_actions:
         print(f"[CRIAR] {name}")
     if apply:
-        notion.pages.create(
-            parent={"database_id": database_id},
-            properties=build_properties(manga),
+        try:
+            page = notion.pages.create(
+                parent={"database_id": database_id},
+                properties=build_properties(manga),
+            )
+            _mark_synced(
+                result_repository,
+                manga,
+                page_id=(page or {}).get("id"),
+                event_type="create",
+            )
+        except Exception as error:
+            _mark_error(
+                result_repository,
+                manga,
+                event_type="create",
+                error=error,
+            )
+            raise
+    else:
+        _record_event(
+            result_repository,
+            manga,
+            event_type="simulate_create",
+            status=statuses.PENDING,
         )
+
+
+def _mark_synced(repository, manga, *, page_id=None, event_type):
+    if repository is None:
+        return
+    _mark_status(
+        repository,
+        manga,
+        page_id=page_id or manga.get("notion_page_id"),
+        status=statuses.SYNCED,
+    )
+    _record_event(
+        repository,
+        manga,
+        event_type=event_type,
+        status=statuses.SYNCED,
+        page_id=page_id or manga.get("notion_page_id"),
+    )
+
+
+def _mark_error(repository, manga, *, event_type, error, page_id=None):
+    if repository is None:
+        return
+    _mark_status(
+        repository,
+        manga,
+        page_id=page_id or manga.get("notion_page_id"),
+        status=statuses.ERROR,
+    )
+    _record_event(
+        repository,
+        manga,
+        event_type=event_type,
+        status=statuses.ERROR,
+        page_id=page_id or manga.get("notion_page_id"),
+        message=str(error),
+    )
+
+
+def _mark_status(repository, manga, *, status, page_id=None):
+    if repository is None:
+        return
+    repository.update_notion_sync_fields(
+        manga["nome"].strip(),
+        page_id=page_id or manga.get("notion_page_id"),
+        status=status,
+    )
+
+
+def _record_event(
+    repository,
+    manga,
+    *,
+    event_type,
+    status,
+    page_id=None,
+    message=None,
+):
+    if repository is None:
+        return
+    repository.record_sync_event(
+        manga["nome"].strip(),
+        event_type=event_type,
+        status=status,
+        page_id=page_id or manga.get("notion_page_id"),
+        message=message,
+        payload={"nome": manga.get("nome")},
+    )

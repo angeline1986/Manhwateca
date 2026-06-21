@@ -29,6 +29,7 @@ class FakePages:
 
     def create(self, **kwargs):
         self.created.append(kwargs)
+        return {"id": f"created-{len(self.created)}"}
 
     def update(self, **kwargs):
         self.updated.append(kwargs)
@@ -86,6 +87,20 @@ class FakeMangaRepository:
 
     def list_mangas(self):
         return self.mangas
+
+
+class FakeSyncRepository:
+    def __init__(self):
+        self.fields = []
+        self.events = []
+
+    def update_notion_sync_fields(self, name, **kwargs):
+        self.fields.append((name, kwargs))
+        return True
+
+    def record_sync_event(self, name, **kwargs):
+        self.events.append((name, kwargs))
+        return True
 
 
 class SyncTests(unittest.TestCase):
@@ -290,6 +305,80 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(1, summary["existing"])
         self.assertEqual("1", notion.pages.updated[0]["page_id"])
         self.assertEqual("database", notion.pages.created[0]["parent"]["database_id"])
+
+    def test_sync_records_successful_update_in_repository(self):
+        notion = SimpleNamespace(
+            databases=FakeDatabases([{
+                "results": [page("page-1", "Alpha")],
+                "has_more": False,
+            }]),
+            pages=FakePages(),
+        )
+        repository = FakeSyncRepository()
+
+        sync.sync(
+            notion,
+            "database",
+            [manga("Alpha")],
+            apply=True,
+            result_repository=repository,
+        )
+
+        self.assertEqual(
+            ("Alpha", {"page_id": "page-1", "status": "synced"}),
+            repository.fields[0],
+        )
+        self.assertEqual("update", repository.events[0][1]["event_type"])
+        self.assertEqual("synced", repository.events[0][1]["status"])
+
+    def test_sync_records_created_page_id_in_repository(self):
+        notion = SimpleNamespace(
+            databases=FakeDatabases([{
+                "results": [],
+                "has_more": False,
+            }]),
+            pages=FakePages(),
+        )
+        repository = FakeSyncRepository()
+
+        sync.sync(
+            notion,
+            "database",
+            [manga("Alpha")],
+            apply=True,
+            result_repository=repository,
+        )
+
+        self.assertEqual(
+            ("Alpha", {"page_id": "created-1", "status": "synced"}),
+            repository.fields[0],
+        )
+        self.assertEqual("create", repository.events[0][1]["event_type"])
+
+    def test_batch_records_deferred_titles_as_pending_when_applying(self):
+        notion = SimpleNamespace(
+            databases=FakeDatabases([{
+                "results": [],
+                "has_more": False,
+            }]),
+            pages=FakePages(),
+        )
+        repository = FakeSyncRepository()
+
+        sync.sync(
+            notion,
+            "database",
+            [manga("Alpha")],
+            apply=True,
+            create_limit=0,
+            result_repository=repository,
+        )
+
+        self.assertEqual(
+            ("Alpha", {"page_id": None, "status": "pending"}),
+            repository.fields[0],
+        )
+        self.assertEqual("defer_create", repository.events[0][1]["event_type"])
 
     def test_sync_prefers_notion_page_id_over_title_matching(self):
         notion = SimpleNamespace(
