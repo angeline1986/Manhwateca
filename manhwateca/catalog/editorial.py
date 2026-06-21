@@ -9,6 +9,11 @@ from manhwateca.catalog.editorial_audit import (
     backup_editorial_files,
     log_editorial_change,
 )
+from manhwateca.database.connection import (
+    DatabaseConfigurationError,
+    DatabaseConnectionError,
+)
+from manhwateca.database.manga_repository import MangaRepository
 
 
 CSV_PATH = Path("reports/integrations/manhwateca_import.csv")
@@ -47,8 +52,20 @@ def update_editorial(project_root, name, changes):
     _write_csv(path, rows, fields)
     update_metadata(root / METADATA_PATH, name, clean)
     update_catalog(root / CATALOG_PATH, name, row, clean)
+    update_database_editorial(name, clean)
     log_editorial_change(root, name, clean, backups)
     return _public_row(row)
+
+
+def update_database_editorial(
+    name,
+    changes,
+    repository_factory=MangaRepository,
+) -> bool:
+    try:
+        return repository_factory().update_editorial_fields(name, changes)
+    except (DatabaseConfigurationError, DatabaseConnectionError):
+        return False
 
 
 def _public_row(row):

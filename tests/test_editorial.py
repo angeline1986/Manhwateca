@@ -7,7 +7,9 @@ from pathlib import Path
 from manhwateca.catalog.editorial import (
     dashboard_payload,
     update_editorial,
+    update_database_editorial,
 )
+from manhwateca.database.connection import DatabaseConfigurationError
 from manhwateca.catalog.editorial_merge import apply_saved_editorial
 
 
@@ -65,6 +67,41 @@ class EditorialTests(unittest.TestCase):
             root = self._project(directory)
             with self.assertRaisesRegex(ValueError, "Status"):
                 update_editorial(root, "Official Alpha", {"Status": "Outro"})
+
+    def test_database_editorial_update_is_optional(self):
+        def missing_database():
+            raise DatabaseConfigurationError("DATABASE_URL")
+
+        self.assertFalse(
+            update_database_editorial(
+                "Official Alpha",
+                {"Status": "Lendo"},
+                repository_factory=missing_database,
+            )
+        )
+
+    def test_database_editorial_update_uses_repository(self):
+        class Repository:
+            def __init__(self):
+                self.calls = []
+
+            def update_editorial_fields(self, name, changes):
+                self.calls.append((name, changes))
+                return True
+
+        repository = Repository()
+
+        result = update_database_editorial(
+            "Official Alpha",
+            {"Status": "Lendo"},
+            repository_factory=lambda: repository,
+        )
+
+        self.assertTrue(result)
+        self.assertEqual(
+            [("Official Alpha", {"Status": "Lendo"})],
+            repository.calls,
+        )
 
     def _project(self, directory):
         root = Path(directory)

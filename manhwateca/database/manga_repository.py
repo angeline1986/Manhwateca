@@ -138,6 +138,29 @@ class MangaRepository:
                 theme_ids.append(self.add_theme_to_manga(manga_id, name))
         return theme_ids
 
+    def update_editorial_fields(self, name: str, changes: dict) -> bool:
+        manga = self.find_by_normalized_title(name)
+        if manga is None:
+            return False
+
+        values = _editorial_values(changes)
+        if values:
+            assignments = ", ".join(f"{column} = %s" for column in values)
+            self._execute(
+                f"""
+                UPDATE mangas
+                SET {assignments}
+                WHERE id = %s
+                """,
+                (*values.values(), manga.id),
+            )
+
+        themes = _theme_values(changes)
+        if themes is not None:
+            self.replace_manga_themes(manga.id, themes)
+
+        return True
+
     def _fetch_all(self, query, params=None):
         with self._cursor() as cursor:
             cursor.execute(query, params or ())
@@ -247,3 +270,68 @@ def _aliases(manga: dict):
         return aliases.strip() or None
     cleaned = [str(alias).strip() for alias in aliases if str(alias).strip()]
     return " | ".join(cleaned) if cleaned else None
+
+
+def _editorial_values(changes: dict):
+    mapping = {
+        "Status": ("reading_status_v2", _status_value),
+        "Interesse": ("personal_rank", _rank_value),
+        "Nota": ("score", _score_value),
+        "Picância": ("spice_level", _plain_value),
+        "Último lido": ("last_read_chapter", _plain_value),
+        "Formato": ("format", _plain_value),
+        "Alias": ("alternative_title", _plain_value),
+    }
+    values = {}
+    for source, (target, transform) in mapping.items():
+        if source in changes:
+            values[target] = transform(changes[source])
+    return values
+
+
+def _theme_values(changes: dict):
+    values = []
+    for field in ("Temática", "Universo"):
+        if field not in changes:
+            continue
+        values.extend(
+            item.strip()
+            for item in str(changes[field]).split("|")
+            if item.strip()
+        )
+    return values or None
+
+
+def _status_value(value):
+    mapping = {
+        "Quero ler": "Quero Ler",
+        "Em espera": "Aguardando Atualização",
+    }
+    value = str(value or "").strip()
+    return mapping.get(value, value)
+
+
+def _rank_value(value):
+    mapping = {
+        "Topzera": "Topzera",
+        "Legalzin": "Legalzin",
+        "Despriorizado": "Despriorizado",
+    }
+    return mapping.get(str(value or "").strip(), "Normal")
+
+
+def _score_value(value):
+    mapping = {
+        "Topzera": 10,
+        "Legalzin": 8,
+        "Ok": 6,
+        "Meia boca": 4,
+        "Ruim": 2,
+    }
+    value = str(value or "").strip()
+    return mapping.get(value)
+
+
+def _plain_value(value):
+    value = str(value or "").strip()
+    return value or None

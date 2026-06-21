@@ -275,6 +275,52 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertNotIn("spice_level", query)
         self.assertEqual(7, params[-1])
 
+    def test_updates_editorial_fields_and_themes(self):
+        connection = FakeConnection()
+        connection.mangas = [{
+            "id": 7,
+            "title": "Official Alpha",
+            "alternative_title": "Alfa",
+        }]
+        repository = MangaRepository(connection)
+
+        updated = repository.update_editorial_fields("Alfa", {
+            "Status": "Em espera",
+            "Interesse": "Topzera",
+            "Nota": "Legalzin",
+            "Picância": "🔥 Alta",
+            "Último lido": "12",
+            "Alias": "Alfa Novo",
+            "Temática": "Drama | Romance",
+            "Universo": "Omegaverse",
+        })
+
+        self.assertTrue(updated)
+        query, params = connection.updated[0]
+        self.assertIn("reading_status_v2", query)
+        self.assertIn("personal_rank", query)
+        self.assertIn("score", query)
+        self.assertIn("spice_level", query)
+        self.assertEqual("Aguardando Atualização", params[0])
+        self.assertEqual("Topzera", params[1])
+        self.assertEqual(8, params[2])
+        self.assertEqual("🔥 Alta", params[3])
+        self.assertEqual("12", params[4])
+        self.assertEqual("Alfa Novo", params[5])
+        self.assertIn((7, 1), connection.links)
+        self.assertIn((7, 2), connection.links)
+        self.assertIn((7, 3), connection.links)
+
+    def test_update_editorial_fields_returns_false_when_missing(self):
+        connection = FakeConnection()
+
+        updated = MangaRepository(connection).update_editorial_fields(
+            "Ausente",
+            {"Status": "Lendo"},
+        )
+
+        self.assertFalse(updated)
+
 
 if __name__ == "__main__":
     unittest.main()
