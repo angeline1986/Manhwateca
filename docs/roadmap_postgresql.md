@@ -471,13 +471,15 @@ Mover edições manuais e metadados editoriais do CSV/JSON para a tabela
 
 ## Milestone 5: MangaUpdates Gravando no PostgreSQL
 
+Status: implementada incrementalmente.
+
 ### Objetivo
 
 Fazer os dados enriquecidos do MangaUpdates atualizarem o banco diretamente.
 
 ### Escopo
 
-- Gravar `work_code`, `mangaupdates_url`, capítulo externo, descrição e
+- Gravar `work_code`, `mangaupdates_url`, capítulo externo, formato e
   metadados úteis em `mangas`.
 - Associar temáticas em `themes` e `manga_themes`.
 - Manter `data/mangaupdates.json` como cache temporário.
@@ -494,6 +496,7 @@ Fazer os dados enriquecidos do MangaUpdates atualizarem o banco diretamente.
 - ID confirmado atualiza a obra correspondente no banco.
 - Temáticas novas são criadas sem duplicar.
 - Obras revisadas manualmente preservam a decisão.
+- CSV e cache continuam funcionando como compatibilidade.
 
 ## Milestone 6: Preparação Para Sync Notion
 

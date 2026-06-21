@@ -321,6 +321,42 @@ class MangaRepositoryTests(unittest.TestCase):
 
         self.assertFalse(updated)
 
+    def test_updates_mangaupdates_fields_and_themes(self):
+        connection = FakeConnection()
+        connection.mangas = [{
+            "id": 7,
+            "title": "Beyond Memories",
+        }]
+        repository = MangaRepository(connection)
+
+        updated = repository.update_mangaupdates_fields(
+            "Beyond Memories",
+            46829042951,
+            {
+                "series_id": 46829042951,
+                "latest_chapter": 104,
+                "url": "https://example.test/beyond",
+                "format": "Manhwa",
+                "genres": ["Drama", "Yaoi"],
+                "universe": ["Omegaverse"],
+            },
+        )
+
+        self.assertTrue(updated)
+        query, params = connection.updated[0]
+        self.assertIn("latest_mangaupdates_chapter", query)
+        self.assertIn("mangaupdates_url", query)
+        self.assertIn("format", query)
+        self.assertNotIn("reading_status_v2", query)
+        self.assertEqual("46829042951", params[0])
+        self.assertEqual(104, params[1])
+        self.assertEqual("https://example.test/beyond", params[2])
+        self.assertEqual("Manhwa", params[3])
+        self.assertEqual(7, params[4])
+        self.assertIn((7, 1), connection.links)
+        self.assertIn((7, 2), connection.links)
+        self.assertIn((7, 3), connection.links)
+
 
 if __name__ == "__main__":
     unittest.main()

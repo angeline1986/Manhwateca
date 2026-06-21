@@ -12,6 +12,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import mangaupdates
 
 
+class FakeMangaRepository:
+    def __init__(self):
+        self.updated = []
+
+    def update_mangaupdates_fields(self, name, series_id, summary):
+        self.updated.append((name, series_id, summary))
+        return True
+
+
 class MangaUpdatesTests(unittest.TestCase):
     def test_choose_search_result_prefers_exact_manhwa(self):
         response = {
@@ -612,6 +621,54 @@ class MangaUpdatesTests(unittest.TestCase):
             self.assertEqual(
                 "ID confirmado automaticamente",
                 row["Correspondência API"],
+            )
+
+    def test_update_csv_persists_mangaupdates_data_to_database(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ids_path = directory / "busca_ids.json"
+            csv_path = directory / "catalog.csv"
+            cache_path = directory / "cache.json"
+            repository = FakeMangaRepository()
+            ids_path.write_text(
+                json.dumps([{
+                    "Nome": "Beyond Memories",
+                    "Status": "Confirmado manualmente",
+                    "ID": 46829042951,
+                }]),
+                encoding="utf-8",
+            )
+            summary = {
+                "series_id": 46829042951,
+                "latest_chapter": 104,
+                "url": "https://example.test/beyond",
+                "genres": ["Drama"],
+                "format": "Manhwa",
+                "universe": ["Omegaverse"],
+            }
+            cache_path.write_text(
+                json.dumps({"46829042951": summary}),
+                encoding="utf-8",
+            )
+            with csv_path.open("w", encoding="utf-8-sig", newline="") as file:
+                writer = csv.DictWriter(
+                    file,
+                    fieldnames=mangaupdates.CSV_COLUMNS,
+                )
+                writer.writeheader()
+                writer.writerow({"Nome": "Beyond Memories"})
+
+            mangaupdates.update_csv_from_confirmed_ids(
+                ids_path,
+                csv_path=csv_path,
+                cache_path=cache_path,
+                delay=0,
+                database_repository=repository,
+            )
+
+            self.assertEqual(
+                [("Beyond Memories", 46829042951, summary)],
+                repository.updated,
             )
 
     def test_update_csv_distinguishes_uncached_from_missing_rows(self):

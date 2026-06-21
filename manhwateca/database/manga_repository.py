@@ -161,6 +161,43 @@ class MangaRepository:
 
         return True
 
+    def update_mangaupdates_fields(
+        self,
+        name: str,
+        series_id,
+        summary: dict,
+    ) -> bool:
+        manga = self.find_by_work_code(series_id)
+        if manga is None:
+            manga = self.find_by_normalized_title(name)
+        if manga is None:
+            return False
+
+        self._execute(
+            """
+            UPDATE mangas
+            SET
+                work_code = COALESCE(work_code, %s),
+                latest_mangaupdates_chapter = %s,
+                mangaupdates_url = COALESCE(%s, mangaupdates_url),
+                format = COALESCE(NULLIF(format, ''), %s)
+            WHERE id = %s
+            """,
+            (
+                _string_or_none(summary.get("series_id") or series_id),
+                _empty_to_none(summary.get("latest_chapter")),
+                _empty_to_none(summary.get("url")),
+                _empty_to_none(summary.get("format")),
+                manga.id,
+            ),
+        )
+
+        themes = _mangaupdates_themes(summary)
+        if themes:
+            self.replace_manga_themes(manga.id, themes)
+
+        return True
+
     def _fetch_all(self, query, params=None):
         with self._cursor() as cursor:
             cursor.execute(query, params or ())
@@ -335,3 +372,24 @@ def _score_value(value):
 def _plain_value(value):
     value = str(value or "").strip()
     return value or None
+
+
+def _string_or_none(value):
+    if value is None or str(value).strip() == "":
+        return None
+    return str(value).strip()
+
+
+def _empty_to_none(value):
+    if value is None or str(value).strip() == "":
+        return None
+    return value
+
+
+def _mangaupdates_themes(summary: dict):
+    values = []
+    for field in ("genres", "universe"):
+        for value in summary.get(field, []) or []:
+            if str(value or "").strip():
+                values.append(str(value).strip())
+    return values

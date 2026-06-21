@@ -1,5 +1,10 @@
 import csv
 
+from manhwateca.database import (
+    DatabaseConfigurationError,
+    DatabaseConnectionError,
+    MangaRepository,
+)
 from manhwateca.mangaupdates_service.candidates import (
     CONFIRMED_STATUSES,
     load_catalog,
@@ -24,6 +29,7 @@ def update_csv_from_confirmed_ids(
     metadata_path,
     catalog_path=None,
     limit=None,
+    database_repository=None,
 ):
     items = load_id_searches(ids_path)
     confirmed = [
@@ -50,6 +56,7 @@ def update_csv_from_confirmed_ids(
     missing_from_csv = []
     handled_ids = set()
     active_names = {normalize_title(item["Nome"]) for item in confirmed}
+    database = database_repository or _optional_database_repository()
 
     for item in confirmed:
         if limit is not None and processed >= limit:
@@ -69,6 +76,7 @@ def update_csv_from_confirmed_ids(
                 rows.append(_normalize_row(row, fieldnames))
                 position = len(rows) - 1
                 _index_row(row_index, rows[position], position)
+                _update_database(database, name, item, summary)
                 processed += 1
                 updated += 1
                 continue
@@ -89,6 +97,7 @@ def update_csv_from_confirmed_ids(
             for field, value in values.items()
         )
         row.update(values)
+        _update_database(database, name, item, summary)
         processed += 1
         updated += int(changed)
 
@@ -237,3 +246,23 @@ def _write_csv(path, rows, fieldnames):
         writer.writeheader()
         writer.writerows(rows)
     temporary.replace(path)
+
+
+def _optional_database_repository():
+    try:
+        return MangaRepository()
+    except Exception:
+        return None
+
+
+def _update_database(repository, name, item, summary):
+    if repository is None:
+        return False
+    try:
+        return repository.update_mangaupdates_fields(
+            name,
+            item.get("ID"),
+            summary,
+        )
+    except (DatabaseConfigurationError, DatabaseConnectionError, Exception):
+        return False

@@ -168,6 +168,7 @@ def update_csv_from_confirmed_ids(
     limit=None,
     cache_path=CACHE_FILE,
     catalog_path=CATALOG_FILE,
+    database_repository=None,
 ):
     return _update_csv(
         ids_path,
@@ -176,6 +177,7 @@ def update_csv_from_confirmed_ids(
         metadata_path=METADATA_FILE,
         catalog_path=catalog_path,
         limit=limit,
+        database_repository=database_repository,
     )
 
 
