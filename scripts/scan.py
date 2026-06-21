@@ -22,7 +22,11 @@ from manhwateca.catalog.external_data import (
     load_mangaupdates_cache,
 )
 from manhwateca.catalog.repository import OUTPUT_FILE, save_mangas
-from manhwateca.catalog.scanner import scan_mangas
+from manhwateca.catalog.scanner import scan_mangas, save_mangas_to_database
+from manhwateca.database.connection import (
+    DatabaseConfigurationError,
+    DatabaseConnectionError,
+)
 from manhwateca.shared.paths import get_required_path_env
 
 
@@ -33,6 +37,7 @@ def main() -> None:
     manga_root = get_required_path_env("MANGA_ROOT")
     mangas = scan_mangas(manga_root=manga_root)
     save_mangas(mangas)
+    database_message = _save_database_if_available(mangas)
 
     total_main_caps = sum(manga["main_caps"] for manga in mangas)
     total_side_caps = sum(manga["side_caps"] for manga in mangas)
@@ -46,6 +51,17 @@ def main() -> None:
     print(f"Total de arquivos de capítulo: {total_chapter_files}")
     print()
     print(f"Arquivo gerado: {OUTPUT_FILE}")
+    print(database_message)
+
+
+def _save_database_if_available(mangas):
+    try:
+        saved = save_mangas_to_database(mangas)
+    except DatabaseConfigurationError:
+        return "PostgreSQL: não configurado (JSON legado mantido)."
+    except DatabaseConnectionError as error:
+        return f"PostgreSQL: não atualizado ({error})."
+    return f"PostgreSQL: {saved} obra(s) atualizada(s)."
 
 
 if __name__ == "__main__":

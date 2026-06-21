@@ -71,6 +71,20 @@ class MangaRepository:
                 return manga
         return None
 
+    def save_catalog_mangas(self, mangas) -> int:
+        saved = 0
+        for manga in mangas:
+            self.save_catalog_manga(manga)
+            saved += 1
+        return saved
+
+    def save_catalog_manga(self, manga: dict) -> int:
+        existing = self._find_catalog_match(manga)
+        if existing:
+            self._update_catalog_manga(existing.id, manga)
+            return existing.id
+        return self._insert_catalog_manga(manga)
+
     def get_or_create_theme(self, name: str) -> int:
         name = str(name or "").strip()
         if not name:
@@ -145,3 +159,91 @@ class MangaRepository:
         if self.connection is None:
             self.connection = self.connection_factory()
         return self.connection
+
+    def _find_catalog_match(self, manga: dict) -> MangaRecord | None:
+        work_code = _work_code(manga)
+        if work_code:
+            match = self.find_by_work_code(work_code)
+            if match:
+                return match
+        return self.find_by_normalized_title(manga.get("nome", ""))
+
+    def _insert_catalog_manga(self, manga: dict) -> int:
+        row = self._fetch_one(
+            """
+            INSERT INTO mangas (
+                work_code,
+                title,
+                alternative_title,
+                reading_status_v2,
+                personal_rank,
+                last_read_chapter,
+                latest_available_chapter,
+                size_label,
+                count_status,
+                latest_mangaupdates_chapter,
+                mangaupdates_url
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                _work_code(manga),
+                manga.get("nome"),
+                _aliases(manga),
+                "Quero Ler",
+                "Normal",
+                manga.get("ultimo_lido"),
+                manga.get("main_caps"),
+                manga.get("tamanho"),
+                manga.get("count_status"),
+                manga.get("mangaupdates_latest_chapter"),
+                manga.get("mangaupdates_url"),
+            ),
+        )
+        return row["id"]
+
+    def _update_catalog_manga(self, manga_id: int, manga: dict) -> None:
+        self._execute(
+            """
+            UPDATE mangas
+            SET
+                work_code = COALESCE(work_code, %s),
+                title = %s,
+                alternative_title = COALESCE(NULLIF(alternative_title, ''), %s),
+                last_read_chapter = COALESCE(last_read_chapter, %s),
+                latest_available_chapter = %s,
+                size_label = %s,
+                count_status = %s,
+                latest_mangaupdates_chapter = %s,
+                mangaupdates_url = COALESCE(%s, mangaupdates_url)
+            WHERE id = %s
+            """,
+            (
+                _work_code(manga),
+                manga.get("nome"),
+                _aliases(manga),
+                manga.get("ultimo_lido"),
+                manga.get("main_caps"),
+                manga.get("tamanho"),
+                manga.get("count_status"),
+                manga.get("mangaupdates_latest_chapter"),
+                manga.get("mangaupdates_url"),
+                manga_id,
+            ),
+        )
+
+
+def _work_code(manga: dict):
+    value = manga.get("work_code") or manga.get("mangaupdates_id")
+    if value is None or str(value).strip() == "":
+        return None
+    return str(value).strip()
+
+
+def _aliases(manga: dict):
+    aliases = manga.get("alias") or []
+    if isinstance(aliases, str):
+        return aliases.strip() or None
+    cleaned = [str(alias).strip() for alias in aliases if str(alias).strip()]
+    return " | ".join(cleaned) if cleaned else None

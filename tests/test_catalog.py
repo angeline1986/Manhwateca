@@ -5,7 +5,16 @@ from pathlib import Path
 
 from manhwateca.catalog.discovery import find_manga_folders
 from manhwateca.catalog.repository import save_mangas
-from manhwateca.catalog.scanner import scan_mangas
+from manhwateca.catalog.scanner import scan_mangas, save_mangas_to_database
+
+
+class FakeCatalogRepository:
+    def __init__(self):
+        self.saved = []
+
+    def save_catalog_mangas(self, mangas):
+        self.saved = list(mangas)
+        return len(self.saved)
 
 
 class CatalogTests(unittest.TestCase):
@@ -66,6 +75,17 @@ class CatalogTests(unittest.TestCase):
                 result = json.load(file)
 
         self.assertEqual([{"nome": "Antidote"}], result)
+
+    def test_persists_catalog_to_database_repository(self):
+        repository = FakeCatalogRepository()
+
+        saved = save_mangas_to_database(
+            [{"nome": "Antidote"}],
+            repository_factory=lambda: repository,
+        )
+
+        self.assertEqual(1, saved)
+        self.assertEqual([{"nome": "Antidote"}], repository.saved)
 
 
 if __name__ == "__main__":

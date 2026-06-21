@@ -4,6 +4,7 @@ from manhwateca.catalog.discovery import find_manga_folders
 from manhwateca.catalog.external_data import load_mangaupdates_cache
 from manhwateca.catalog.external_data import apply_external_data
 from manhwateca.catalog.editorial_merge import apply_saved_editorial
+from manhwateca.database.manga_repository import MangaRepository
 from manhwateca.shared.chapters import scan_chapters
 from manhwateca.shared.media import get_cover_file
 from manhwateca.shared.paths import get_required_path_env
@@ -64,3 +65,11 @@ def scan_mangas(
         apply_saved_editorial(mangas),
         key=lambda item: item["nome"].lower(),
     )
+
+
+def save_mangas_to_database(
+    mangas: list[dict],
+    repository_factory=MangaRepository,
+) -> int:
+    repository = repository_factory()
+    return repository.save_catalog_mangas(mangas)

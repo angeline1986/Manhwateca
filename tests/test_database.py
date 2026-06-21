@@ -75,6 +75,24 @@ class FakeCursor:
             self.connection.links.append(params)
             return
 
+        if normalized.startswith("insert into mangas"):
+            manga_id = len(self.connection.mangas) + 1
+            self.connection.inserted.append(params)
+            self.row = {"id": manga_id}
+            self.connection.mangas.append({
+                "id": manga_id,
+                "work_code": params[0],
+                "title": params[1],
+                "alternative_title": params[2],
+                "reading_status_v2": params[3],
+                "personal_rank": params[4],
+            })
+            return
+
+        if normalized.startswith("update mangas"):
+            self.connection.updated.append((normalized, params))
+            return
+
         if normalized.startswith("delete from manga_themes"):
             self.connection.deleted.append(params[0])
             return
@@ -94,6 +112,8 @@ class FakeConnection:
         self.themes = {}
         self.links = []
         self.deleted = []
+        self.inserted = []
+        self.updated = []
 
     def cursor(self):
         return FakeCursor(self)
@@ -201,6 +221,59 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertEqual([10], connection.deleted)
         self.assertIn((10, 1), connection.links)
         self.assertIn((10, 2), connection.links)
+
+    def test_inserts_catalog_manga_with_technical_fields_only(self):
+        connection = FakeConnection()
+        repository = MangaRepository(connection)
+
+        manga_id = repository.save_catalog_manga({
+            "nome": "Alpha",
+            "alias": ["Alfa"],
+            "mangaupdates_id": 123,
+            "ultimo_lido": 4,
+            "main_caps": 12,
+            "tamanho": "Curto",
+            "count_status": "OK",
+            "mangaupdates_latest_chapter": 13,
+            "mangaupdates_url": "https://example.test/alpha",
+        })
+
+        self.assertEqual(1, manga_id)
+        self.assertEqual("123", connection.inserted[0][0])
+        self.assertEqual("Alpha", connection.inserted[0][1])
+        self.assertEqual("Alfa", connection.inserted[0][2])
+        self.assertEqual("Quero Ler", connection.inserted[0][3])
+        self.assertEqual("Normal", connection.inserted[0][4])
+
+    def test_updates_catalog_manga_without_touching_manual_fields(self):
+        connection = FakeConnection()
+        connection.mangas = [{
+            "id": 7,
+            "work_code": "123",
+            "title": "Alpha",
+            "reading_status_v2": "Lendo",
+            "personal_rank": "Topzera",
+            "score": 10,
+            "spice_level": "Alta",
+        }]
+        repository = MangaRepository(connection)
+
+        manga_id = repository.save_catalog_manga({
+            "nome": "Alpha",
+            "mangaupdates_id": 123,
+            "ultimo_lido": 4,
+            "main_caps": 12,
+            "tamanho": "Curto",
+            "count_status": "OK",
+        })
+
+        self.assertEqual(7, manga_id)
+        query, params = connection.updated[0]
+        self.assertNotIn("reading_status_v2", query)
+        self.assertNotIn("personal_rank", query)
+        self.assertNotIn("score", query)
+        self.assertNotIn("spice_level", query)
+        self.assertEqual(7, params[-1])
 
 
 if __name__ == "__main__":
