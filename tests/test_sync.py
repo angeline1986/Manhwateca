@@ -291,6 +291,30 @@ class SyncTests(unittest.TestCase):
         self.assertEqual("1", notion.pages.updated[0]["page_id"])
         self.assertEqual("database", notion.pages.created[0]["parent"]["database_id"])
 
+    def test_sync_prefers_notion_page_id_over_title_matching(self):
+        notion = SimpleNamespace(
+            databases=FakeDatabases([{
+                "results": [page("page-1", "Old Alpha")],
+                "has_more": False,
+            }]),
+            pages=FakePages(),
+        )
+        item = manga("New Alpha")
+        item["notion_page_id"] = "page-1"
+
+        summary = sync.sync(
+            notion,
+            "database",
+            [item],
+            apply=True,
+            title_aliases={},
+        )
+
+        self.assertEqual(1, summary["updated"])
+        self.assertEqual(0, summary["created"])
+        self.assertEqual(["New Alpha"], summary["matched_titles"])
+        self.assertEqual("page-1", notion.pages.updated[0]["page_id"])
+
     def test_sync_blocks_duplicate_notion_pages(self):
         notion = SimpleNamespace(
             databases=FakeDatabases([{

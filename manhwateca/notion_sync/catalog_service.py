@@ -89,11 +89,25 @@ def _sync_manga(
 
 
 def _find_matches(manga, existing, title_aliases):
+    page_id = str(manga.get("notion_page_id") or "").strip()
+    if page_id:
+        page = _find_page_by_id(page_id, existing)
+        if page:
+            return [page]
+
     matches = {}
     for candidate in catalog_title_candidates(manga, title_aliases):
         for page in existing.get(candidate, []):
             matches[page["id"]] = page
     return list(matches.values())
+
+
+def _find_page_by_id(page_id, existing):
+    for pages in existing.values():
+        for page in pages:
+            if page.get("id") == page_id:
+                return page
+    return None
 
 
 def _update_match(

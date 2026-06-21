@@ -529,7 +529,9 @@ para PostgreSQL.
 ## Milestone 7: Notion Sync Usando PostgreSQL
 
 Status: iniciada incrementalmente. O sync já pode carregar catálogo do
-PostgreSQL sob opção explícita, mantendo JSON como padrão legado.
+PostgreSQL sob opção explícita, mantendo JSON como padrão legado. Quando
+`notion_page_id` estiver disponível no catálogo, ele é usado antes da busca por
+título.
 
 ### Objetivo
 
