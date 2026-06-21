@@ -3,6 +3,11 @@ import urllib.error
 from pathlib import Path
 
 
+from manhwateca.database.connection import (
+    DatabaseConfigurationError,
+    DatabaseConnectionError,
+)
+from manhwateca.database.manga_repository import MangaRepository
 from manhwateca.mangaupdates_service.client import (
     API_BASE,
     get_series,
@@ -103,6 +108,7 @@ def fill_ids_file(
         retry_review=retry_review,
         catalog_path=catalog_path,
         initials=initials,
+        decision_repository=_optional_decision_repository(),
     )
 
 
@@ -122,6 +128,7 @@ def refresh_incomplete_candidates(
         delay=delay,
         limit=limit,
         per_page=per_page,
+        decision_repository=_optional_decision_repository(),
     )
 
 
@@ -211,6 +218,13 @@ def refresh_cache(mappings_path=MAPPINGS_FILE, cache_path=CACHE_FILE):
         detail_function=get_series,
         summarize_function=summarize_series,
     )
+
+
+def _optional_decision_repository():
+    try:
+        return MangaRepository()
+    except (DatabaseConfigurationError, DatabaseConnectionError):
+        return None
 
 
 def main():

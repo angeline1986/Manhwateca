@@ -11,6 +11,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import id_review
 
 
+class FakeDecisionRepository:
+    def __init__(self):
+        self.resolved = []
+
+    def resolve_decision(self, **kwargs):
+        self.resolved.append(kwargs)
+        return True
+
+
 class IdReviewTests(unittest.TestCase):
     def test_report_contains_review_candidates_and_export(self):
         report = id_review.render_report([
@@ -95,6 +104,47 @@ class IdReviewTests(unittest.TestCase):
             self.assertEqual("Confirmado manualmente", updated["Status"])
             self.assertEqual(46829042951, updated["ID"])
             self.assertNotIn("IDs", updated)
+
+    def test_import_decisions_resolves_decision_queue_item(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ids_path = directory / "buscaIds.json"
+            decisions_path = directory / "decisions.json"
+            ids_path.write_text(
+                json.dumps([{
+                    "Nome": "Beyond Memories",
+                    "Status": "Revisar",
+                    "IDs": [{
+                        "id": 46829042951,
+                        "titulo": "Beyond the Memories",
+                    }],
+                }]),
+                encoding="utf-8",
+            )
+            decisions_path.write_text(
+                json.dumps([{
+                    "Nome": "Beyond Memories",
+                    "ID": 46829042951,
+                    "Nome encontrado": "Beyond the Memories",
+                }]),
+                encoding="utf-8",
+            )
+            repository = FakeDecisionRepository()
+
+            applied, rejected, _ = id_review.import_decisions(
+                decisions_path,
+                ids_path=ids_path,
+                decision_repository=repository,
+            )
+
+            self.assertEqual(["Beyond Memories"], applied)
+            self.assertEqual([], rejected)
+            self.assertEqual(1, len(repository.resolved))
+            resolved = repository.resolved[0]
+            self.assertEqual("mangaupdates_match", resolved["decision_type"])
+            self.assertEqual("mangaupdates", resolved["source"])
+            self.assertEqual("Beyond Memories", resolved["title"])
+            self.assertEqual(46829042951, resolved["resolution"]["id"])
 
     def test_import_decisions_rejects_id_outside_candidates(self):
         with tempfile.TemporaryDirectory() as directory:

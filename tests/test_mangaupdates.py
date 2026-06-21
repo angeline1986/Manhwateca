@@ -10,6 +10,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import mangaupdates
+from manhwateca.mangaupdates_service.candidate_workflows import fill_ids_file
 
 
 class FakeMangaRepository:
@@ -18,6 +19,15 @@ class FakeMangaRepository:
 
     def update_mangaupdates_fields(self, name, series_id, summary):
         self.updated.append((name, series_id, summary))
+        return True
+
+
+class FakeDecisionRepository:
+    def __init__(self):
+        self.queued = []
+
+    def enqueue_decision(self, **kwargs):
+        self.queued.append(kwargs)
         return True
 
 
@@ -197,6 +207,41 @@ class MangaUpdatesTests(unittest.TestCase):
             self.assertNotIn("IDs", items[0])
             persisted = json.loads(path.read_text(encoding="utf-8"))
             self.assertNotIn("IDs", persisted[0])
+
+    def test_fill_ids_enqueues_review_candidates_in_decision_queue(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "busca_ids.json"
+            path.write_text(
+                json.dumps([{"Nome": "Alpha"}]),
+                encoding="utf-8",
+            )
+            queued = FakeDecisionRepository()
+
+            items, processed = fill_ids_file(
+                path,
+                metadata={},
+                search_candidates=lambda _item, _metadata, per_page=10: (
+                    [{"id": 1, "titulo": "Alfa", "pontuacao": 0.7}],
+                    "Alpha",
+                ),
+                save_function=lambda target, data: target.write_text(
+                    json.dumps(data),
+                    encoding="utf-8",
+                ),
+                wait_function=lambda _delay: None,
+                limit=1,
+                catalog_path=Path(directory) / "missing_catalog.json",
+                decision_repository=queued,
+            )
+
+            self.assertEqual(1, processed)
+            self.assertEqual("Revisar", items[0]["Status"])
+            self.assertEqual(1, len(queued.queued))
+            decision = queued.queued[0]
+            self.assertEqual("mangaupdates_match", decision["decision_type"])
+            self.assertEqual("mangaupdates", decision["source"])
+            self.assertEqual("Alpha", decision["title"])
+            self.assertEqual("Alpha", decision["payload"]["termo_busca"])
 
     def test_refresh_incomplete_candidates_only_reprocesses_missing_data(self):
         with tempfile.TemporaryDirectory() as directory:

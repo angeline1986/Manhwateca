@@ -79,6 +79,45 @@ class FakeCursor:
             self.connection.sync_events.append(params)
             return
 
+        if "from information_schema.columns" in normalized:
+            self.rows = [
+                {"column_name": name, "data_type": data_type}
+                for name, data_type in self.connection.decision_queue_schema
+            ]
+            return
+
+        if "from decision_queue" in normalized and "select id" in normalized:
+            self.row = next(
+                (
+                    {"id": item["id"]}
+                    for item in reversed(self.connection.decision_queue)
+                    if item.get("decision_type") == params[0]
+                    and item.get("title") == params[1]
+                    and (
+                        len(params) < 3
+                        or "source" not in item
+                        or item.get("source") == params[2]
+                    )
+                ),
+                None,
+            )
+            return
+
+        if normalized.startswith("insert into decision_queue"):
+            self.connection.decision_inserts.append((normalized, params))
+            self.connection.decision_queue.append({
+                "id": len(self.connection.decision_queue) + 1,
+                "decision_type": params[0],
+                "title": params[1],
+                "payload": params[2],
+                "source": params[3] if len(params) > 3 else None,
+            })
+            return
+
+        if normalized.startswith("update decision_queue"):
+            self.connection.decision_updates.append((normalized, params))
+            return
+
         if normalized.startswith("insert into mangas"):
             manga_id = len(self.connection.mangas) + 1
             self.connection.inserted.append(params)
@@ -119,6 +158,20 @@ class FakeConnection:
         self.inserted = []
         self.updated = []
         self.sync_events = []
+        self.decision_queue_schema = [
+            ("id", "bigint"),
+            ("decision_type", "character varying"),
+            ("title", "character varying"),
+            ("payload", "jsonb"),
+            ("source", "character varying"),
+            ("status", "character varying"),
+            ("source_key", "character varying"),
+            ("resolution", "jsonb"),
+            ("resolved_at", "timestamp without time zone"),
+        ]
+        self.decision_queue = []
+        self.decision_inserts = []
+        self.decision_updates = []
 
     def cursor(self):
         return FakeCursor(self)
@@ -413,6 +466,51 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertEqual("synced", params[3])
         self.assertEqual("ok", params[4])
         self.assertIn('"nome": "Alpha"', params[5])
+
+    def test_enqueues_mangaupdates_decision(self):
+        connection = FakeConnection()
+        repository = MangaRepository(connection)
+
+        queued = repository.enqueue_decision(
+            decision_type="mangaupdates_match",
+            source="mangaupdates",
+            title="Alpha",
+            source_key="Alpha",
+            payload={"candidatos": [{"id": 1}]},
+        )
+
+        self.assertTrue(queued)
+        query, params = connection.decision_inserts[0]
+        self.assertIn("insert into decision_queue", query)
+        self.assertIn("%s::jsonb", query)
+        self.assertEqual("mangaupdates_match", params[0])
+        self.assertEqual("Alpha", params[1])
+        self.assertIn('"candidatos"', params[2])
+
+    def test_resolves_existing_decision(self):
+        connection = FakeConnection()
+        connection.decision_queue = [{
+            "id": 1,
+            "decision_type": "mangaupdates_match",
+            "title": "Alpha",
+            "source": "mangaupdates",
+            "status": "pending",
+        }]
+        repository = MangaRepository(connection)
+
+        resolved = repository.resolve_decision(
+            decision_type="mangaupdates_match",
+            source="mangaupdates",
+            title="Alpha",
+            resolution={"id": 123},
+        )
+
+        self.assertTrue(resolved)
+        query, params = connection.decision_updates[0]
+        self.assertIn("update decision_queue", query)
+        self.assertIn("resolution = %s::jsonb", query)
+        self.assertEqual("resolved", params[0])
+        self.assertIn('"id": 123', params[1])
 
 
 if __name__ == "__main__":

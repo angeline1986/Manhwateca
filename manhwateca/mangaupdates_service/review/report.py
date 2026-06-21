@@ -40,8 +40,12 @@ def load_items(path=IDS_FILE):
     return _load_items(path)
 
 
-def import_decisions(decisions_path, ids_path=IDS_FILE):
-    return _import_decisions(decisions_path, ids_path)
+def import_decisions(decisions_path, ids_path=IDS_FILE, decision_repository=None):
+    return _import_decisions(
+        decisions_path,
+        ids_path,
+        decision_repository=decision_repository,
+    )
 
 
 def count_confirmed_without_details(items, cache_path=CACHE_FILE):

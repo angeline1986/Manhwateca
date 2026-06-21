@@ -21,6 +21,7 @@ def fill_ids_file(
     retry_review=False,
     catalog_path=None,
     initials="",
+    decision_repository=None,
 ):
     items = load_id_searches(path)
     added = add_catalog_titles_to_id_searches(items, catalog_path)
@@ -58,6 +59,12 @@ def fill_ids_file(
             )
         else:
             print(f"[REVISAR] {name}: {len(candidates)} candidato(s)")
+            _enqueue_match_decision(
+                decision_repository,
+                item,
+                candidates,
+                search_term,
+            )
 
         save_function(path, items)
         processed += 1
@@ -75,6 +82,7 @@ def refresh_incomplete_candidates(
     delay=3.0,
     limit=10,
     per_page=10,
+    decision_repository=None,
 ):
     items = load_id_searches(path)
     pending = incomplete_review_items(items)
@@ -89,7 +97,37 @@ def refresh_incomplete_candidates(
             per_page=per_page,
         )
         apply_candidate_result(item, candidates, search_term)
+        if item.get("Status") == "Revisar":
+            _enqueue_match_decision(
+                decision_repository,
+                item,
+                candidates,
+                search_term,
+            )
         save_function(path, items)
         wait_function(delay)
 
     return len(selected), len(pending) - len(selected)
+
+
+def _enqueue_match_decision(repository, item, candidates, search_term):
+    if repository is None:
+        return False
+    name = str(item.get("Nome") or "").strip()
+    if not name:
+        return False
+    try:
+        return repository.enqueue_decision(
+            decision_type="mangaupdates_match",
+            source="mangaupdates",
+            title=name,
+            manga_name=name,
+            source_key=str(search_term or name),
+            payload={
+                "nome": name,
+                "termo_busca": search_term,
+                "candidatos": candidates,
+            },
+        )
+    except Exception:
+        return False

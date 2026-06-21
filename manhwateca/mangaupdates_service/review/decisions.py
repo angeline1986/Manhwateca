@@ -2,6 +2,12 @@ import json
 import shutil
 from datetime import datetime
 
+from manhwateca.database.connection import (
+    DatabaseConfigurationError,
+    DatabaseConnectionError,
+)
+from manhwateca.database.manga_repository import MangaRepository
+
 
 def load_items(path):
     with path.open(encoding="utf-8") as file:
@@ -26,17 +32,23 @@ def backup_path(path):
     return path.with_name(f"{path.stem}.backup-{timestamp}{path.suffix}")
 
 
-def import_decisions(decisions_path, ids_path):
+def import_decisions(decisions_path, ids_path, decision_repository=None):
     items = load_items(ids_path)
     decisions = load_decisions(decisions_path)
-    return apply_decisions(decisions, items, ids_path)
+    return apply_decisions(
+        decisions,
+        items,
+        ids_path,
+        decision_repository=decision_repository,
+    )
 
 
-def apply_decisions(decisions, items, ids_path):
+def apply_decisions(decisions, items, ids_path, decision_repository=None):
     by_name, duplicate_names = _index_items(items)
     applied = []
     rejected = []
     seen = set()
+    repository = decision_repository or _optional_decision_repository()
 
     for decision in decisions:
         validated, error = _validate_decision(
@@ -57,6 +69,13 @@ def apply_decisions(decisions, items, ids_path):
         item["Nome encontrado"] = candidate_title
         item.pop("IDs", None)
         applied.append(name)
+        _resolve_match_decision(
+            repository,
+            name=name,
+            series_id=series_id,
+            candidate_title=candidate_title,
+            decision=decision,
+        )
 
     backup = _persist_changes(items, ids_path) if applied else None
     return applied, rejected, backup
@@ -146,3 +165,36 @@ def _persist_changes(items, ids_path):
     )
     temporary.replace(ids_path)
     return backup
+
+
+def _optional_decision_repository():
+    try:
+        return MangaRepository()
+    except (DatabaseConfigurationError, DatabaseConnectionError):
+        return None
+
+
+def _resolve_match_decision(
+    repository,
+    *,
+    name,
+    series_id,
+    candidate_title,
+    decision,
+):
+    if repository is None:
+        return False
+    try:
+        return repository.resolve_decision(
+            decision_type="mangaupdates_match",
+            source="mangaupdates",
+            title=name,
+            resolution={
+                "nome": name,
+                "id": series_id,
+                "nome_encontrado": candidate_title,
+                "origem": decision.get("Origem") or "Candidato exibido",
+            },
+        )
+    except Exception:
+        return False

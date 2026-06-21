@@ -5,6 +5,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 from notion_client import Client
 
+from manhwateca.database.connection import (
+    DatabaseConfigurationError,
+    DatabaseConnectionError,
+)
 from manhwateca.database.manga_repository import MangaRepository
 from manhwateca.notion_sync import catalog_properties, matching, pages
 from manhwateca.notion_sync.catalog_service import sync
@@ -56,7 +60,10 @@ def write_import_status(summary, mode, applied=False, path=STATUS_FILE):
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(
-        description="Sincroniza data/mangas.json com o banco do Notion."
+        description=(
+            "Sincroniza o catálogo com o banco do Notion. Por padrão tenta "
+            "PostgreSQL e usa data/mangas.json somente como fallback legado."
+        )
     )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
@@ -92,11 +99,12 @@ def parse_args(argv=None):
     )
     parser.add_argument(
         "--catalog-source",
-        choices=("json", "postgresql"),
-        default=os.getenv("MANHWATECA_CATALOG_SOURCE", "json"),
+        choices=("auto", "json", "postgresql"),
+        default=os.getenv("MANHWATECA_CATALOG_SOURCE", "auto"),
         help=(
-            "Fonte do catálogo para o sync. Use postgresql para ler vw_mangas; "
-            "json mantém o fluxo legado."
+            "Fonte do catálogo para o sync. auto tenta PostgreSQL e cai para "
+            "JSON legado quando o banco não está disponível; postgresql força "
+            "vw_mangas; json força o fluxo legado."
         ),
     )
     return parser.parse_args(argv)
@@ -149,7 +157,7 @@ def _validate_application(args, summary, mangas, ratio, applying):
 
 
 def _repository_for(source):
-    if source == "postgresql":
+    if source in {"auto", "postgresql"}:
         return MangaRepository()
     return None
 
@@ -157,7 +165,15 @@ def _repository_for(source):
 def _load_catalog(source, repository=None):
     if source == "postgresql":
         return load_mangas_from_database(repository)
-    return load_mangas()
+    if source == "auto":
+        try:
+            return load_mangas_from_database(repository)
+        except (DatabaseConfigurationError, DatabaseConnectionError) as error:
+            print(
+                "PostgreSQL indisponível para o sync; usando "
+                f"{DATA_FILE} como fallback legado. Motivo: {error}"
+            )
+    return load_mangas(DATA_FILE)
 
 
 def _run_selected_mode(

@@ -89,6 +89,11 @@ class FakeMangaRepository:
         return self.mangas
 
 
+class FailingMangaRepository:
+    def list_mangas(self):
+        raise sync.DatabaseConfigurationError("sem DATABASE_URL")
+
+
 class FakeSyncRepository:
     def __init__(self):
         self.fields = []
@@ -258,10 +263,31 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(["Drama", "Omegaverse"], result[0]["tematica"])
         self.assertEqual("page-1", result[0]["notion_page_id"])
 
-    def test_catalog_source_defaults_to_json(self):
+    def test_catalog_source_defaults_to_auto(self):
         args = sync.parse_args([])
 
-        self.assertEqual("json", args.catalog_source)
+        self.assertEqual("auto", args.catalog_source)
+
+    def test_auto_catalog_source_prefers_database(self):
+        result = sync._load_catalog(
+            "auto",
+            FakeMangaRepository([FakeMangaRecord(title="Alpha")]),
+        )
+
+        self.assertEqual("Alpha", result[0]["nome"])
+
+    def test_auto_catalog_source_falls_back_to_json_when_database_unavailable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "mangas.json"
+            path.write_text(json.dumps([manga("Legacy Alpha")]), encoding="utf-8")
+            original = sync.DATA_FILE
+            sync.DATA_FILE = path
+            try:
+                result = sync._load_catalog("auto", FailingMangaRepository())
+            finally:
+                sync.DATA_FILE = original
+
+        self.assertEqual("Legacy Alpha", result[0]["nome"])
 
     def test_existing_pages_are_paginated(self):
         notion = SimpleNamespace(

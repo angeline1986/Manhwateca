@@ -269,6 +269,140 @@ class MangaRepository:
         )
         return True
 
+    def enqueue_decision(
+        self,
+        *,
+        decision_type: str,
+        source: str,
+        title: str,
+        payload: dict,
+        manga_name: str | None = None,
+        source_key: str | None = None,
+        status: str = "pending",
+    ) -> bool:
+        schema = self._decision_queue_schema()
+        columns = set(schema)
+        if not columns:
+            return False
+
+        type_column = _first_existing(columns, "decision_type", "type")
+        title_column = _first_existing(
+            columns,
+            "title",
+            "name",
+            "manga_title",
+            "work_title",
+        )
+        payload_column = _first_existing(columns, "payload", "data", "metadata")
+        if not type_column or not title_column or not payload_column:
+            return False
+
+        row = {
+            type_column: decision_type,
+            title_column: title,
+            payload_column: json.dumps(payload or {}, ensure_ascii=False),
+        }
+        optional = {
+            "source": source,
+            "status": status,
+            "manga_name": manga_name or title,
+            "source_key": source_key,
+        }
+        for column, value in optional.items():
+            if column in columns and value not in (None, ""):
+                row[column] = value
+
+        existing_id = self._find_decision_id(
+            columns,
+            decision_type=decision_type,
+            source=source,
+            title=title,
+            status=status,
+        )
+        if existing_id:
+            assignments = ", ".join(
+                f"{column} = {_placeholder_for(schema.get(column))}"
+                for column in row
+            )
+            self._execute(
+                f"""
+                UPDATE decision_queue
+                SET {assignments}
+                WHERE id = %s
+                """,
+                (*row.values(), existing_id),
+            )
+            return True
+
+        column_names = ", ".join(row)
+        placeholders = ", ".join(
+            _placeholder_for(schema.get(column)) for column in row
+        )
+        self._execute(
+            f"""
+            INSERT INTO decision_queue ({column_names})
+            VALUES ({placeholders})
+            """,
+            tuple(row.values()),
+        )
+        return True
+
+    def resolve_decision(
+        self,
+        *,
+        decision_type: str,
+        source: str,
+        title: str,
+        resolution: dict,
+        status: str = "resolved",
+    ) -> bool:
+        schema = self._decision_queue_schema()
+        columns = set(schema)
+        if not columns:
+            return False
+
+        decision_id = self._find_decision_id(
+            columns,
+            decision_type=decision_type,
+            source=source,
+            title=title,
+        )
+        if not decision_id:
+            return False
+
+        values = {}
+        if "status" in columns:
+            values["status"] = status
+        resolution_column = _first_existing(
+            columns,
+            "resolution",
+            "decision",
+            "resolved_payload",
+        )
+        if resolution_column:
+            values[resolution_column] = json.dumps(
+                resolution or {},
+                ensure_ascii=False,
+            )
+        if "resolved_at" in columns:
+            values["resolved_at"] = datetime.now().astimezone()
+        if not values:
+            return False
+
+        assignments = ", ".join(
+            f"{column} = {_placeholder_for(schema.get(column))}"
+            for column in values
+        )
+        self._execute(
+            f"""
+            UPDATE decision_queue
+            SET {assignments}
+            WHERE id = %s
+            """,
+            (*values.values(), decision_id),
+        )
+        return True
+
     def _fetch_all(self, query, params=None):
         with self._cursor() as cursor:
             cursor.execute(query, params or ())
@@ -290,6 +424,58 @@ class MangaRepository:
         if self.connection is None:
             self.connection = self.connection_factory()
         return self.connection
+
+    def _decision_queue_schema(self) -> dict[str, str]:
+        rows = self._fetch_all(
+            """
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'decision_queue'
+            """
+        )
+        return {row["column_name"]: row.get("data_type", "") for row in rows}
+
+    def _find_decision_id(
+        self,
+        columns,
+        *,
+        decision_type: str,
+        source: str,
+        title: str,
+        status: str | None = None,
+    ):
+        type_column = _first_existing(columns, "decision_type", "type")
+        title_column = _first_existing(
+            columns,
+            "title",
+            "name",
+            "manga_title",
+            "work_title",
+        )
+        if not type_column or not title_column:
+            return None
+
+        clauses = [f"{type_column} = %s", f"{title_column} = %s"]
+        params = [decision_type, title]
+        if "source" in columns:
+            clauses.append("source = %s")
+            params.append(source)
+        if status and "status" in columns:
+            clauses.append("status = %s")
+            params.append(status)
+
+        row = self._fetch_one(
+            f"""
+            SELECT id
+            FROM decision_queue
+            WHERE {' AND '.join(clauses)}
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            tuple(params),
+        )
+        return row["id"] if row else None
 
     def _find_catalog_match(self, manga: dict) -> MangaRecord | None:
         work_code = _work_code(manga)
@@ -456,6 +642,21 @@ def _string_or_none(value):
     if value is None or str(value).strip() == "":
         return None
     return str(value).strip()
+
+
+def _first_existing(columns, *candidates):
+    for candidate in candidates:
+        if candidate in columns:
+            return candidate
+    return None
+
+
+def _placeholder_for(data_type):
+    if data_type == "jsonb":
+        return "%s::jsonb"
+    if data_type == "json":
+        return "%s::json"
+    return "%s"
 
 
 def _empty_to_none(value):

@@ -30,10 +30,22 @@ OPTIONS = {
 }
 
 
-def dashboard_payload(project_root):
-    rows, _ = _read_csv(Path(project_root) / CSV_PATH)
-    works = [_public_row(row) for row in rows]
-    return {"summary": _summary(works), "options": OPTIONS, "works": works}
+def dashboard_payload(project_root, repository_factory=MangaRepository):
+    works, source = _database_dashboard_works(repository_factory)
+    if works is None:
+        rows, _ = _read_csv(Path(project_root) / CSV_PATH)
+        works = [_public_row(row) for row in rows]
+        source = {
+            "kind": "csv",
+            "label": "CSV legado",
+            "detail": str(CSV_PATH),
+        }
+    return {
+        "source": source,
+        "summary": _summary(works),
+        "options": OPTIONS,
+        "works": works,
+    }
 
 
 def update_editorial(project_root, name, changes):
@@ -68,6 +80,18 @@ def update_database_editorial(
         return False
 
 
+def _database_dashboard_works(repository_factory):
+    try:
+        records = repository_factory().list_mangas()
+    except (DatabaseConfigurationError, DatabaseConnectionError):
+        return None, None
+    return [_public_record(record) for record in records], {
+        "kind": "postgresql",
+        "label": "PostgreSQL",
+        "detail": "vw_mangas",
+    }
+
+
 def _public_row(row):
     result = {field: row.get(field, "") for field in EDITABLE_FIELDS}
     result.update({
@@ -79,6 +103,35 @@ def _public_row(row):
         "Status da contagem": row.get("Status da contagem", ""),
     })
     return result
+
+
+def _public_record(record):
+    return {
+        "Nome": record.title or "",
+        "ID da obra": record.work_code or "",
+        "Alias": record.alternative_title or "",
+        "Interesse": record.personal_rank or "",
+        "Status": record.reading_status or "",
+        "Nota": record.personal_rank or "",
+        "Último lido": _display_number(record.last_read_chapter),
+        "Último capítulo disponível": _display_number(
+            record.latest_available_chapter
+        ),
+        "Tamanho": record.size_label or "",
+        "Capítulos encontrados": _display_number(
+            record.latest_available_chapter
+        ),
+        "Side stories": "",
+        "Status da contagem": record.count_status or "OK",
+        "Capítulo MangaUpdates": _display_number(
+            record.latest_mangaupdates_chapter
+        ),
+        "MangaUpdates": record.mangaupdates_url or "",
+        "Temática": " | ".join(record.themes or []),
+        "Formato": record.format or "",
+        "Universo": "",
+        "Picância": record.spice_level or "",
+    }
 
 
 def _summary(works):
@@ -133,3 +186,13 @@ def _number(value):
         return int(float(value or 0))
     except (TypeError, ValueError):
         return 0
+
+
+def _display_number(value):
+    if value is None:
+        return ""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    return str(int(number)) if number.is_integer() else str(number)
