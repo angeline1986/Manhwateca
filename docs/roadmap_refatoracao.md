@@ -973,3 +973,151 @@ Antes de mover qualquer função:
 
 Essa preparação reduz o risco de uma refatoração silenciosamente alterar
 arquivos da biblioteca ou dados do Notion.
+
+## Fase 2 planejada: Advisor de fluxo e estados acionáveis
+
+**Status:** planejado. Não implementar neste momento.
+
+Após o uso real da interface web, ficou claro que o núcleo modular já reduziu
+duplicação técnica, mas ainda falta uma camada explícita para orientar a
+usuária sobre o próximo passo correto.
+
+O problema principal não é mais somente código duplicado. O problema atual é
+que diferentes telas e comandos calculam pendências de formas diferentes:
+
+- o comando pode dizer `Para revisão: 27`;
+- a tela de revisão pode mostrar `A revisar: 0`;
+- uma obra com `Status: Não encontrada` pode parecer pendente;
+- uma ação pode continuar disponível mesmo quando não muda mais o estado;
+- o histórico técnico pode virar o único feedback após uma execução.
+
+Essa fase deve criar uma fonte única de verdade para estados e recomendações,
+antes de novos ajustes visuais ou novas automações.
+
+### Objetivo
+
+Criar uma camada de orientação que leia os arquivos existentes, classifique o
+estado real de cada fluxo e exponha ações recomendadas para terminal e web.
+
+Essa camada deve responder perguntas como:
+
+- existe algo realmente pesquisável no MangaUpdates?
+- existe algo revisável na tela de IDs?
+- existe ID confirmado sem detalhes?
+- existe dado pronto para exportar ao CSV?
+- existe obra no Drive fora do catálogo?
+- existe página faltando no Notion?
+- existe ação que deve ficar bloqueada porque não produzirá mudança?
+
+### Componente proposto
+
+```text
+manhwateca/workflow_advisor/
+├── __init__.py
+├── mangaupdates_state.py
+├── notion_state.py
+├── catalog_state.py
+└── recommendations.py
+```
+
+Responsabilidades:
+
+- ler arquivos de estado atuais;
+- classificar itens em estados acionáveis;
+- gerar contadores consistentes;
+- gerar recomendações com destino claro na interface;
+- informar quando uma ação deve ser bloqueada ou desabilitada;
+- ser usado pela interface web, pelo menu terminal e pelo painel de pendências.
+
+### Estados mínimos do MangaUpdates
+
+O primeiro domínio a entrar nessa fase deve ser o MangaUpdates, porque é onde
+o loop de ação ficou mais evidente.
+
+Estados sugeridos por obra:
+
+```text
+nao_pesquisada
+nao_encontrada
+revisao_acionavel
+revisao_nao_acionavel
+confirmada_sem_detalhes
+detalhes_em_cache
+pronta_para_csv
+csv_atualizado
+fora_do_catalogo
+```
+
+Regras importantes:
+
+- `Não encontrada` não pode ser contada como pendente de lote.
+- `Revisar` no JSON bruto não significa necessariamente item visível na tela.
+- Uma ação só deve ser sugerida se houver item que ela possa alterar.
+- Se a próxima ação for manual, a recomendação deve indicar a seção exata.
+
+### Estados mínimos do Notion
+
+Estados sugeridos:
+
+```text
+catalogo_desatualizado
+obra_nao_catalogada
+pagina_ausente
+pagina_criada
+metadados_pendentes
+metadados_sincronizados
+duplicada_no_notion
+ausente_no_notion
+```
+
+Regras importantes:
+
+- simular não deve ser apresentado como solução final;
+- importar lote só deve aparecer quando a simulação indicar páginas ausentes;
+- atualizar metadados só deve aparecer quando houver diff real;
+- duplicidades devem bloquear aplicação e apontar para revisão.
+
+### Entregáveis planejados
+
+1. Criar inventário de estados do MangaUpdates.
+2. Substituir contadores divergentes da web pelo inventário.
+3. Desabilitar ações sem efeito, exibindo o motivo.
+4. Atualizar `pending_actions.py` para usar recomendações do advisor.
+5. Atualizar o histórico de tarefas para mostrar próximo passo vindo do advisor,
+   não do `stdout`.
+6. Estender o mesmo modelo para Notion.
+7. Expor recomendações no menu terminal.
+8. Atualizar README e `docs/arquitetura.md` após a estabilização.
+
+### Critérios de aceite
+
+- A mesma pendência não pode aparecer com números diferentes em telas distintas.
+- Nenhum botão deve sugerir uma ação que não altera estado algum.
+- Toda mensagem de ação deve indicar o destino exato: página, seção e ação.
+- O histórico técnico deve continuar disponível, mas não ser a orientação
+  principal.
+- O terminal e a web devem usar a mesma classificação de estados.
+- Testes devem cobrir pelo menos os estados críticos:
+  - `Não encontrada`;
+  - `Revisar` não acionável;
+  - `Revisar` acionável;
+  - confirmado sem detalhes;
+  - pronto para CSV;
+  - Notion com páginas pendentes;
+  - Notion sem alterações.
+
+### Fora do escopo inicial
+
+- redesenhar a interface inteira;
+- mudar formato dos arquivos JSON sem migração;
+- alterar regras de matching do MangaUpdates;
+- automatizar decisões manuais;
+- remover o menu terminal.
+
+### Sequência recomendada
+
+1. Implementar somente `mangaupdates_state.py`.
+2. Trocar a tela MangaUpdates para consumir esse estado.
+3. Ajustar ações web para usar `enabled`, `disabled_reason` e `next_action`.
+4. Atualizar o painel de pendências.
+5. Só então levar o mesmo padrão para Notion.
