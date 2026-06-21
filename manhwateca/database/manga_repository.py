@@ -202,6 +202,37 @@ class MangaRepository:
 
         return True
 
+    def confirm_mangaupdates_id(
+        self,
+        name: str,
+        series_id,
+        found_title: str | None = None,
+    ) -> bool:
+        manga = self.find_by_work_code(series_id)
+        if manga is None:
+            manga = self.find_by_normalized_title(name)
+        if manga is None:
+            return False
+
+        self._execute(
+            """
+            UPDATE mangas
+            SET
+                work_code = %s,
+                alternative_title = COALESCE(
+                    NULLIF(alternative_title, ''),
+                    %s
+                )
+            WHERE id = %s
+            """,
+            (
+                _string_or_none(series_id),
+                _empty_to_none(found_title),
+                manga.id,
+            ),
+        )
+        return True
+
     def update_notion_sync_fields(
         self,
         name: str,

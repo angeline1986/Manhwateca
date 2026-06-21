@@ -455,6 +455,32 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertIn((7, 2), connection.links)
         self.assertIn((7, 3), connection.links)
 
+    def test_confirms_mangaupdates_id_without_touching_manual_fields(self):
+        connection = FakeConnection()
+        connection.mangas = [{
+            "id": 7,
+            "title": "Alpha",
+            "reading_status_v2": "Lendo",
+            "personal_rank": "Topzera",
+        }]
+        repository = MangaRepository(connection)
+
+        confirmed = repository.confirm_mangaupdates_id(
+            "Alpha",
+            123,
+            found_title="Official Alpha",
+        )
+
+        self.assertTrue(confirmed)
+        query, params = connection.updated[0]
+        self.assertIn("work_code", query)
+        self.assertIn("alternative_title", query)
+        self.assertNotIn("reading_status_v2", query)
+        self.assertNotIn("personal_rank", query)
+        self.assertEqual("123", params[0])
+        self.assertEqual("Official Alpha", params[1])
+        self.assertEqual(7, params[2])
+
     def test_updates_notion_sync_fields_by_page_id(self):
         connection = FakeConnection()
         connection.mangas = [{

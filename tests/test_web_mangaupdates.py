@@ -34,6 +34,10 @@ class FakeRepository:
 
 
 class FakeReviewRepository:
+    def __init__(self):
+        self.confirmed = []
+        self.resolved = []
+
     def list_decisions(self, *, decision_type=None, status=None):
         return [{
             "decision_type": decision_type,
@@ -64,6 +68,14 @@ class FakeReviewRepository:
             FakeMangaRecord(title="Alpha", work_code="1"),
             FakeMangaRecord(title="Beta"),
         ]
+
+    def confirm_mangaupdates_id(self, name, series_id, found_title=None):
+        self.confirmed.append((name, series_id, found_title))
+        return True
+
+    def resolve_decision(self, **kwargs):
+        self.resolved.append(kwargs)
+        return True
 
 
 class WebMangaUpdatesTests(unittest.TestCase):
@@ -127,6 +139,32 @@ class WebMangaUpdatesTests(unittest.TestCase):
         self.assertEqual(99, saved[0]["ID"])
         self.assertEqual("Confirmado manualmente", saved[0]["Status"])
         self.assertNotIn("IDs", saved[0])
+
+    def test_apply_decision_uses_decision_queue_and_mirrors_json(self):
+        repository = FakeReviewRepository()
+        decision = {
+            "Nome": "Alpha",
+            "ID": 1,
+            "Nome encontrado": "Valid",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._project(directory, [])
+            applied, rejected, backup = apply_review_decisions(
+                root,
+                [decision],
+                repository_factory=lambda: repository,
+            )
+            saved = json.loads(
+                (root / "reports/integrations/buscaIds.json").read_text()
+            )
+
+        self.assertEqual(["Alpha"], applied)
+        self.assertEqual([], rejected)
+        self.assertIsNotNone(backup)
+        self.assertEqual(("Alpha", 1, "Valid"), repository.confirmed[0])
+        self.assertEqual("mangaupdates_match", repository.resolved[0]["decision_type"])
+        self.assertEqual(1, saved[0]["ID"])
+        self.assertEqual("Confirmado manualmente", saved[0]["Status"])
 
     def test_status_counts_predicted_api_calls_without_network(self):
         items = [

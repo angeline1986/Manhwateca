@@ -170,10 +170,20 @@ decision_queue
 -> buscaIds.json como fallback temporario
 ```
 
+A aplicacao das decisoes tambem passou a usar a fila quando houver pendencias:
+
+```text
+decision_queue
+-> decisao humana
+-> work_code em mangas
+-> decision_queue resolvida
+-> buscaIds.json espelhado quando existir
+```
+
 ## Pendencias restantes
 
-1. Fazer a resolucao manual persistir primeiro na `decision_queue` e depois
-   aplicar no PostgreSQL, mantendo JSON apenas como espelho temporario.
+1. Fazer o export/import legado de decisoes ser substituido por fluxo direto da
+   web, sem exigir arquivo JSON baixado pelo navegador.
 2. Migrar o cache MangaUpdates de `data/mangaupdates.json` para campos do banco
    ja existentes sempre que possivel.
 3. Reduzir dependencia de `manhwateca_import.csv` nos fluxos de Notion.
@@ -212,7 +222,7 @@ de revisao deixar de depender do `buscaIds.json` como fonte principal.
 
 - Modelagem PostgreSQL: 95%
 - Infraestrutura PostgreSQL: 90%
-- Integracao operacional: 75%
+- Integracao operacional: 78%
 - Desacoplamento JSON/CSV: 50%
 
-Estimativa geral: 75% da migracao operacional concluida.
+Estimativa geral: 78% da migracao operacional concluida.

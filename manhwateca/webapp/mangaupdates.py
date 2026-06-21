@@ -96,10 +96,62 @@ def _legacy_review_payload(root):
     }
 
 
-def apply_review_decisions(project_root, decisions):
-    path = Path(project_root) / IDS_PATH
+def apply_review_decisions(
+    project_root,
+    decisions,
+    repository_factory=MangaRepository,
+):
+    root = Path(project_root)
+    path = root / IDS_PATH
+    repository = _optional_repository(repository_factory)
+    database_items = _pending_decision_items(repository)
+    if database_items:
+        return apply_decisions(
+            decisions,
+            _merge_json_mirror(path, database_items),
+            path if path.exists() else None,
+            decision_repository=repository,
+        )
     items = load_items(path)
-    return apply_decisions(decisions, items, path)
+    return apply_decisions(
+        decisions,
+        items,
+        path,
+        decision_repository=repository,
+    )
+
+
+def _optional_repository(repository_factory=MangaRepository):
+    try:
+        return repository_factory()
+    except (DatabaseConfigurationError, DatabaseConnectionError):
+        return None
+
+
+def _pending_decision_items(repository):
+    if repository is None:
+        return []
+    try:
+        decisions = repository.list_decisions(
+            decision_type="mangaupdates_match",
+            status="pending",
+        )
+    except Exception:
+        return []
+    return [_decision_to_item(decision) for decision in decisions]
+
+
+def _merge_json_mirror(path, database_items):
+    if not path.exists():
+        return database_items
+    try:
+        legacy = load_items(path)
+    except (OSError, ValueError):
+        return database_items
+    by_name = {item.get("Nome"): item for item in legacy}
+    for item in database_items:
+        by_name[item.get("Nome")] = item
+    return list(by_name.values())
 
 
 def _decision_to_item(decision):

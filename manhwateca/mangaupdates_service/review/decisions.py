@@ -43,7 +43,7 @@ def import_decisions(decisions_path, ids_path, decision_repository=None):
     )
 
 
-def apply_decisions(decisions, items, ids_path, decision_repository=None):
+def apply_decisions(decisions, items, ids_path=None, decision_repository=None):
     by_name, duplicate_names = _index_items(items)
     applied = []
     rejected = []
@@ -69,6 +69,12 @@ def apply_decisions(decisions, items, ids_path, decision_repository=None):
         item["Nome encontrado"] = candidate_title
         item.pop("IDs", None)
         applied.append(name)
+        _confirm_mangaupdates_id(
+            repository,
+            name=name,
+            series_id=series_id,
+            candidate_title=candidate_title,
+        )
         _resolve_match_decision(
             repository,
             name=name,
@@ -77,7 +83,11 @@ def apply_decisions(decisions, items, ids_path, decision_repository=None):
             decision=decision,
         )
 
-    backup = _persist_changes(items, ids_path) if applied else None
+    backup = (
+        _persist_changes(items, ids_path)
+        if applied and ids_path is not None and ids_path.exists()
+        else None
+    )
     return applied, rejected, backup
 
 
@@ -195,6 +205,25 @@ def _resolve_match_decision(
                 "nome_encontrado": candidate_title,
                 "origem": decision.get("Origem") or "Candidato exibido",
             },
+        )
+    except Exception:
+        return False
+
+
+def _confirm_mangaupdates_id(
+    repository,
+    *,
+    name,
+    series_id,
+    candidate_title,
+):
+    if repository is None:
+        return False
+    try:
+        return repository.confirm_mangaupdates_id(
+            name,
+            series_id,
+            found_title=candidate_title,
         )
     except Exception:
         return False
