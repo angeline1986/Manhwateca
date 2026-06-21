@@ -1,6 +1,8 @@
 import json
 import tempfile
 import unittest
+from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 
 from manhwateca.webapp.mangaupdates import (
@@ -8,6 +10,27 @@ from manhwateca.webapp.mangaupdates import (
     review_payload,
 )
 from manhwateca.webapp.mangaupdates_status import mangaupdates_status
+
+
+@dataclass
+class FakeMangaRecord:
+    title: str
+    work_code: str | None = None
+    mangaupdates_url: str | None = None
+    latest_mangaupdates_chapter: Decimal | None = None
+
+
+class FakeRepository:
+    def list_mangas(self):
+        return [
+            FakeMangaRecord(
+                title="Cached",
+                work_code="1",
+                mangaupdates_url="https://example.test/cached",
+            ),
+            FakeMangaRecord(title="Missing", work_code="2"),
+            FakeMangaRecord(title="No ID"),
+        ]
 
 
 class WebMangaUpdatesTests(unittest.TestCase):
@@ -25,6 +48,7 @@ class WebMangaUpdatesTests(unittest.TestCase):
             root = self._project(directory, items)
             payload = review_payload(root)
 
+        self.assertEqual("json", payload["source"]["kind"])
         self.assertEqual(1, payload["summary"]["review"])
         self.assertEqual([1], [
             candidate["id"] for candidate in payload["items"][0]["candidates"]
@@ -87,10 +111,26 @@ class WebMangaUpdatesTests(unittest.TestCase):
             )
             payload = mangaupdates_status(root, batch_size=10)
 
+        self.assertEqual("json", payload["source"]["kind"])
         self.assertEqual(2, payload["summary"]["confirmed_ids"])
         self.assertEqual(1, payload["summary"]["cached_ids"])
         self.assertEqual(1, payload["summary"]["calls_needed"])
         self.assertEqual(2, payload["summary"]["force_refresh_calls"])
+        self.assertEqual(["Missing"], [
+            item["name"] for item in payload["next_batch"]
+        ])
+
+    def test_status_prefers_database_when_available(self):
+        payload = mangaupdates_status(
+            Path("."),
+            batch_size=10,
+            repository_factory=lambda: FakeRepository(),
+        )
+
+        self.assertEqual("postgresql", payload["source"]["kind"])
+        self.assertEqual(2, payload["summary"]["confirmed_ids"])
+        self.assertEqual(1, payload["summary"]["cached_ids"])
+        self.assertEqual(1, payload["summary"]["calls_needed"])
         self.assertEqual(["Missing"], [
             item["name"] for item in payload["next_batch"]
         ])

@@ -25,6 +25,12 @@ def review_payload(project_root):
         metadata_path=root / METADATA_PATH,
     )
     return {
+        "source": {
+            "kind": "json",
+            "label": "JSON legado",
+            "detail": str(IDS_PATH),
+            "role": "staging de revisão de IDs",
+        },
         "summary": {
             "total": len(items),
             "review": len(review),

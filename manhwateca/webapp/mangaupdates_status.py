@@ -1,5 +1,10 @@
 from pathlib import Path
 
+from manhwateca.database.connection import (
+    DatabaseConfigurationError,
+    DatabaseConnectionError,
+)
+from manhwateca.database.manga_repository import MangaRepository
 from manhwateca.mangaupdates_service.candidates import (
     CONFIRMED_STATUSES,
     load_id_searches,
@@ -13,8 +18,63 @@ CACHE_PATH = Path("data/mangaupdates.json")
 STATE_PATH = Path("reports/integrations/mangaupdates_state.json")
 
 
-def mangaupdates_status(project_root, *, ttl_days=30, batch_size=10):
+def mangaupdates_status(
+    project_root,
+    *,
+    ttl_days=30,
+    batch_size=10,
+    repository_factory=MangaRepository,
+):
     root = Path(project_root)
+    try:
+        return _database_status(
+            repository_factory(),
+            batch_size=batch_size,
+            ttl_days=ttl_days,
+        )
+    except (DatabaseConfigurationError, DatabaseConnectionError):
+        pass
+
+    return _legacy_status(root, ttl_days=ttl_days, batch_size=batch_size)
+
+
+def _database_status(repository, *, batch_size, ttl_days):
+    records = repository.list_mangas()
+    confirmed = [
+        record for record in records
+        if getattr(record, "work_code", None)
+    ]
+    missing_details = [
+        record for record in confirmed
+        if not (
+            getattr(record, "mangaupdates_url", None)
+            or getattr(record, "latest_mangaupdates_chapter", None)
+        )
+    ]
+    calls = [_public_record(record) for record in missing_details]
+    forced_calls = [_public_record(record) for record in confirmed]
+    return {
+        "source": {
+            "kind": "postgresql",
+            "label": "PostgreSQL",
+            "detail": "vw_mangas",
+        },
+        "summary": {
+            "confirmed_ids": len(confirmed),
+            "cached_ids": len(confirmed) - len(missing_details),
+            "calls_needed": len(calls),
+            "next_batch": len(calls[:batch_size]),
+            "force_refresh_calls": len(forced_calls),
+            "force_refresh_batch": len(forced_calls[:batch_size]),
+            "batch_size": batch_size,
+            "ttl_days": ttl_days,
+        },
+        "next_batch": calls[:batch_size],
+        "force_refresh_batch": forced_calls[:batch_size],
+    }
+
+
+def _legacy_status(root, *, ttl_days, batch_size):
     items = _load_items(root / IDS_PATH)
     cache = _load_object(root / CACHE_PATH)
     state = _load_object(root / STATE_PATH)
@@ -29,6 +89,11 @@ def mangaupdates_status(project_root, *, ttl_days=30, batch_size=10):
     ]
     forced_calls = [_public_item(item) for item in confirmed]
     return {
+        "source": {
+            "kind": "json",
+            "label": "JSON legado",
+            "detail": f"{IDS_PATH} + {CACHE_PATH}",
+        },
         "summary": {
             "confirmed_ids": len(confirmed),
             "cached_ids": sum(
@@ -69,4 +134,12 @@ def _public_item(item):
         "name": item.get("Nome"),
         "id": item.get("ID"),
         "title": item.get("Nome encontrado") or item.get("Nome"),
+    }
+
+
+def _public_record(record):
+    return {
+        "name": record.title,
+        "id": record.work_code,
+        "title": record.title,
     }

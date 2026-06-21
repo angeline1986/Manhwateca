@@ -646,11 +646,15 @@ claramente quando algum painel ainda estiver usando JSON/CSV legado.
   PostgreSQL primeiro e usa CSV apenas como fallback legado.
 - Status de metadados registra e expõe a fonte usada na última simulação ou
   aplicação.
+- Painel de status MangaUpdates passa a preferir PostgreSQL para contagem de
+  IDs confirmados, detalhes já persistidos e próximos detalhes a consultar.
+- Revisão de candidatos MangaUpdates permanece marcada como staging JSON
+  legado até existir tabela própria de decisões.
 
 ### Próximos cortes
 
-- Migrar painéis MangaUpdates da web para ler estado do PostgreSQL quando as
-  decisões/cache saírem do JSON.
+- Modelar decisões/candidatos MangaUpdates no PostgreSQL para substituir
+  `buscaIds.json`.
 - Atualizar textos do README e menu para marcar JSON/CSV como compatibilidade.
 
 ## Milestone 9: Limpeza e Documentação Final
