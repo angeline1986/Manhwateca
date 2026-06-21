@@ -20,6 +20,7 @@ def metadata_status(project_root):
     return {
         "available": True,
         "csv_available": (root / CSV_PATH).is_file(),
+        "source": data.get("fonte") or _source(root),
         "updated_at": data.get("atualizado_em"),
         "mode": data.get("modo"),
         "summary": {
@@ -41,6 +42,7 @@ def _empty(root, error=None):
     return {
         "available": False,
         "csv_available": (root / CSV_PATH).is_file(),
+        "source": _source(root),
         "updated_at": None,
         "mode": None,
         "summary": {
@@ -55,6 +57,15 @@ def _empty(root, error=None):
         "duplicates": [],
         "sync_state": _sync_state(root),
         "error": error,
+    }
+
+
+def _source(root):
+    return {
+        "kind": "csv",
+        "label": "CSV legado",
+        "detail": str(CSV_PATH),
+        "available": (root / CSV_PATH).is_file(),
     }
 
 

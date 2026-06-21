@@ -26,7 +26,12 @@ class WebNotionMetadataTests(unittest.TestCase):
             status_path = (
                 root / "reports/integrations/notion_csv_status.json"
             )
-            write_csv_status(summary, False, status_path)
+            write_csv_status(
+                summary,
+                False,
+                status_path,
+                source={"kind": "postgresql", "label": "PostgreSQL"},
+            )
             sync_path = root / "reports/integrations/sync_state.json"
             sync_path.write_text(
                 json.dumps({
@@ -44,6 +49,8 @@ class WebNotionMetadataTests(unittest.TestCase):
         self.assertTrue(payload["available"])
         self.assertTrue(payload["csv_available"])
         self.assertEqual("SIMULAÇÃO", payload["mode"])
+        self.assertEqual("postgresql", payload["source"]["kind"])
+        self.assertEqual("PostgreSQL", payload["source"]["label"])
         self.assertEqual(1, payload["summary"]["updates"])
         self.assertEqual(["Beta"], payload["missing"])
         self.assertEqual(

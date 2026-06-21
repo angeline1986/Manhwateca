@@ -307,8 +307,8 @@ async function loadActions() {
     notion_simulate_batch: ["Compara o catálogo com as páginas do Notion.", "Mostra o próximo lote sem alterar o Notion."],
     notion_apply_batch: ["Cria as próximas páginas ausentes.", "Publica até 25 obras após confirmação."],
     notion_update_existing: ["Envia novas contagens para páginas existentes.", "Atualiza o Notion sem criar páginas."],
-    notion_csv_preview: ["Compara o CSV com as páginas existentes.", "Simula as alterações sem escrever no Notion."],
-    notion_csv_apply: ["Envia os metadados enriquecidos do CSV.", "Atualiza páginas após confirmação."],
+    notion_csv_preview: ["Compara a fonte enriquecida com as páginas existentes.", "Simula as alterações sem escrever no Notion."],
+    notion_csv_apply: ["Envia metadados enriquecidos para páginas existentes.", "Atualiza páginas após confirmação."],
   };
   const response = await fetch("/api/actions", { cache: "no-store" });
   const actions = await response.json();

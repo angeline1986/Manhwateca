@@ -2,12 +2,16 @@ import json
 from datetime import datetime
 
 
-def write_csv_status(summary, applied, path):
+def write_csv_status(summary, applied, path, source=None):
     payload = {
         "atualizado_em": datetime.now().astimezone().isoformat(
             timespec="seconds"
         ),
         "modo": "APLICAÇÃO" if applied else "SIMULAÇÃO",
+        "fonte": source or {
+            "kind": "csv",
+            "label": "CSV legado",
+        },
         "resumo": {
             "atualizacoes": summary["updated"],
             "sem_alteracao": len(summary.get("unchanged", [])),

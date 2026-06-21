@@ -642,13 +642,15 @@ claramente quando algum painel ainda estiver usando JSON/CSV legado.
   disponível.
 - Pendências de CSV deixam de ser tratadas como bloqueio operacional quando
   PostgreSQL está ativo.
+- Atualização de metadados do Notion passa a ter fonte `auto`: tenta
+  PostgreSQL primeiro e usa CSV apenas como fallback legado.
+- Status de metadados registra e expõe a fonte usada na última simulação ou
+  aplicação.
 
 ### Próximos cortes
 
 - Migrar painéis MangaUpdates da web para ler estado do PostgreSQL quando as
   decisões/cache saírem do JSON.
-- Criar caminho PostgreSQL para atualização de metadados no Notion sem passar
-  pelo CSV.
 - Atualizar textos do README e menu para marcar JSON/CSV como compatibilidade.
 
 ## Milestone 9: Limpeza e Documentação Final

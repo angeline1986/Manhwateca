@@ -1,5 +1,7 @@
 import sys
 import unittest
+from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -31,6 +33,31 @@ class FakePages:
 
     def update(self, **kwargs):
         self.updated.append(kwargs)
+
+
+@dataclass
+class FakeMangaRecord:
+    work_code: str = "123"
+    title: str = "Official Alpha"
+    alternative_title: str = "Alfa | Alpha Alias"
+    reading_status: str = "Quero Ler"
+    personal_rank: str = "Topzera"
+    last_read_chapter: Decimal = Decimal("4")
+    latest_available_chapter: Decimal = Decimal("12")
+    size_label: str = "Curto"
+    count_status: str = "OK"
+    latest_mangaupdates_chapter: Decimal = Decimal("13")
+    mangaupdates_url: str = "https://example.test/alpha"
+    spice_level: str = "🔥 Alta"
+    format: str = "Manhwa"
+    themes: list[str] | None = None
+
+
+class FakeRepository:
+    def list_mangas(self):
+        record = FakeMangaRecord()
+        record.themes = ["Drama", "Romance"]
+        return [record]
 
 
 class NotionCsvTests(unittest.TestCase):
@@ -78,6 +105,20 @@ class NotionCsvTests(unittest.TestCase):
         self.assertEqual("Alpha", summary["updates"][0]["name"])
         self.assertNotIn("Alias", summary["updates"][0]["properties"])
         self.assertFalse(pages.updated)
+
+    def test_load_rows_from_database_maps_records_to_metadata_rows(self):
+        rows = notion_csv.load_rows_from_database(FakeRepository())
+
+        self.assertEqual(1, len(rows))
+        row = rows[0]
+        self.assertEqual("123", row["ID da obra"])
+        self.assertEqual("Official Alpha", row["Nome"])
+        self.assertEqual("Alfa | Alpha Alias", row["Alias"])
+        self.assertEqual("4", row["Último lido"])
+        self.assertEqual("12", row["Último capítulo disponível"])
+        self.assertEqual("13", row["Capítulo MangaUpdates"])
+        self.assertEqual("Drama|Romance", row["Temática"])
+        self.assertEqual("Topzera", row["Interesse"])
 
     def test_update_from_csv_skips_unchanged_page(self):
         pages = FakePages()
