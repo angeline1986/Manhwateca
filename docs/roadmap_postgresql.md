@@ -318,6 +318,11 @@ ao formato bruto das linhas SQL.
 
 ## Milestone 1: Camada de Conexão e Repositório
 
+Status: base implementada. `DATABASE_URL`, `psycopg[binary]`, conexão,
+modelos, repositório, temas, leituras de views e testes unitários já existem.
+Ainda assim, esta milestone deve continuar sendo tratada como fundação, não
+como autorização para remover JSON/CSV.
+
 ### Objetivo
 
 Criar a base mínima para o projeto acessar PostgreSQL sem espalhar SQL pelos
@@ -358,6 +363,12 @@ scanner, remoção de JSON/CSV ou alteração de fluxo da web.
 - Nenhum fluxo existente muda de comportamento.
 
 ## Milestone 2: Web Lendo do PostgreSQL
+
+Status: parcial. A web já possui fonte ativa para alternar entre PostgreSQL e
+JSON legado, e os principais painéis começam a preferir PostgreSQL. Ainda falta
+garantir consistência visual e funcional em todas as telas, especialmente onde
+existem ações antigas, mensagens de próximo passo e dados ainda derivados de
+artefatos JSON/CSV.
 
 ### Objetivo
 
@@ -402,6 +413,11 @@ Fonte: JSON legado
 
 ## Milestone 3: Catalogação Salvando no PostgreSQL
 
+Status: integrada de forma incremental. `scripts/scan.py` continua gerando
+`data/mangas.json`, mas também tenta salvar no PostgreSQL quando o banco está
+configurado. O próximo cuidado é validar em uso real que campos editoriais
+manuais nunca sejam sobrescritos pela catalogação.
+
 ### Objetivo
 
 Permitir que a catalogação atualize o banco, mantendo o JSON como export de
@@ -440,6 +456,10 @@ Regra obrigatória: a catalogação não pode sobrescrever campos manuais.
 
 ## Milestone 4: Editorial Migrado Para PostgreSQL
 
+Status: parcial. O fluxo editorial ainda preserva CSV, metadata JSON e
+`data/mangas.json`, mas também tenta aplicar alterações no PostgreSQL via
+repositório. Ainda não é um fluxo banco-primeiro.
+
 ### Objetivo
 
 Mover edições manuais e metadados editoriais do CSV/JSON para a tabela
@@ -471,7 +491,9 @@ Mover edições manuais e metadados editoriais do CSV/JSON para a tabela
 
 ## Milestone 5: MangaUpdates Gravando no PostgreSQL
 
-Status: implementada incrementalmente.
+Status: parcial. Dados do MangaUpdates já podem atualizar campos e temas no
+PostgreSQL, e o painel web de status já prefere o banco quando disponível. A
+revisão de candidatos e parte do cache continuam em JSON legado.
 
 ### Objetivo
 
@@ -500,7 +522,10 @@ Fazer os dados enriquecidos do MangaUpdates atualizarem o banco diretamente.
 
 ## Milestone 6: Preparação Para Sync Notion
 
-Status: implementada como base técnica, sem alterar o sync atual.
+Status: base técnica implementada. Existem constantes de status, regra de
+conflito, migration para `updated_at`/`sync_events` e testes. Ainda depende de
+aplicação efetiva da migration no banco local/produção e de uso disciplinado
+pelos fluxos de sync.
 
 ### Objetivo
 
@@ -528,11 +553,13 @@ para PostgreSQL.
 
 ## Milestone 7: Notion Sync Usando PostgreSQL
 
-Status: núcleo implementado. O sync já pode carregar catálogo do PostgreSQL sob
-opção explícita, mantendo JSON como padrão legado. Quando `notion_page_id`
-estiver disponível no catálogo, ele é usado antes da busca por título. Rodadas
-aplicadas com origem PostgreSQL persistem `notion_page_id`,
-`notion_last_synced_at`, `notion_sync_status` e eventos em `sync_events`.
+Status: núcleo implementado, mas ainda híbrido. O sync já pode carregar
+catálogo do PostgreSQL sob opção explícita, mantendo JSON como padrão legado.
+Quando `notion_page_id` estiver disponível no catálogo, ele é usado antes da
+busca por título. Rodadas aplicadas com origem PostgreSQL persistem
+`notion_page_id`, `notion_last_synced_at`, `notion_sync_status` e eventos em
+`sync_events`. Falta tornar PostgreSQL o padrão operacional em todos os pontos
+de entrada.
 
 ### Objetivo
 
