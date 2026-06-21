@@ -77,6 +77,11 @@ Foram criadas duas colunas:
 - `reading_status_v2`
 - `personal_rank`
 
+`reading_status_v2` é aceitável como nome de transição no banco, mas não deve
+vazar como nome final nas APIs internas. No código novo, o campo deve ser
+exposto como `reading_status`. A renomeação física da coluna poderá acontecer
+em uma migração futura, depois que os fluxos legados forem estabilizados.
+
 Mapeamento aplicado para status:
 
 | Valor antigo | `reading_status_v2` |
@@ -124,6 +129,58 @@ Não há ganho suficiente para criar tabelas `formats` e `manga_formats` agora.
 
 Ele possui restrição `UNIQUE` e deve ser usado para evitar duplicidades de uma
 mesma obra importada por nomes diferentes.
+
+Nem toda obra nova terá `work_code` no primeiro cadastro. O repositório deve
+suportar:
+
+- busca por `work_code`;
+- fallback por título normalizado;
+- criação temporária sem `work_code`;
+- preenchimento posterior do `work_code` sem duplicar a obra.
+
+### Campos de Sincronização com Notion
+
+`notion_sync_status` deve usar valores oficiais:
+
+| Valor | Uso |
+| ----- | --- |
+| `pending` | Precisa ser criada ou atualizada no Notion. |
+| `synced` | Banco e Notion estão alinhados na última verificação. |
+| `error` | Última tentativa falhou. |
+| `ignored` | Obra intencionalmente fora do sync. |
+| `conflict` | Banco e Notion mudaram depois do último sync. |
+
+Antes de migrar o sync do Notion, o banco deve possuir uma forma confiável de
+atualizar `updated_at` em todo `UPDATE`, preferencialmente via trigger.
+
+### Regras de Conflito Notion x PostgreSQL
+
+A sincronização deve obedecer regras explícitas:
+
+| Tipo de campo | Fonte vencedora |
+| ------------- | --------------- |
+| Campos técnicos | PostgreSQL |
+| Campos editoriais manuais | Notion pode vencer |
+| Ambos alterados após último sync | Marcar `conflict` |
+
+Campos técnicos incluem identificação, caminhos, contagens calculadas,
+capítulos detectados e metadados importados de fontes externas.
+
+Campos editoriais incluem status de leitura, nota, prioridade pessoal,
+picância e progresso atualizado manualmente.
+
+### `notion_import` Como Staging
+
+`manhwateca.notion_import` é uma tabela de staging/importação.
+
+Ela pode ser usada para carga inicial, auditoria e comparação temporária, mas
+não deve virar dependência permanente da aplicação.
+
+### Views Somente Leitura
+
+`vw_mangas` e `vw_next_reads` são representações para consumo.
+
+Qualquer escrita deve acontecer nas tabelas base por meio do repositório.
 
 ## Modelo de Dados Relevante
 
@@ -246,6 +303,12 @@ Responsável por:
 - atualizar campos de sincronização com Notion;
 - buscar por `work_code`, título ou `notion_page_id`.
 
+Também deve centralizar métodos para temáticas:
+
+- `get_or_create_theme`;
+- `add_theme_to_manga`;
+- `replace_manga_themes`.
+
 ### `database/models.py`
 
 Opcional.
@@ -260,6 +323,9 @@ ao formato bruto das linhas SQL.
 Criar a base mínima para o projeto acessar PostgreSQL sem espalhar SQL pelos
 módulos.
 
+Esta milestone deve começar a implementação. Ela não deve mexer em sync Notion,
+scanner, remoção de JSON/CSV ou alteração de fluxo da web.
+
 ### Escopo
 
 - Adicionar `DATABASE_URL` em `.env.example`.
@@ -267,6 +333,9 @@ módulos.
 - Criar `manhwateca/database/connection.py`.
 - Criar `manhwateca/database/manga_repository.py`.
 - Implementar leituras de `vw_mangas` e `vw_next_reads`.
+- Expor `reading_status_v2` no código como `reading_status`.
+- Implementar busca por `work_code`, título normalizado e `notion_page_id`.
+- Implementar métodos de temas sem duplicação.
 - Criar testes unitários com conexão falsa ou funções isoladas.
 
 ### Fora do escopo
@@ -274,12 +343,18 @@ módulos.
 - Alterar a interface web para usar PostgreSQL.
 - Remover JSON ou CSV.
 - Alterar sincronização com Notion.
+- Alterar o scanner para gravar no banco.
+- Alterar o fluxo de MangaUpdates.
 
 ### Critérios de aceite
 
 - O projeto importa os novos módulos sem exigir banco ativo.
 - A conexão falha com mensagem clara quando `DATABASE_URL` não existe.
+- Banco indisponível gera erro claro, sem quebrar importação dos módulos.
 - O repositório possui métodos de leitura estáveis.
+- Nenhum SQL novo fica espalhado fora de `manhwateca/database/`.
+- Os testes cobrem ausência de `DATABASE_URL`, banco indisponível e leitura
+  por repositório com cliente falso.
 - Nenhum fluxo existente muda de comportamento.
 
 ## Milestone 2: Web Lendo do PostgreSQL
@@ -306,7 +381,7 @@ Fonte: JSON legado
 ```
 
 - Ajustar tela de Biblioteca para usar os campos novos:
-  - `reading_status_v2`;
+  - `reading_status`;
   - `personal_rank`;
   - `last_read_chapter`;
   - `latest_available_chapter`;
@@ -346,6 +421,8 @@ compatibilidade.
   - caminho local quando necessário.
 - Manter campos editoriais existentes no banco.
 
+Regra obrigatória: a catalogação não pode sobrescrever campos manuais.
+
 ### Fora do escopo
 
 - Remover o JSON.
@@ -355,6 +432,8 @@ compatibilidade.
 
 - Rodar catalogação não apaga `reading_status_v2`, `personal_rank`, `score` ou
   `spice_level`.
+- Rodar catalogação não altera `last_read_chapter` quando o campo tiver sido
+  atualizado manualmente por uma fonte editorial mais recente.
 - Obras novas entram no banco.
 - Obras existentes são atualizadas por `work_code` ou título normalizado.
 - JSON continua sendo gerado.
@@ -416,11 +495,43 @@ Fazer os dados enriquecidos do MangaUpdates atualizarem o banco diretamente.
 - Temáticas novas são criadas sem duplicar.
 - Obras revisadas manualmente preservam a decisão.
 
-## Milestone 6: Notion Sync Usando PostgreSQL
+## Milestone 6: Preparação Para Sync Notion
+
+### Objetivo
+
+Criar os mecanismos de segurança necessários antes de migrar a sincronização
+para PostgreSQL.
+
+### Escopo
+
+- Criar trigger de atualização automática de `updated_at`.
+- Criar tabela `sync_log` ou `sync_events`.
+- Documentar e implementar constantes para `notion_sync_status`.
+- Implementar funções auxiliares de decisão de conflito.
+
+### Fora do escopo
+
+- Alterar criação de páginas no Notion.
+- Alterar atualização de páginas no Notion.
+- Remover CSV.
+
+### Critérios de aceite
+
+- Todo `UPDATE` em `mangas` atualiza `updated_at`.
+- Tentativas futuras de sync terão onde registrar sucesso, erro e conflito.
+- Regras de conflito podem ser testadas sem chamar a API do Notion.
+
+## Milestone 7: Notion Sync Usando PostgreSQL
 
 ### Objetivo
 
 Fazer a sincronização com Notion usar o banco como fonte principal.
+
+Esta milestone só pode começar depois de existir:
+
+- trigger ou mecanismo equivalente para `updated_at`;
+- regra formal de conflito Notion x PostgreSQL;
+- tabela ou log de eventos de sincronização.
 
 ### Escopo
 
@@ -430,6 +541,7 @@ Fazer a sincronização com Notion usar o banco como fonte principal.
 - Criar páginas ausentes com base em `vw_mangas`.
 - Atualizar metadados sem depender do CSV.
 - Manter CSV como modo legado temporário.
+- Registrar cada tentativa em `sync_log` ou `sync_events`.
 
 ### Fora do escopo
 
@@ -442,8 +554,10 @@ Fazer a sincronização com Notion usar o banco como fonte principal.
 - Páginas sem `notion_page_id` entram como pendentes.
 - Rodadas repetidas não geram alterações falsas.
 - Notion não apaga campos preenchidos manualmente sem intenção explícita.
+- Conflitos são marcados como `conflict` e não são resolvidos
+  automaticamente.
 
-## Milestone 7: Redução do Legado JSON/CSV
+## Milestone 8: Redução do Legado JSON/CSV
 
 ### Objetivo
 
@@ -465,7 +579,7 @@ Transformar JSON e CSV em exportações opcionais, não em fonte operacional.
 - README explica claramente o novo fluxo.
 - Arquivos legados continuam geráveis sob demanda.
 
-## Milestone 8: Limpeza e Documentação Final
+## Milestone 9: Limpeza e Documentação Final
 
 ### Objetivo
 
@@ -569,9 +683,10 @@ Pode ser desnecessária se `vw_next_reads` já cobrir o uso principal.
 3. Fazer catalogação gravar no PostgreSQL.
 4. Migrar edição editorial.
 5. Migrar MangaUpdates.
-6. Migrar Notion sync.
-7. Reduzir JSON/CSV para compatibilidade.
-8. Atualizar documentação final.
+6. Preparar segurança do sync Notion.
+7. Migrar Notion sync.
+8. Reduzir JSON/CSV para compatibilidade.
+9. Atualizar documentação final.
 
 Essa ordem evita mexer primeiro nas partes mais sensíveis, como Notion e
 MangaUpdates, antes de existir uma camada de banco estável.
