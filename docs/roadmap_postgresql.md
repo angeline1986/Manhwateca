@@ -32,11 +32,24 @@ Tabelas principais:
 - `manhwateca.themes`
 - `manhwateca.manga_themes`
 - `manhwateca.notion_import`
+- `manhwateca.decision_queue`
 
 Views implementadas:
 
 - `manhwateca.vw_mangas`
 - `manhwateca.vw_next_reads`
+- `manhwateca.vw_stats`
+
+Infraestrutura implementada:
+
+- conexão PostgreSQL via `DATABASE_URL`;
+- camada de repositório;
+- `updated_at` automático;
+- `sync_events`;
+- `decision_queue`;
+- índices de `decision_queue` por status, tipo, obra e fonte;
+- regras de conflito Notion x PostgreSQL;
+- valores oficiais de `notion_sync_status`.
 
 Dados atuais:
 
@@ -45,6 +58,24 @@ Dados atuais:
 | Obras em `mangas` | 133 |
 | Temáticas em `themes` | 30 |
 | Relações em `manga_themes` | 576 |
+
+### Diagnóstico Atual
+
+O projeto saiu da fase principal de modelagem e entrou na fase de migração
+operacional.
+
+| Área | Estado |
+| ---- | ------ |
+| Modelagem de banco | praticamente concluída |
+| Infraestrutura PostgreSQL | majoritariamente implementada |
+| Integração dos fluxos | parcial |
+| Desacoplamento de JSON/CSV | inicial |
+
+O gargalo atual não é criar mais estrutura de banco. O gargalo é fazer os
+fluxos existentes adotarem as estruturas já criadas.
+
+Regra operacional: não criar novas tabelas até que `decision_queue` esteja
+sendo usada por pelo menos um fluxo real, como MangaUpdates ou revisão manual.
 
 ## Decisões Arquiteturais
 
@@ -492,8 +523,9 @@ Mover edições manuais e metadados editoriais do CSV/JSON para a tabela
 ## Milestone 5: MangaUpdates Gravando no PostgreSQL
 
 Status: parcial. Dados do MangaUpdates já podem atualizar campos e temas no
-PostgreSQL, e o painel web de status já prefere o banco quando disponível. A
-revisão de candidatos e parte do cache continuam em JSON legado.
+PostgreSQL, e o painel web de status já prefere o banco quando disponível.
+`decision_queue` já existe para substituir o staging de decisões, mas o fluxo
+de revisão de candidatos e parte do cache ainda continuam em JSON legado.
 
 ### Objetivo
 
@@ -505,7 +537,9 @@ Fazer os dados enriquecidos do MangaUpdates atualizarem o banco diretamente.
   metadados úteis em `mangas`.
 - Associar temáticas em `themes` e `manga_themes`.
 - Manter `data/mangaupdates.json` como cache temporário.
-- Manter `reports/integrations/buscaIds.json` como arquivo de revisão enquanto
+- Migrar gradualmente candidatos ambíguos, conflitos e decisões humanas para
+  `decision_queue`.
+- Manter `reports/integrations/buscaIds.json` como compatibilidade enquanto
   necessário.
 
 ### Fora do escopo
@@ -616,7 +650,9 @@ Esta milestone só pode começar depois de existir:
 
 Status: iniciada. A web já possui uma camada central para identificar a fonte
 ativa do catálogo e passa a preferir PostgreSQL em painéis de status, catálogo
-e reconciliação do Notion, mantendo JSON como fallback explícito.
+e reconciliação do Notion, mantendo JSON como fallback explícito. A redução do
+legado agora depende menos de modelagem e mais da adoção operacional de
+`decision_queue`, `vw_mangas`, `vw_next_reads` e `sync_events`.
 
 ### Objetivo
 
@@ -676,12 +712,15 @@ claramente quando algum painel ainda estiver usando JSON/CSV legado.
 - Painel de status MangaUpdates passa a preferir PostgreSQL para contagem de
   IDs confirmados, detalhes já persistidos e próximos detalhes a consultar.
 - Revisão de candidatos MangaUpdates permanece marcada como staging JSON
-  legado até existir tabela própria de decisões.
+  legado até o fluxo passar a consumir `decision_queue`.
 
 ### Próximos cortes
 
-- Modelar decisões/candidatos MangaUpdates no PostgreSQL para substituir
-  `buscaIds.json`.
+- Fazer MangaUpdates gravar candidatos ambíguos e decisões pendentes em
+  `decision_queue`.
+- Fazer a revisão manual ler e aplicar decisões a partir de `decision_queue`.
+- Tornar catalogação, editorial e sync Notion banco-primeiro nos pontos de
+  entrada principais.
 - Atualizar textos do README e menu para marcar JSON/CSV como compatibilidade.
 
 ## Milestone 9: Limpeza e Documentação Final
@@ -747,9 +786,9 @@ Mitigação:
 - registrar no roadmap qual fluxo ainda é legado;
 - migrar um domínio por milestone.
 
-## Views Propostas Para Depois
+## Views Implementadas e Propostas
 
-Ainda não implementadas:
+Já implementadas:
 
 ### `vw_stats`
 
@@ -760,6 +799,13 @@ Métricas rápidas da biblioteca:
 - finalizadas;
 - backlog;
 - aguardando atualização.
+
+Também já existem:
+
+- `vw_mangas`: representação principal para consumo da aplicação;
+- `vw_next_reads`: fila priorizada de próximas leituras.
+
+Ainda propostas para depois:
 
 ### `vw_topzera`
 
