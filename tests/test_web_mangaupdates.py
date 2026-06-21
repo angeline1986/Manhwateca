@@ -33,6 +33,39 @@ class FakeRepository:
         ]
 
 
+class FakeReviewRepository:
+    def list_decisions(self, *, decision_type=None, status=None):
+        return [{
+            "decision_type": decision_type,
+            "status": status,
+            "source": "mangaupdates",
+            "title": "Alpha",
+            "payload": {
+                "nome": "Alpha",
+                "candidatos": [
+                    {
+                        "id": 1,
+                        "titulo": "Valid",
+                        "pontuacao": 0.9,
+                        "bl": True,
+                    },
+                    {
+                        "id": 2,
+                        "titulo": "Low",
+                        "pontuacao": 0.6,
+                        "bl": True,
+                    },
+                ],
+            },
+        }]
+
+    def list_mangas(self):
+        return [
+            FakeMangaRecord(title="Alpha", work_code="1"),
+            FakeMangaRecord(title="Beta"),
+        ]
+
+
 class WebMangaUpdatesTests(unittest.TestCase):
     def test_review_payload_filters_low_score_and_explicit_non_bl(self):
         items = [{
@@ -50,6 +83,23 @@ class WebMangaUpdatesTests(unittest.TestCase):
 
         self.assertEqual("json", payload["source"]["kind"])
         self.assertEqual(1, payload["summary"]["review"])
+        self.assertEqual([1], [
+            candidate["id"] for candidate in payload["items"][0]["candidates"]
+        ])
+
+    def test_review_payload_prefers_decision_queue_when_available(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._project(directory, [])
+            payload = review_payload(
+                root,
+                repository_factory=lambda: FakeReviewRepository(),
+            )
+
+        self.assertEqual("postgresql", payload["source"]["kind"])
+        self.assertEqual("decision_queue", payload["source"]["detail"])
+        self.assertEqual(1, payload["summary"]["review"])
+        self.assertEqual(1, payload["summary"]["confirmed"])
+        self.assertEqual("Alpha", payload["items"][0]["nome"])
         self.assertEqual([1], [
             candidate["id"] for candidate in payload["items"][0]["candidates"]
         ])

@@ -150,16 +150,34 @@ O `catalog_workflow` passou a usar `--catalog-source auto` por padrao:
    preservam CSV/JSON para nao quebrar a operacao atual.
 5. A remocao completa de legado ainda nao deve acontecer.
 
+## Atualizacao operacional
+
+Em 2026-06-21, a tela web de revisao MangaUpdates passou a consultar
+`decision_queue` como fonte primaria quando houver decisoes pendentes do tipo
+`mangaupdates_match`.
+
+Compatibilidade preservada:
+
+- se o banco estiver indisponivel, a tela continua lendo `buscaIds.json`;
+- se a fila estiver vazia, a tela ainda cai para `buscaIds.json`, evitando
+  esconder decisoes antigas ainda nao migradas para a fila.
+
+Isso inicia o corte:
+
+```text
+decision_queue
+-> revisao MangaUpdates na web
+-> buscaIds.json como fallback temporario
+```
+
 ## Pendencias restantes
 
-1. Fazer a tela de revisao MangaUpdates consumir `decision_queue` como fonte
-   primaria.
-2. Fazer a resolucao manual persistir primeiro na `decision_queue` e depois
+1. Fazer a resolucao manual persistir primeiro na `decision_queue` e depois
    aplicar no PostgreSQL, mantendo JSON apenas como espelho temporario.
-3. Migrar o cache MangaUpdates de `data/mangaupdates.json` para campos do banco
+2. Migrar o cache MangaUpdates de `data/mangaupdates.json` para campos do banco
    ja existentes sempre que possivel.
-4. Reduzir dependencia de `manhwateca_import.csv` nos fluxos de Notion.
-5. Revisar indicadores web que ainda usam arquivos `reports/` como fonte
+3. Reduzir dependencia de `manhwateca_import.csv` nos fluxos de Notion.
+4. Revisar indicadores web que ainda usam arquivos `reports/` como fonte
    principal.
 
 ## Arquivos que podem ser removidos futuramente
@@ -194,7 +212,7 @@ de revisao deixar de depender do `buscaIds.json` como fonte principal.
 
 - Modelagem PostgreSQL: 95%
 - Infraestrutura PostgreSQL: 90%
-- Integracao operacional: 70%
-- Desacoplamento JSON/CSV: 45%
+- Integracao operacional: 75%
+- Desacoplamento JSON/CSV: 50%
 
-Estimativa geral: 70% da migracao operacional concluida.
+Estimativa geral: 75% da migracao operacional concluida.

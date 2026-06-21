@@ -86,7 +86,10 @@ class FakeCursor:
             ]
             return
 
-        if "from decision_queue" in normalized and "select id" in normalized:
+        if (
+            "from decision_queue" in normalized
+            and normalized.startswith("select id from decision_queue")
+        ):
             self.row = next(
                 (
                     {"id": item["id"]}
@@ -101,6 +104,21 @@ class FakeCursor:
                 ),
                 None,
             )
+            return
+
+        if "from decision_queue" in normalized:
+            rows = list(self.connection.decision_queue)
+            if params:
+                rows = [
+                    item for item in rows
+                    if item.get("decision_type") == params[0]
+                ]
+            if len(params) > 1:
+                rows = [
+                    item for item in rows
+                    if item.get("status") == params[1]
+                ]
+            self.rows = rows
             return
 
         if normalized.startswith("insert into decision_queue"):
@@ -533,6 +551,36 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertIn("resolution = %s::jsonb", query)
         self.assertEqual("resolved", params[0])
         self.assertIn('"id": 123', params[1])
+
+    def test_lists_pending_decisions(self):
+        connection = FakeConnection()
+        connection.decision_queue = [
+            {
+                "id": 1,
+                "decision_type": "mangaupdates_match",
+                "title": "Alpha",
+                "source": "mangaupdates",
+                "payload": {"candidatos": [{"id": 1}]},
+                "status": "pending",
+            },
+            {
+                "id": 2,
+                "decision_type": "mangaupdates_match",
+                "title": "Beta",
+                "source": "mangaupdates",
+                "payload": {},
+                "status": "resolved",
+            },
+        ]
+        repository = MangaRepository(connection)
+
+        decisions = repository.list_decisions(
+            decision_type="mangaupdates_match",
+            status="pending",
+        )
+
+        self.assertEqual(1, len(decisions))
+        self.assertEqual("Alpha", decisions[0]["title"])
 
 
 if __name__ == "__main__":

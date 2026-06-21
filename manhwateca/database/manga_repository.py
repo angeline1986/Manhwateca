@@ -403,6 +403,67 @@ class MangaRepository:
         )
         return True
 
+    def list_decisions(
+        self,
+        *,
+        decision_type: str | None = None,
+        status: str | None = None,
+    ) -> list[dict]:
+        schema = self._decision_queue_schema()
+        columns = set(schema)
+        if not columns:
+            return []
+
+        select_columns = [
+            column for column in (
+                "id",
+                "decision_type",
+                "type",
+                "source",
+                "source_key",
+                "title",
+                "name",
+                "manga_title",
+                "work_title",
+                "payload",
+                "data",
+                "metadata",
+                "resolution",
+                "decision",
+                "resolved_payload",
+                "status",
+                "created_at",
+                "updated_at",
+                "resolved_at",
+            )
+            if column in columns
+        ]
+        if not select_columns:
+            return []
+
+        type_column = _first_existing(columns, "decision_type", "type")
+        clauses = []
+        params = []
+        if decision_type and type_column:
+            clauses.append(f"{type_column} = %s")
+            params.append(decision_type)
+        if status and "status" in columns:
+            clauses.append("status = %s")
+            params.append(status)
+
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        order_column = "created_at" if "created_at" in columns else "id"
+        rows = self._fetch_all(
+            f"""
+            SELECT {', '.join(select_columns)}
+            FROM decision_queue
+            {where}
+            ORDER BY {order_column}, id
+            """,
+            tuple(params),
+        )
+        return [dict(row) for row in rows]
+
     def _fetch_all(self, query, params=None):
         with self._cursor() as cursor:
             cursor.execute(query, params or ())
