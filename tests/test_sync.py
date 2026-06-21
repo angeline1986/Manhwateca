@@ -2,6 +2,7 @@ import json
 import sys
 import tempfile
 import unittest
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -53,6 +54,38 @@ def manga(name):
         "total_caps": 12,
         "path": f"/tmp/{name}",
     }
+
+
+class FakeMangaRecord:
+    def __init__(self, **values):
+        self.id = values.get("id", 1)
+        self.work_code = values.get("work_code")
+        self.title = values.get("title", "Alpha")
+        self.alternative_title = values.get("alternative_title")
+        self.reading_status = values.get("reading_status", "Quero Ler")
+        self.personal_rank = values.get("personal_rank", "Normal")
+        self.score = values.get("score")
+        self.last_read_chapter = values.get("last_read_chapter")
+        self.latest_available_chapter = values.get("latest_available_chapter")
+        self.size_label = values.get("size_label")
+        self.count_status = values.get("count_status")
+        self.latest_mangaupdates_chapter = values.get(
+            "latest_mangaupdates_chapter"
+        )
+        self.mangaupdates_url = values.get("mangaupdates_url")
+        self.spice_level = values.get("spice_level")
+        self.format = values.get("format")
+        self.themes = values.get("themes", [])
+        self.notion_page_id = values.get("notion_page_id")
+        self.notion_sync_status = values.get("notion_sync_status")
+
+
+class FakeMangaRepository:
+    def __init__(self, mangas):
+        self.mangas = mangas
+
+    def list_mangas(self):
+        return self.mangas
 
 
 class SyncTests(unittest.TestCase):
@@ -177,6 +210,43 @@ class SyncTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "esperada uma lista"):
                 sync.load_mangas(path)
+
+    def test_load_mangas_from_database_maps_view_records_to_catalog_items(self):
+        result = sync.load_mangas_from_database(FakeMangaRepository([
+            FakeMangaRecord(
+                title="Official Alpha",
+                alternative_title="Alfa | Alpha Work",
+                reading_status="Aguardando Atualização",
+                personal_rank="Topzera",
+                last_read_chapter=Decimal("12"),
+                latest_available_chapter=Decimal("40"),
+                latest_mangaupdates_chapter=Decimal("42.5"),
+                mangaupdates_url="https://example.test/alpha",
+                size_label="Médio",
+                count_status="OK",
+                format="Manhwa",
+                themes=["Drama", "Omegaverse"],
+                spice_level="🔥 Alta",
+                notion_page_id="page-1",
+                notion_sync_status="pending",
+            ),
+        ]))
+
+        self.assertEqual(1, len(result))
+        self.assertEqual("Official Alpha", result[0]["nome"])
+        self.assertEqual(["Alfa", "Alpha Work"], result[0]["alias"])
+        self.assertEqual("Em espera", result[0]["status"])
+        self.assertEqual("Topzera", result[0]["nota"])
+        self.assertEqual(12, result[0]["ultimo_lido"])
+        self.assertEqual(40, result[0]["main_caps"])
+        self.assertEqual(42.5, result[0]["mangaupdates_latest_chapter"])
+        self.assertEqual(["Drama", "Omegaverse"], result[0]["tematica"])
+        self.assertEqual("page-1", result[0]["notion_page_id"])
+
+    def test_catalog_source_defaults_to_json(self):
+        args = sync.parse_args([])
+
+        self.assertEqual("json", args.catalog_source)
 
     def test_existing_pages_are_paginated(self):
         notion = SimpleNamespace(

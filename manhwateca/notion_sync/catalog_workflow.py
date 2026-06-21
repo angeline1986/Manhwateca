@@ -7,7 +7,10 @@ from notion_client import Client
 
 from manhwateca.notion_sync import catalog_properties, matching, pages
 from manhwateca.notion_sync.catalog_service import sync
-from manhwateca.notion_sync.repositories import load_mangas as read_mangas
+from manhwateca.notion_sync.repositories import (
+    load_mangas as read_mangas,
+    load_mangas_from_database as read_mangas_from_database,
+)
 from manhwateca.notion_sync.status_repository import (
     write_import_status as save_import_status,
 )
@@ -38,6 +41,10 @@ def load_mangas(path=DATA_FILE):
     return read_mangas(path)
 
 
+def load_mangas_from_database(repository=None):
+    return read_mangas_from_database(repository)
+
+
 def build_title_candidates(manga, title_aliases):
     return matching.catalog_title_candidates(manga, title_aliases)
 
@@ -46,7 +53,7 @@ def write_import_status(summary, mode, applied=False, path=STATUS_FILE):
     return save_import_status(summary, mode, applied=applied, path=path)
 
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         description="Sincroniza data/mangas.json com o banco do Notion."
     )
@@ -82,7 +89,16 @@ def parse_args():
         action="store_true",
         help="Permite aplicar quando mais de 25%% do catálogo seria criado.",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--catalog-source",
+        choices=("json", "postgresql"),
+        default=os.getenv("MANHWATECA_CATALOG_SOURCE", "json"),
+        help=(
+            "Fonte do catálogo para o sync. Use postgresql para ler vw_mangas; "
+            "json mantém o fluxo legado."
+        ),
+    )
+    return parser.parse_args(argv)
 
 
 def main():
@@ -90,7 +106,7 @@ def main():
     if args.batch_size < 1:
         raise SystemExit("--batch-size deve ser maior que zero.")
     database_id = require_env("NOTION_DATABASE_ID")
-    mangas = load_mangas()
+    mangas = _load_catalog(args.catalog_source)
     notion = Client(auth=require_env("NOTION_TOKEN"))
     aliases = load_title_aliases()
     full = sync(
@@ -121,6 +137,12 @@ def _validate_application(args, summary, mangas, ratio, applying):
             f"({ratio:.0%}) seriam criadas. Revise a simulação e use "
             "--allow-mass-create somente se isso for realmente esperado."
         )
+
+
+def _load_catalog(source):
+    if source == "postgresql":
+        return load_mangas_from_database()
+    return load_mangas()
 
 
 def _run_selected_mode(args, notion, database_id, mangas, aliases):
