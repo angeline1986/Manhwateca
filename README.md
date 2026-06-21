@@ -45,6 +45,20 @@ Os arquivos em `scripts/` são pontos de entrada compatíveis com os comandos
 atuais. As regras de negócio ficam no pacote `manhwateca/`, podendo ser
 reutilizadas pelo menu, pelos testes e pela aplicação web.
 
+### Modo PostgreSQL-first
+
+A arquitetura operacional atual é:
+
+- PostgreSQL é a fonte principal dos dados técnicos e editoriais.
+- Notion é fonte secundária, usada como interface manual de leitura e consulta.
+- JSON e CSV permanecem como legado, fallback e espelho temporário.
+- `decision_queue` centraliza decisões humanas pendentes.
+- `vw_mangas`, `vw_next_reads` e `vw_stats` são as views principais de leitura.
+
+Quando o banco está configurado via `DATABASE_URL`, os fluxos tentam usar
+PostgreSQL primeiro. Se o banco estiver indisponível, os comandos mantêm
+compatibilidade com os arquivos legados sempre que possível.
+
 O mapa dos módulos e as instruções para adicionar integrações estão em
 [`docs/arquitetura.md`](docs/arquitetura.md).
 
@@ -62,6 +76,7 @@ Preencher `.env`:
 NOTION_TOKEN=
 NOTION_DATABASE_ID=
 MANGA_ROOT=
+DATABASE_URL=postgresql://usuario:senha@localhost:5432/manhwateca
 ```
 
 ## Início rápido
@@ -142,8 +157,8 @@ numéricas `1. Aplicar` e `2. Cancelar`.
 | ------- | :---: | --------------------------------------------------- |
 | Local   |   1   | Padroniza e audita pastas, capítulos e capas.       |
 | Local   |   2   | Organiza as obras em grupos alfabéticos.            |
-| Catálogo|   3   | Lê o Drive e atualiza `data/mangas.json`.           |
-| API     |   4   | Busca IDs e atualiza `buscaIds.json`.               |
+| Catálogo|   3   | Lê o Drive, atualiza PostgreSQL e mantém JSON legado. |
+| API     |   4   | Busca IDs, alimenta `decision_queue` e espelha JSON. |
 | API     |   5   | Usa o cache ou consulta detalhes e atualiza o CSV.  |
 | Notion  |   6   | Simula, importa ou atualiza páginas do catálogo.    |
 | Notion  |   7   | Atualiza páginas existentes usando o CSV.           |
@@ -171,7 +186,10 @@ numéricas `1. Aplicar` e `2. Cancelar`.
 python scripts/scan.py
 ```
 
-Gera:
+Quando `DATABASE_URL` está configurado, atualiza o PostgreSQL por meio do
+repository layer e mantém `data/mangas.json` como compatibilidade.
+
+Também gera:
 
 ```text
 data/mangas.json
@@ -341,15 +359,17 @@ Deixar o campo vazio mantém a busca em todas as obras pendentes.
 
 O processo funciona assim:
 
-1. **Opção 4:** busca os IDs e atualiza
-   `reports/integrations/buscaIds.json`.
+1. **Opção 4:** busca os IDs, cria decisões em `decision_queue` quando houver
+   correspondências duvidosas e mantém
+   `reports/integrations/buscaIds.json` como espelho legado.
 2. Use a opção `4.2` para atualizar candidatos antigos sem link, descrição ou
    classificação BL. Correspondências exatas e únicas podem ser confirmadas
    automaticamente nessa atualização.
 3. Gere `reports/audits/mangaupdates_id_review.html` na opção `4.3` para
    comparar os candidatos marcados com `Status: Revisar`.
-4. Selecione os candidatos, exporte as decisões e use a opção `4.4` para
-   importá-las. O processo valida os IDs e cria um backup do `buscaIds.json`.
+4. Na interface web, a revisão de correspondências lê `decision_queue` primeiro.
+   Ao aplicar a decisão, o sistema confirma `mangas.work_code`, resolve a fila
+   e espelha o resultado no `buscaIds.json` quando o arquivo existir.
 5. **Opção 5.2:** consulta na API os detalhes dos IDs ainda pendentes.
 6. **Opção 5.1:** usa os dados salvos para atualizar
    `reports/integrations/manhwateca_import.csv`, sem chamar a API.
@@ -362,6 +382,27 @@ A atualização do CSV preserva campos manuais como `Interesse`,
 
 A opção 7 simula a atualização do Notion antes de pedir confirmação. Ela
 atualiza somente páginas existentes.
+
+### Uso atual de buscaIds.json
+
+`reports/integrations/buscaIds.json` ainda existe por compatibilidade.
+
+Ainda depende dele:
+
+- comandos de terminal do MangaUpdates;
+- geração do relatório HTML legado de revisão de IDs;
+- atualização do CSV com dados salvos;
+- consulta de detalhes por IDs confirmados;
+- indicadores antigos que ainda leem arquivos em `reports/integrations/`.
+
+Já não depende exclusivamente dele:
+
+- a busca de IDs alimenta `decision_queue` quando há candidatos para revisar;
+- a revisão web usa `decision_queue` como fonte primária quando há pendências;
+- a aplicação de decisões confirma `work_code` no PostgreSQL e resolve a fila.
+
+Próximo corte seguro: manter `buscaIds.json` apenas como export/espelho e fazer
+os comandos de revisão consumirem `decision_queue` diretamente.
 
 ### Novas obras e capítulos
 
