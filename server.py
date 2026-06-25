@@ -1,14 +1,34 @@
 import argparse
+import os
+import sys
 import threading
 import webbrowser
 from pathlib import Path
 
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+
+def _ensure_project_python():
+    if os.environ.get("MANHWATECA_PYTHON_BOOTSTRAPPED") == "1":
+        return
+
+    candidates = [
+        PROJECT_ROOT / ".venv/bin/python",
+        Path("/opt/homebrew/Caskroom/miniconda/base/bin/python"),
+    ]
+    current = Path(sys.executable).resolve()
+    for candidate in candidates:
+        if candidate.is_file() and candidate.resolve() != current:
+            os.environ["MANHWATECA_PYTHON_BOOTSTRAPPED"] = "1"
+            os.execv(str(candidate), [str(candidate), str(PROJECT_ROOT / "server.py"), *sys.argv[1:]])
+
+
+_ensure_project_python()
+
 from dotenv import load_dotenv
 
 from manhwateca.webapp.server import create_server
-
-
-PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 def main():
