@@ -1,4 +1,5 @@
 import argparse
+import importlib.util
 import os
 import sys
 import threading
@@ -7,24 +8,53 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+OFFICIAL_PYTHON = PROJECT_ROOT / ".venv/bin/python"
 
 
-def _ensure_project_python():
-    if os.environ.get("MANHWATECA_PYTHON_BOOTSTRAPPED") == "1":
+def _ensure_official_python():
+    current = Path(sys.executable)
+    if OFFICIAL_PYTHON.exists() and current.samefile(OFFICIAL_PYTHON):
         return
 
-    candidates = [
-        PROJECT_ROOT / ".venv/bin/python",
-        Path("/opt/homebrew/Caskroom/miniconda/base/bin/python"),
+    message = f"""
+Runtime Python inválido.
+
+Use o inicializador oficial:
+
+./start_manhwateca.command
+
+Runtime esperado:
+{OFFICIAL_PYTHON}
+
+Runtime atual:
+{current}
+"""
+    raise SystemExit(message.strip())
+
+
+def _ensure_dependencies():
+    missing = [
+        module
+        for module in ("dotenv", "psycopg")
+        if importlib.util.find_spec(module) is None
     ]
-    current = Path(sys.executable).resolve()
-    for candidate in candidates:
-        if candidate.is_file() and candidate.resolve() != current:
-            os.environ["MANHWATECA_PYTHON_BOOTSTRAPPED"] = "1"
-            os.execv(str(candidate), [str(candidate), str(PROJECT_ROOT / "server.py"), *sys.argv[1:]])
+    if not missing:
+        return
+
+    message = f"""
+Ambiente Python incompleto.
+
+Módulos ausentes: {", ".join(missing)}
+
+Execute:
+
+.venv/bin/pip install -r requirements.txt
+"""
+    raise SystemExit(message.strip())
 
 
-_ensure_project_python()
+_ensure_official_python()
+_ensure_dependencies()
 
 from dotenv import load_dotenv
 
