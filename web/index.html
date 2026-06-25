@@ -218,6 +218,41 @@
               <span id="reviewFeedback" aria-live="polite"></span>
             </form>
           </section>
+
+          <section class="panel pending-panel" id="organizationPendingPanel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">PRÓXIMAS AÇÕES</span>
+                <h2>Pendências acionáveis</h2>
+                <p>
+                  Mostra somente o que ainda precisa de execução ou decisão.
+                  Cada card leva para o próximo passo.
+                </p>
+              </div>
+            </div>
+            <div class="pending-list" id="organizationPendingList" aria-live="polite">
+              <article class="pending-card loading">Calculando pendências...</article>
+            </div>
+          </section>
+
+          <details class="panel collapsible-panel mangaupdates-panel" id="organizationIdReviewPanel">
+            <summary>
+              <div>
+                <span class="eyebrow">REVISÃO DE IDS</span>
+                <h2>Correspondências pendentes</h2>
+                <p>Resolva as decisões de MangaUpdates sem sair da Organização.</p>
+              </div>
+            </summary>
+            <div class="catalog-heading collapsible-toolbar">
+              <input id="organizationReviewSearch" type="search" placeholder="Buscar obra pendente">
+            </div>
+            <div class="catalog-summary" id="organizationReviewSummary"></div>
+            <div class="review-toolbar">
+              <button id="organizationApplyDecisions" type="button">Aplicar decisões</button>
+              <span id="organizationDecisionFeedback" aria-live="polite"></span>
+            </div>
+            <div class="review-list" id="organizationIdReviewList"></div>
+          </details>
         </section>
 
         <section class="page" id="page-mangaupdates">

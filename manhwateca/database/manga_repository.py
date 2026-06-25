@@ -184,6 +184,7 @@ class MangaRepository:
                 work_code = COALESCE(work_code, %s),
                 latest_mangaupdates_chapter = %s,
                 mangaupdates_url = COALESCE(%s, mangaupdates_url),
+                cover_url = COALESCE(%s, cover_url),
                 format = COALESCE(NULLIF(format, ''), %s)
             WHERE id = %s
             """,
@@ -191,6 +192,7 @@ class MangaRepository:
                 _string_or_none(summary.get("series_id") or series_id),
                 _empty_to_none(summary.get("latest_chapter")),
                 _empty_to_none(summary.get("url")),
+                _empty_to_none(summary.get("cover_url")),
                 _empty_to_none(summary.get("format")),
                 manga.id,
             ),
@@ -598,9 +600,10 @@ class MangaRepository:
                 size_label,
                 count_status,
                 latest_mangaupdates_chapter,
-                mangaupdates_url
+                mangaupdates_url,
+                cover_url
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -615,6 +618,7 @@ class MangaRepository:
                 manga.get("count_status"),
                 manga.get("mangaupdates_latest_chapter"),
                 manga.get("mangaupdates_url"),
+                manga.get("cover_url"),
             ),
         )
         return row["id"]
@@ -632,7 +636,8 @@ class MangaRepository:
                 size_label = %s,
                 count_status = %s,
                 latest_mangaupdates_chapter = %s,
-                mangaupdates_url = COALESCE(%s, mangaupdates_url)
+                mangaupdates_url = COALESCE(%s, mangaupdates_url),
+                cover_url = COALESCE(%s, cover_url)
             WHERE id = %s
             """,
             (
@@ -645,6 +650,7 @@ class MangaRepository:
                 manga.get("count_status"),
                 manga.get("mangaupdates_latest_chapter"),
                 manga.get("mangaupdates_url"),
+                manga.get("cover_url"),
                 manga_id,
             ),
         )

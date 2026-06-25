@@ -26,7 +26,7 @@ SAFE_ACTIONS = {
     "catalog_scan": {
         "label": "Catalogar biblioteca",
         "description": "Lê novamente todas as pastas e capítulos da biblioteca.",
-        "result": "Atualiza data/mangas.json e os indicadores da Biblioteca.",
+        "result": "Atualiza o PostgreSQL e os indicadores da Biblioteca.",
         "command": ["scripts/scan.py"],
         "reports": [],
         "group": "library",

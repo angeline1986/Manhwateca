@@ -40,8 +40,8 @@ WORKFLOW_STEPS = [
     },
     {
         "id": "details",
-        "label": "Consultar detalhes e atualizar CSV",
-        "actions": ["mangaupdates_details", "mangaupdates_csv"],
+        "label": "Consultar detalhes no banco",
+        "actions": ["mangaupdates_details"],
     },
     {
         "id": "notion_catalog",

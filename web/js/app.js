@@ -1,6 +1,7 @@
 const grid = document.getElementById("statusGrid");
 const refreshButton = document.getElementById("refresh");
 const pendingList = document.getElementById("pendingList");
+const organizationPendingList = document.getElementById("organizationPendingList");
 const diagnosticGrid = document.getElementById("diagnosticGrid");
 const refreshDiagnostics = document.getElementById("refreshDiagnostics");
 const actionGrid = document.getElementById("actionGrid");
@@ -21,6 +22,11 @@ const idReviewList = document.getElementById("idReviewList");
 const reviewSearch = document.getElementById("reviewSearch");
 const applyDecisionsButton = document.getElementById("applyDecisions");
 const decisionFeedback = document.getElementById("decisionFeedback");
+const organizationReviewSummary = document.getElementById("organizationReviewSummary");
+const organizationIdReviewList = document.getElementById("organizationIdReviewList");
+const organizationReviewSearch = document.getElementById("organizationReviewSearch");
+const organizationApplyDecisionsButton = document.getElementById("organizationApplyDecisions");
+const organizationDecisionFeedback = document.getElementById("organizationDecisionFeedback");
 const mangaCacheSummary = document.getElementById("mangaCacheSummary");
 const mangaCacheLists = document.getElementById("mangaCacheLists");
 const refreshMangaUpdatesStatus = document.getElementById("refreshMangaUpdatesStatus");
@@ -172,7 +178,7 @@ function card(title, detail, available, label) {
 
 async function loadStatus() {
   grid.innerHTML = '<article class="status-card loading">Consultando o ambiente...</article>';
-  pendingList.innerHTML = '<article class="pending-card loading">Calculando pendências...</article>';
+  setPendingLists('<article class="pending-card loading">Calculando pendências...</article>');
   refreshButton.disabled = true;
   try {
     const response = await fetch("/api/status", { cache: "no-store" });
@@ -224,12 +230,12 @@ async function loadStatus() {
       false,
       "Servidor indisponível"
     );
-    pendingList.innerHTML = `
+    setPendingLists(`
       <article class="pending-card warning">
         <strong>Não foi possível calcular pendências</strong>
         <span>${escapeHtml(error.message)}</span>
       </article>
-    `;
+    `);
   } finally {
     refreshButton.disabled = false;
   }
@@ -242,25 +248,33 @@ async function loadPendingActions() {
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const payload = await response.json();
   if (!payload.items.length) {
-    pendingList.innerHTML = `
+    setPendingLists(`
       <article class="pending-card success">
         <strong>Tudo em dia</strong>
         <span>${escapeHtml(payload.empty_message || "Nenhuma pendência acionável encontrada.")}</span>
       </article>
-    `;
+    `);
     return;
   }
-  pendingList.innerHTML = payload.items.map(item => `
+  setPendingLists(payload.items.map(item => `
     <button type="button"
             class="pending-card ${escapeHtml(item.severity || "info")}"
             ${item.action ? `data-action="${escapeHtml(item.action)}"` : ""}
-            ${item.page ? `data-pending-page="${escapeHtml(item.page)}"` : ""}>
+            ${item.page ? `data-pending-page="${escapeHtml(item.page)}"` : ""}
+            ${item.panel ? `data-pending-panel="${escapeHtml(item.panel)}"` : ""}>
       <span class="pending-kind">${escapeHtml(pendingKindLabel(item.kind))}</span>
       <strong>${escapeHtml(item.title)}</strong>
       <span>${escapeHtml(item.detail)}</span>
       <em>${escapeHtml(item.action ? "Executar próxima etapa" : "Abrir seção")}</em>
     </button>
-  `).join("");
+  `).join(""));
+}
+
+function setPendingLists(html) {
+  pendingList.innerHTML = html;
+  if (organizationPendingList) {
+    organizationPendingList.innerHTML = html;
+  }
 }
 
 function pendingKindLabel(kind) {
@@ -295,7 +309,7 @@ async function loadActions() {
     organization_preview: ["Analisa a organização alfabética das pastas.", "Gera um preview sem mover pastas."],
     rename_preview: ["Analisa nomes de capítulos, capas e títulos.", "Gera um preview sem renomear arquivos."],
     chapter_audit: ["Verifica capítulos e arquivos que precisam de conferência.", "Gera um relatório sem alterar a biblioteca."],
-    catalog_scan: ["Lê novamente todas as pastas e capítulos.", "Atualiza o catálogo local data/mangas.json."],
+    catalog_scan: ["Lê novamente todas as pastas e capítulos.", "Atualiza o catálogo no PostgreSQL."],
     apply_organization: ["Move as obras para os grupos alfabéticos corretos.", "Altera as pastas após confirmação."],
     apply_renaming: ["Padroniza os nomes de capítulos e capas.", "Renomeia os arquivos após confirmação."],
     run_tests: ["Verifica automaticamente as regras principais do sistema.", "Mostra os resultados no histórico."],
@@ -312,28 +326,65 @@ async function loadActions() {
   };
   const response = await fetch("/api/actions", { cache: "no-store" });
   const actions = await response.json();
-  const render = entries => entries.map(([id, action]) => {
+  const renderActionButton = (id, action, options = {}) => {
     const fallback = actionHelp[id] || ["Ação disponível no sistema.", "O resultado aparecerá no histórico."];
+    const label = options.label || action.label || id;
+    const classes = [
+      "action-button",
+      action.requires_confirmation ? "destructive" : "",
+      options.compact ? "compact" : "",
+    ].filter(Boolean).join(" ");
     return `
-    <button class="action-button ${action.requires_confirmation ? "destructive" : ""}"
+    <button class="${classes}"
             type="button" data-action="${id}"
             data-confirmation="${action.requires_confirmation}">
-      <strong>${escapeHtml(action.label || id)}</strong>
+      <strong>${escapeHtml(label)}</strong>
       <span>${escapeHtml(action.description || fallback[0])}</span>
       <small>${escapeHtml(action.result || fallback[1])}</small>
     </button>
   `;
-  }).join("");
+  };
+  const render = entries => entries.map(([id, action]) =>
+    renderActionButton(id, action)
+  ).join("");
+  const renderGroupedAction = ({ title, description, previewId, applyId }) => {
+    const preview = actions[previewId];
+    const apply = actions[applyId];
+    if (!preview || !apply) return "";
+    return `
+      <article class="action-card">
+        <div>
+          <h3>${escapeHtml(title)}</h3>
+          <p>${escapeHtml(description)}</p>
+        </div>
+        <div class="action-card-options" aria-label="Ações de ${escapeHtml(title)}">
+          ${renderActionButton(previewId, preview, { label: "Preview", compact: true })}
+          ${renderActionButton(applyId, apply, { label: "Aplicar", compact: true })}
+        </div>
+      </article>
+    `;
+  };
   const entries = Object.entries(actions);
-  const organizationIds = new Set([
-    "organization_preview", "rename_preview", "chapter_audit",
-    "catalog_scan", "apply_organization", "apply_renaming",
-  ]);
+  const organizationIds = new Set(["chapter_audit", "catalog_scan"]);
   const notionIds = new Set([
     "notion_simulate_batch", "notion_apply_batch", "notion_update_existing",
     "notion_csv_preview", "notion_csv_apply",
   ]);
-  actionGrid.innerHTML = render(entries.filter(([id]) => organizationIds.has(id)));
+  actionGrid.innerHTML = [
+    renderGroupedAction({
+      title: "Organização de Pastas",
+      description: "Analisa e move pastas para os grupos alfabéticos corretos.",
+      previewId: "organization_preview",
+      applyId: "apply_organization",
+    }),
+    renderGroupedAction({
+      title: "Padronização",
+      description: "Analisa e renomeia capítulos, capas e títulos fora do padrão.",
+      previewId: "rename_preview",
+      applyId: "apply_renaming",
+    }),
+    render(entries.filter(([id]) => organizationIds.has(id))),
+  ].join("");
   mangaActionGrid.innerHTML = render(entries.filter(([, action]) =>
     action.group === "mangaupdates"
   ));
@@ -489,7 +540,7 @@ function taskNextStep(task) {
         label: "Revisar IDs pendentes",
         page: "mangaupdates",
         panel: "idReviewPanel",
-        text: `${actionableReview} correspondência(s) aparecem na seção de revisão e precisam de decisão antes de atualizar detalhes e CSV.`,
+        text: `${actionableReview} correspondência(s) aparecem na seção de revisão e precisam de decisão antes de consultar detalhes na API.`,
       };
     }
     if ((manga.pending || 0) > 0) {
@@ -520,10 +571,10 @@ function taskNextStep(task) {
       };
     }
     return {
-      label: "Atualizar CSV",
+      label: "Ver banco atualizado",
       page: "mangaupdates",
       panel: "mangaActionsPanel",
-      text: "Os detalhes consultados já podem ser exportados para o CSV.",
+      text: "Os detalhes consultados já foram salvos no banco quando PostgreSQL está ativo.",
     };
   }
 
@@ -539,9 +590,9 @@ function taskNextStep(task) {
   if (task.action === "catalog_scan") {
     return {
       label: "Ver pendências",
-      page: "overview",
-      panel: "",
-      text: "Confira as pendências acionáveis para decidir se o próximo passo é organização, MangaUpdates ou Notion.",
+      page: "organization",
+      panel: "organizationPendingPanel",
+      text: "Confira as pendências acionáveis abaixo da organização local para decidir se o próximo passo é MangaUpdates ou Notion.",
     };
   }
 
@@ -567,7 +618,7 @@ function taskNextStep(task) {
       label: "Simular metadados",
       page: "notion",
       panel: "notionActionsPanel",
-      text: "O catálogo foi importado. Agora simule a atualização dos metadados do CSV.",
+      text: "O catálogo foi importado. Agora simule a atualização dos metadados a partir do banco.",
     };
   }
 
@@ -903,8 +954,8 @@ function candidateCard(item, candidate) {
   `;
 }
 
-function renderReview(items) {
-  idReviewList.innerHTML = items.length ? items.map(item => `
+function reviewMarkup(items) {
+  return items.length ? items.map(item => `
     <details class="review-work">
       <summary><strong>${escapeHtml(item.nome)}</strong>
         <span>${item.candidates.length} candidato(s)</span></summary>
@@ -920,20 +971,45 @@ function renderReview(items) {
         </button>
       </div>
     </details>
-  `).join("") : '<p class="empty">Nenhuma obra aguardando revisão no CSV.</p>';
+  `).join("") : '<p class="empty">Nenhuma obra aguardando revisão.</p>';
+}
+
+function renderReview(items) {
+  const html = reviewMarkup(items);
+  idReviewList.innerHTML = html;
+  if (organizationIdReviewList) {
+    organizationIdReviewList.innerHTML = html;
+  }
+}
+
+function renderReviewSummary(summary) {
+  const html = [
+    summaryCard("Registros", summary.total),
+    summaryCard("A revisar", summary.review),
+    summaryCard("IDs confirmados", summary.confirmed),
+    summaryCard("Ainda não pesquisados", summary.pending),
+  ].join("");
+  reviewSummary.innerHTML = html;
+  if (organizationReviewSummary) {
+    organizationReviewSummary.innerHTML = html;
+  }
 }
 
 async function loadIdReview() {
   const response = await fetch("/api/mangaupdates/review", { cache: "no-store" });
   const data = await response.json();
   reviewItems = data.items;
-  reviewSummary.innerHTML = [
-    summaryCard("Registros", data.summary.total),
-    summaryCard("A revisar", data.summary.review),
-    summaryCard("IDs confirmados", data.summary.confirmed),
-    summaryCard("Ainda não pesquisados", data.summary.pending),
-  ].join("");
+  renderReviewSummary(data.summary);
   renderReview(reviewItems);
+  const warning = data.warning || "";
+  decisionFeedback.textContent = warning;
+  applyDecisionsButton.hidden = !reviewItems.length;
+  if (organizationDecisionFeedback) {
+    organizationDecisionFeedback.textContent = warning;
+  }
+  if (organizationApplyDecisionsButton) {
+    organizationApplyDecisionsButton.hidden = !reviewItems.length;
+  }
 }
 
 async function loadMangaUpdatesStatus() {
@@ -1383,7 +1459,7 @@ workflowSteps.addEventListener("click", async event => {
   if (response.ok) renderWorkflow(payload);
 });
 
-idReviewList.addEventListener("click", event => {
+function handleReviewDecisionClick(event, list, feedback) {
   const selected = event.target.closest("[data-select-id]");
   const manual = event.target.closest("[data-manual-work]");
   if (selected) {
@@ -1396,7 +1472,7 @@ idReviewList.addEventListener("click", event => {
     renderReview(reviewItems);
   }
   if (manual) {
-    const input = idReviewList.querySelector(
+    const input = list.querySelector(
       `[data-manual-id="${CSS.escape(manual.dataset.manualWork)}"]`
     );
     if (!input.value) return;
@@ -1406,16 +1482,38 @@ idReviewList.addEventListener("click", event => {
       "Nome encontrado": `ID ${input.value}`,
       Origem: "ID informado manualmente",
     });
-    decisionFeedback.textContent = "ID manual incluído nas decisões.";
+    feedback.textContent = "ID manual incluído nas decisões.";
   }
-});
+}
 
-reviewSearch.addEventListener("input", () => {
-  const query = reviewSearch.value.toLocaleLowerCase("pt-BR").trim();
+idReviewList.addEventListener("click", event =>
+  handleReviewDecisionClick(event, idReviewList, decisionFeedback)
+);
+
+if (organizationIdReviewList) {
+  organizationIdReviewList.addEventListener("click", event =>
+    handleReviewDecisionClick(
+      event,
+      organizationIdReviewList,
+      organizationDecisionFeedback
+    )
+  );
+}
+
+function filterReviewFromInput(input) {
+  const query = input.value.toLocaleLowerCase("pt-BR").trim();
   renderReview(reviewItems.filter(item =>
     item.nome.toLocaleLowerCase("pt-BR").includes(query)
   ));
-});
+}
+
+reviewSearch.addEventListener("input", () => filterReviewFromInput(reviewSearch));
+
+if (organizationReviewSearch) {
+  organizationReviewSearch.addEventListener("input", () =>
+    filterReviewFromInput(organizationReviewSearch)
+  );
+}
 
 apiSearchForm.addEventListener("submit", async event => {
   event.preventDefault();
@@ -1517,9 +1615,9 @@ apiSearchResults.addEventListener("click", async event => {
   }
 });
 
-applyDecisionsButton.addEventListener("click", async () => {
+async function submitReviewDecisions(feedback) {
   if (!decisions.size) {
-    decisionFeedback.textContent = "Selecione ao menos uma decisão.";
+    feedback.textContent = "Selecione ao menos uma decisão.";
     return;
   }
   const response = await fetch("/api/mangaupdates/decisions", {
@@ -1528,14 +1626,25 @@ applyDecisionsButton.addEventListener("click", async () => {
     body: JSON.stringify({ decisions: [...decisions.values()] })
   });
   const payload = await response.json();
-  decisionFeedback.textContent = response.ok
+  feedback.textContent = response.ok
     ? `${payload.applied.length} decisão(ões) aplicada(s).`
     : (payload.rejected || [payload.error]).join(" ");
   if (response.ok) {
     decisions.clear();
     await loadIdReview();
+    await loadPendingActions();
   }
-});
+}
+
+applyDecisionsButton.addEventListener("click", () =>
+  submitReviewDecisions(decisionFeedback)
+);
+
+if (organizationApplyDecisionsButton) {
+  organizationApplyDecisionsButton.addEventListener("click", () =>
+    submitReviewDecisions(organizationDecisionFeedback)
+  );
+}
 
 async function loadCatalog() {
   const response = await fetch("/api/catalog", { cache: "no-store" });
@@ -1581,16 +1690,30 @@ document.querySelector(".quick-guide").addEventListener("click", event => {
   if (action) handleActionClick(event);
 });
 
-pendingList.addEventListener("click", event => {
+function handlePendingClick(event) {
+  const list = event.currentTarget;
   const card = event.target.closest(".pending-card");
-  if (!card || !pendingList.contains(card)) return;
+  if (!card || !list.contains(card)) return;
   const action = card.dataset.action;
   if (action) {
     startTask(action, pendingRequiresConfirmation(action));
     return;
   }
-  if (card.dataset.pendingPage) showPage(card.dataset.pendingPage);
-});
+  if (card.dataset.pendingPage) {
+    if (
+      list === organizationPendingList
+      && card.dataset.pendingPanel === "idReviewPanel"
+    ) {
+      goToNextStep("organization", "organizationIdReviewPanel");
+      return;
+    }
+    goToNextStep(card.dataset.pendingPage, card.dataset.pendingPanel || "");
+  }
+}
+
+[pendingList, organizationPendingList]
+  .filter(Boolean)
+  .forEach(list => list.addEventListener("click", handlePendingClick));
 
 function pendingRequiresConfirmation(action) {
   return [

@@ -17,6 +17,7 @@ class MangaRecord:
     count_status: str | None = None
     latest_mangaupdates_chapter: Decimal | None = None
     mangaupdates_url: str | None = None
+    cover_url: str | None = None
     spice_level: str | None = None
     format: str | None = None
     themes: list[str] | None = None
@@ -41,6 +42,7 @@ def manga_from_row(row: dict) -> MangaRecord:
         count_status=row.get("count_status"),
         latest_mangaupdates_chapter=row.get("latest_mangaupdates_chapter"),
         mangaupdates_url=row.get("mangaupdates_url"),
+        cover_url=row.get("cover_url"),
         spice_level=row.get("spice_level"),
         format=row.get("format"),
         themes=_normalize_themes(row.get("themes")),

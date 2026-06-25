@@ -57,6 +57,7 @@ class CatalogTests(unittest.TestCase):
                 "antidote": {
                     "series_id": 123,
                     "latest_chapter": 20,
+                    "cover_url": "https://cdn.example.test/antidote.jpg",
                 },
             }
 
@@ -65,6 +66,10 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual("Divergência externa", result[0]["count_status"])
         self.assertIn("MangaUpdates divergente", result[0]["count_issues"])
         self.assertEqual(123, result[0]["mangaupdates_id"])
+        self.assertEqual(
+            "https://cdn.example.test/antidote.jpg",
+            result[0]["cover_url"],
+        )
 
     def test_saves_catalog_creating_parent_directory(self):
         with tempfile.TemporaryDirectory() as directory:

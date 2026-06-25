@@ -29,6 +29,7 @@ def apply_external_data(manga: dict, external: dict | None) -> dict:
         "universo": external.get("universe", []),
         "mangaupdates_id": external.get("series_id"),
         "mangaupdates_url": external.get("url"),
+        "cover_url": external.get("cover_url"),
         "mangaupdates_latest_chapter": external.get("latest_chapter"),
         "mangaupdates_status": external.get("status"),
         "mangaupdates_completed": external.get("completed"),

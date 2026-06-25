@@ -2,7 +2,11 @@ import csv
 import json
 from pathlib import Path
 
-from manhwateca.mangaupdates_service.candidates import CONFIRMED_STATUSES
+from manhwateca.database.connection import (
+    DatabaseConfigurationError,
+    DatabaseConnectionError,
+)
+from manhwateca.database.manga_repository import MangaRepository
 from manhwateca.notion_sync.matching import normalize_title
 from manhwateca.webapp.data_source import active_catalog_source
 from manhwateca.webapp.notion import notion_status
@@ -21,8 +25,6 @@ def pending_payload(project_root):
     items = []
     items.extend(_catalog_pending(root))
     items.extend(_mangaupdates_pending(root))
-    if source["kind"] != "postgresql":
-        items.extend(_csv_pending(root))
     items.extend(_notion_pending(root))
     return {
         "total": len(items),
@@ -55,38 +57,70 @@ def _catalog_pending(root):
 
 
 def _mangaupdates_pending(root):
-    path = root / IDS_PATH
-    if not path.is_file():
-        return []
+    database = _mangaupdates_database_pending()
+    if database is not None:
+        return database
+
+    return []
+
+
+def _mangaupdates_database_pending(repository_factory=MangaRepository):
     try:
-        items = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return [_item(
-            "mangaupdates",
-            "Revisar IDs",
-            "buscaIds.json está inválido e precisa de revisão.",
-            None,
-            "mangaupdates",
-            severity="warning",
-        )]
-    review = sum(1 for item in items if item.get("Status") == "Revisar")
-    confirmed_without_cache = _confirmed_without_cache(root, items)
+        repository = repository_factory()
+        decisions = repository.list_decisions(
+            decision_type="mangaupdates_match",
+            status="pending",
+        )
+        mangas = repository.list_mangas()
+    except (DatabaseConfigurationError, DatabaseConnectionError):
+        return None
+
+    review = len(decisions)
+    confirmed_without_details = sum(
+        1
+        for manga in mangas
+        if getattr(manga, "work_code", None)
+        and not (
+            getattr(manga, "mangaupdates_url", None)
+            or getattr(manga, "latest_mangaupdates_chapter", None)
+        )
+    )
+    without_id = sum(
+        1
+        for manga in mangas
+        if not getattr(manga, "work_code", None)
+    )
+
     pending = []
     if review:
         pending.append(_item(
             "mangaupdates",
             "Revisar correspondências",
-            f"{review} obra(s) precisam de decisão de ID.",
+            (
+                f"{review} obra(s) precisam de decisão de ID. "
+                "Abra a seção, escolha um candidato ou informe o ID correto."
+            ),
             None,
             "mangaupdates",
+            panel="idReviewPanel",
         ))
-    if confirmed_without_cache:
+    if confirmed_without_details:
         pending.append(_item(
             "mangaupdates",
             "Consultar detalhes na API",
-            f"{confirmed_without_cache} ID(s) confirmados ainda não têm cache.",
+            f"{confirmed_without_details} ID(s) confirmados ainda não têm detalhes no banco.",
             "mangaupdates_details",
             "mangaupdates",
+            panel="mangaActionsPanel",
+        ))
+    if without_id and not review:
+        pending.append(_item(
+            "mangaupdates",
+            "Buscar IDs no MangaUpdates",
+            f"{without_id} obra(s) ainda não têm ID MangaUpdates no banco.",
+            "mangaupdates_search",
+            "mangaupdates",
+            panel="mangaActionsPanel",
         ))
     return pending
 
@@ -200,21 +234,6 @@ def _sync_state_pending(root):
     return items
 
 
-def _confirmed_without_cache(root, items):
-    cache_path = root / "data/mangaupdates.json"
-    try:
-        cache = json.loads(cache_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        cache = {}
-    return sum(
-        1
-        for item in items
-        if item.get("Status") in CONFIRMED_STATUSES
-        and item.get("ID")
-        and str(item["ID"]) not in cache
-    )
-
-
 def _catalog_names(path):
     try:
         catalog = json.loads(path.read_text(encoding="utf-8"))
@@ -244,12 +263,13 @@ def _csv_names_from_rows(rows):
     return names
 
 
-def _item(kind, title, detail, action, page, severity="info"):
+def _item(kind, title, detail, action, page, severity="info", panel=None):
     return {
         "kind": kind,
         "title": title,
         "detail": detail,
         "action": action,
         "page": page,
+        "panel": panel,
         "severity": severity,
     }

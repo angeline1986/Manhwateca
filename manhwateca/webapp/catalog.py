@@ -103,6 +103,7 @@ def public_manga(manga):
         "mangaupdates_latest_chapter": manga.get(
             "mangaupdates_latest_chapter"
         ),
+        "cover_url": manga.get("cover_url"),
         "reading_status": manga.get("reading_status"),
         "personal_rank": manga.get("personal_rank"),
         "themes": manga.get("themes", []),
@@ -137,6 +138,7 @@ def _database_manga(record):
             record.latest_mangaupdates_chapter,
             default=None,
         ),
+        "cover_url": getattr(record, "cover_url", None),
         "reading_status": record.reading_status,
         "personal_rank": record.personal_rank,
         "themes": record.themes or [],

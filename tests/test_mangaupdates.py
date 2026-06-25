@@ -32,6 +32,24 @@ class FakeDecisionRepository:
 
 
 class MangaUpdatesTests(unittest.TestCase):
+    def test_summarize_series_extracts_original_cover_url(self):
+        summary = mangaupdates.summarize_series({
+            "series_id": 123,
+            "title": "Alpha",
+            "image": {
+                "url": {
+                    "original": "https://cdn.example.test/original.jpg",
+                    "thumb": "https://cdn.example.test/thumb.jpg",
+                },
+            },
+        })
+
+        self.assertEqual(
+            "https://cdn.example.test/original.jpg",
+            summary["cover_url"],
+        )
+        self.assertNotIn("thumbnail_url", summary)
+
     def test_choose_search_result_prefers_exact_manhwa(self):
         response = {
             "results": [

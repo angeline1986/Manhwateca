@@ -261,6 +261,16 @@ button.pending-card:focus-visible {
 
 .action-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 22px 0; }
 .action-grid.single { grid-template-columns: 1fr; }
+.action-card {
+  min-height: 150px; padding: 17px; border: 1px solid var(--border);
+  border-radius: 15px; background: #faf7f8;
+  display: flex; flex-direction: column; justify-content: space-between; gap: 14px;
+}
+.action-card h3 { margin: 0 0 8px; font-size: 18px; }
+.action-card p {
+  margin: 0; color: var(--muted); font-size: 13px; font-weight: 700; line-height: 1.45;
+}
+.action-card-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .action-button {
   min-height: 68px; padding: 15px 17px !important; text-align: left;
   color: var(--text) !important; background: #faf7f8 !important;
@@ -282,6 +292,13 @@ button.pending-card:focus-visible {
   border-color: var(--border) !important; background: #faf7f8 !important;
 }
 .action-button.destructive { color: var(--danger) !important; background: #fff6f6 !important; }
+.action-button.compact {
+  min-height: 0; padding: 10px 12px !important; text-align: center;
+  background: #fff !important;
+}
+.action-button.compact strong { margin: 0; font-size: 13px; }
+.action-button.compact span,
+.action-button.compact small { display: none; }
 .review-form { margin-top: 20px; padding: 20px; border: 1px solid var(--rose-border); border-radius: 15px; background: var(--soft-2); }
 .review-form label { display: block; margin-bottom: 9px; font-weight: 800; }
 .review-form div { display: flex; gap: 9px; }

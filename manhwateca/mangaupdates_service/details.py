@@ -17,6 +17,11 @@ def infer_format(details):
 
 
 def summarize_series(details):
+    cover_url = (
+        details.get("image", {})
+        .get("url", {})
+        .get("original")
+    )
     categories = [
         item["category"]
         for item in details.get("categories", [])
@@ -35,6 +40,7 @@ def summarize_series(details):
         "series_id": details["series_id"],
         "title": details["title"],
         "url": details.get("url"),
+        "cover_url": cover_url,
         "type": details.get("type"),
         "format": infer_format(details),
         "year": details.get("year"),

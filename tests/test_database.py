@@ -334,6 +334,7 @@ class MangaRepositoryTests(unittest.TestCase):
             "count_status": "OK",
             "mangaupdates_latest_chapter": 13,
             "mangaupdates_url": "https://example.test/alpha",
+            "cover_url": "https://cdn.example.test/alpha.jpg",
         })
 
         self.assertEqual(1, manga_id)
@@ -342,6 +343,10 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertEqual("Alfa", connection.inserted[0][2])
         self.assertEqual("Quero Ler", connection.inserted[0][3])
         self.assertEqual("Normal", connection.inserted[0][4])
+        self.assertEqual(
+            "https://cdn.example.test/alpha.jpg",
+            connection.inserted[0][11],
+        )
 
     def test_updates_catalog_manga_without_touching_manual_fields(self):
         connection = FakeConnection()
@@ -363,6 +368,7 @@ class MangaRepositoryTests(unittest.TestCase):
             "main_caps": 12,
             "tamanho": "Curto",
             "count_status": "OK",
+            "cover_url": "https://cdn.example.test/alpha-new.jpg",
         })
 
         self.assertEqual(7, manga_id)
@@ -371,6 +377,8 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertNotIn("personal_rank", query)
         self.assertNotIn("score", query)
         self.assertNotIn("spice_level", query)
+        self.assertIn("cover_url", query)
+        self.assertEqual("https://cdn.example.test/alpha-new.jpg", params[-2])
         self.assertEqual(7, params[-1])
 
     def test_updates_editorial_fields_and_themes(self):
@@ -434,6 +442,7 @@ class MangaRepositoryTests(unittest.TestCase):
                 "series_id": 46829042951,
                 "latest_chapter": 104,
                 "url": "https://example.test/beyond",
+                "cover_url": "https://cdn.example.test/beyond.jpg",
                 "format": "Manhwa",
                 "genres": ["Drama", "Yaoi"],
                 "universe": ["Omegaverse"],
@@ -449,8 +458,9 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertEqual("46829042951", params[0])
         self.assertEqual(104, params[1])
         self.assertEqual("https://example.test/beyond", params[2])
-        self.assertEqual("Manhwa", params[3])
-        self.assertEqual(7, params[4])
+        self.assertEqual("https://cdn.example.test/beyond.jpg", params[3])
+        self.assertEqual("Manhwa", params[4])
+        self.assertEqual(7, params[5])
         self.assertIn((7, 1), connection.links)
         self.assertIn((7, 2), connection.links)
         self.assertIn((7, 3), connection.links)

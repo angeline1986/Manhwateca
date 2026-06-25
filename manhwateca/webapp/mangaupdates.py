@@ -22,12 +22,30 @@ METADATA_PATH = Path("config/catalog_metadata.json")
 
 
 def review_payload(project_root, repository_factory=MangaRepository):
-    root = Path(project_root)
     database_payload = _database_review_payload(repository_factory)
     if database_payload is not None:
         return database_payload
 
-    return _legacy_review_payload(root)
+    return {
+        "source": {
+            "kind": "postgresql",
+            "label": "PostgreSQL",
+            "detail": "decision_queue",
+            "role": "fila de revisão de IDs",
+            "available": False,
+        },
+        "summary": {
+            "total": 0,
+            "review": 0,
+            "confirmed": 0,
+            "pending": 0,
+        },
+        "items": [],
+        "warning": (
+            "PostgreSQL indisponível. A revisão de IDs não usa mais "
+            "buscaIds.json como fonte principal."
+        ),
+    }
 
 
 def _database_review_payload(repository_factory):
@@ -42,9 +60,6 @@ def _database_review_payload(repository_factory):
             for record in repository.list_mangas()
         )
     except (DatabaseConfigurationError, DatabaseConnectionError):
-        return None
-
-    if not decisions:
         return None
 
     items = [_decision_to_item(decision) for decision in decisions]
@@ -105,11 +120,11 @@ def apply_review_decisions(
     path = root / IDS_PATH
     repository = _optional_repository(repository_factory)
     database_items = _pending_decision_items(repository)
-    if database_items:
+    if repository is not None:
         return apply_decisions(
             decisions,
-            _merge_json_mirror(path, database_items),
-            path if path.exists() else None,
+            database_items,
+            None,
             decision_repository=repository,
         )
     items = load_items(path)
@@ -123,7 +138,12 @@ def apply_review_decisions(
 
 def _optional_repository(repository_factory=MangaRepository):
     try:
-        return repository_factory()
+        repository = repository_factory()
+        repository.list_decisions(
+            decision_type="mangaupdates_match",
+            status="pending",
+        )
+        return repository
     except (DatabaseConfigurationError, DatabaseConnectionError):
         return None
 
