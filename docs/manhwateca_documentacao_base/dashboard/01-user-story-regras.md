@@ -344,10 +344,6 @@ Ao abrir a aplicação após qualquer período de inatividade, o usuário deve c
 
 Quando uma ação exigir maior interação, o Dashboard deve atuar apenas como ponto de entrada, direcionando o usuário para Biblioteca, Fluxos ou Configurações, sem replicar funcionalidades desses módulos.
 
----
-
-Esse é o nível de detalhamento que eu seguiria para todo o restante da documentação. O documento completo teria esse mesmo padrão para User Stories, Regras de Negócio, Matrizes de Decisão, State Machines e demais seções.
-
 # 4. Escopo
 
 ## Visão Geral
