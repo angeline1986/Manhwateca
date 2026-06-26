@@ -596,48 +596,53 @@ input:focus, select:focus { border-color: var(--rose); box-shadow: 0 0 0 4px rgb
 .catalog-pending-pages {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 14px;
 }
 .catalog-pending-pages button {
-  border: 0;
-  background: transparent;
-  color: var(--ink);
+  border: 0 !important;
+  background: transparent !important;
+  color: #2f3c52 !important;
   cursor: pointer;
   font-weight: 800;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 7px;
-  border-radius: 8px;
+  min-width: auto;
+  height: auto;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+  font-size: 14px;
 }
 .catalog-pending-pages button:hover {
-  background: #f7e8ed;
-  color: var(--rose);
+  background: transparent !important;
+  color: var(--rose) !important;
+  transform: none !important;
 }
 .catalog-pending-pages button:disabled {
-  color: var(--muted);
+  color: #c8b7bd !important;
   cursor: not-allowed;
-  opacity: .55;
+  opacity: 1;
 }
 .catalog-pending-pages strong {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 8px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 9px;
   border-radius: 8px;
   background: var(--rose);
   color: #fff;
   font-size: 13px;
 }
 .catalog-pending-pages .page-arrow {
-  color: var(--muted);
-  font-size: 20px;
+  color: #8ea0b7;
+  font-size: 22px;
+  font-weight: 600;
   line-height: 1;
 }
 .catalog-pending-pages .page-ellipsis {
-  padding: 0 7px;
-  color: var(--muted);
+  padding: 0;
+  color: #8ea0b7;
   font-weight: 800;
 }
 .catalog-pending-meta {
