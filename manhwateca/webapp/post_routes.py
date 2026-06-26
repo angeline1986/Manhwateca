@@ -2,7 +2,10 @@ from manhwateca.database.connection import (
     DatabaseConfigurationError,
     DatabaseConnectionError,
 )
-from manhwateca.webapp.catalog_pending import catalog_single_work
+from manhwateca.webapp.catalog_pending import (
+    catalog_single_work,
+    reconcile_catalog_aliases,
+)
 from manhwateca.webapp.editorial import update_editorial
 from manhwateca.webapp.mangaupdates import apply_review_decisions
 from manhwateca.webapp.mangaupdates_search import search_payload
@@ -54,6 +57,8 @@ def handle_direct_post(path, payload, project_root, workflow_manager=None):
         return _save_editorial(payload, project_root)
     if path == "/api/catalog/catalog-one":
         return _catalog_one(payload)
+    if path == "/api/catalog/reconcile-aliases":
+        return _reconcile_catalog_aliases(project_root)
     if path == "/api/workflow":
         return _start_workflow(payload, workflow_manager)
     if path == "/api/workflow/continue":
@@ -83,6 +88,16 @@ def _catalog_one(payload):
         return {"error": str(error)}, 400
     except KeyError:
         return {"error": "Obra não encontrada no Drive."}, 404
+    except (DatabaseConfigurationError, DatabaseConnectionError) as error:
+        return {"error": str(error)}, 503
+    except RuntimeError as error:
+        return {"error": str(error)}, 409
+    return result, 200
+
+
+def _reconcile_catalog_aliases(project_root):
+    try:
+        result = reconcile_catalog_aliases(project_root)
     except (DatabaseConfigurationError, DatabaseConnectionError) as error:
         return {"error": str(error)}, 503
     except RuntimeError as error:

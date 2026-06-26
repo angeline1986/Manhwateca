@@ -127,7 +127,7 @@ def _record_names(record):
     alternative = getattr(record, "alternative_title", None)
     if not alternative:
         return
-    for separator in ("|", ",", ";"):
+    for separator in ("|", ";"):
         alternative = alternative.replace(separator, "\n")
     for name in alternative.splitlines():
         name = name.strip()

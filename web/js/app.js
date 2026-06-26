@@ -1825,6 +1825,11 @@ if (refreshCatalogPending) {
     refreshCatalogPending.disabled = true;
     refreshCatalogPending.classList.add("spinning");
     try {
+      await fetch("/api/catalog/reconcile-aliases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
       await Promise.all([loadNotionStatus(), loadPendingActions()]);
     } finally {
       refreshCatalogPending.disabled = false;

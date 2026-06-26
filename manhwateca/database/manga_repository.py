@@ -80,14 +80,18 @@ class MangaRepository:
         for manga in mangas:
             self.save_catalog_manga(manga)
             saved += 1
+        self._connection().commit()
         return saved
 
     def save_catalog_manga(self, manga: dict) -> int:
         existing = self._find_catalog_match(manga)
         if existing:
             self._update_catalog_manga(existing.id, manga)
+            self._connection().commit()
             return existing.id
-        return self._insert_catalog_manga(manga)
+        manga_id = self._insert_catalog_manga(manga)
+        self._connection().commit()
+        return manga_id
 
     def get_or_create_theme(self, name: str) -> int:
         name = str(name or "").strip()
@@ -164,6 +168,54 @@ class MangaRepository:
             self.replace_manga_themes(manga.id, themes)
 
         return True
+
+    def append_alternative_title(self, manga_id: int, alias: str) -> dict | None:
+        alias = str(alias or "").strip()
+        if not alias:
+            return None
+
+        row = self._fetch_one(
+            """
+            SELECT alternative_title
+            FROM mangas
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (manga_id,),
+        )
+        if row is None:
+            return None
+
+        previous = row.get("alternative_title") or ""
+        aliases = [
+            item.strip()
+            for item in previous.split("|")
+            if item.strip()
+        ]
+        normalized_aliases = {normalize_title(item) for item in aliases}
+        if normalize_title(alias) in normalized_aliases:
+            return {
+                "changed": False,
+                "previous": previous,
+                "current": previous,
+            }
+
+        aliases.append(alias)
+        current = " | ".join(aliases)
+        self._execute(
+            """
+            UPDATE mangas
+            SET alternative_title = %s
+            WHERE id = %s
+            """,
+            (current, manga_id),
+        )
+        self._connection().commit()
+        return {
+            "changed": True,
+            "previous": previous,
+            "current": current,
+        }
 
     def update_mangaupdates_fields(
         self,
