@@ -235,6 +235,30 @@
             </div>
           </section>
 
+          <details class="panel collapsible-panel" id="organizationCatalogPendingPanel">
+            <summary>
+              <div>
+                <span class="eyebrow">PENDÊNCIAS DE CATÁLOGO</span>
+                <h2>Obras Fora do Catálogo <span class="count-pill" id="catalogPendingCount">0 pendentes</span></h2>
+                <p>Lista as pastas detectadas na biblioteca local que ainda não existem no catálogo do banco.</p>
+              </div>
+            </summary>
+            <div class="catalog-pending-actions">
+              <button type="button" class="primary-action" id="catalogAllPending">
+                Catalogar Tudo
+              </button>
+              <button type="button" class="secondary-action" id="refreshCatalogPending">
+                Atualizar Lista
+              </button>
+            </div>
+            <div class="catalog-pending-table" id="organizationCatalogPendingList">
+              <p class="empty">Calculando pendências...</p>
+            </div>
+            <p class="catalog-pending-meta" id="catalogPendingMeta">
+              Lista sincronizada com a última verificação local.
+            </p>
+          </details>
+
           <details class="panel collapsible-panel mangaupdates-panel" id="organizationIdReviewPanel">
             <summary>
               <div>

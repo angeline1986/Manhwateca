@@ -46,10 +46,16 @@ def _catalog_pending(root):
     status = notion_status(root)
     uncataloged = status.get("summary", {}).get("uncataloged", 0)
     if uncataloged:
+        source = status.get("source", {})
+        target = (
+            "no PostgreSQL"
+            if source.get("kind") == "postgresql"
+            else "em data/mangas.json"
+        )
         return [_item(
             "catalog",
             "Catalogar biblioteca",
-            f"{uncataloged} obra(s) no Drive ainda não estão em data/mangas.json.",
+            f"{uncataloged} obra(s) no Drive ainda não estão {target}.",
             "catalog_scan",
             "library",
         )]

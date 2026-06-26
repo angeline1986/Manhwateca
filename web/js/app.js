@@ -2,6 +2,11 @@ const grid = document.getElementById("statusGrid");
 const refreshButton = document.getElementById("refresh");
 const pendingList = document.getElementById("pendingList");
 const organizationPendingList = document.getElementById("organizationPendingList");
+const organizationCatalogPendingList = document.getElementById("organizationCatalogPendingList");
+const catalogPendingCount = document.getElementById("catalogPendingCount");
+const catalogPendingMeta = document.getElementById("catalogPendingMeta");
+const catalogAllPending = document.getElementById("catalogAllPending");
+const refreshCatalogPending = document.getElementById("refreshCatalogPending");
 const diagnosticGrid = document.getElementById("diagnosticGrid");
 const refreshDiagnostics = document.getElementById("refreshDiagnostics");
 const actionGrid = document.getElementById("actionGrid");
@@ -73,6 +78,9 @@ let lastMangaUpdatesTask;
 let lastNotionTask;
 let lastMetadataTask;
 let reviewItems = [];
+let catalogPendingItems = [];
+let catalogPendingPage = 1;
+const catalogPendingPageSize = 8;
 let apiSearchItems = [];
 const decisions = new Map();
 let editorialWorks = [];
@@ -399,12 +407,17 @@ function confirmTask(action) {
     "notion_csv_apply",
   ].includes(action);
   const externalRefresh = action === "mangaupdates_force_refresh";
-  confirmationTitle.textContent = externalRefresh
+  const massCatalog = action === "catalog_scan";
+  confirmationTitle.textContent = massCatalog
+    ? "Confirmar Catalogação em Massa"
+    : externalRefresh
     ? "Confirmar consultas externas"
     : notionWrite
     ? "Confirmar alteração no Notion"
     : "Confirmar alteração na biblioteca";
-  confirmationText.textContent = externalRefresh
+  confirmationText.textContent = massCatalog
+    ? `Você está prestes a registrar ${notionUncataloged} nova(s) obra(s) no banco de dados. Deseja prosseguir?`
+    : externalRefresh
     ? "Esta ação reconsulta o MangaUpdates mesmo quando já existe cache. Deseja continuar?"
     : notionWrite
     ? "Esta ação enviará alterações ao Notion. Deseja continuar?"
@@ -589,10 +602,10 @@ function taskNextStep(task) {
 
   if (task.action === "catalog_scan") {
     return {
-      label: "Ver pendências",
+      label: "Ver pendências de catálogo",
       page: "organization",
-      panel: "organizationPendingPanel",
-      text: "Confira as pendências acionáveis abaixo da organização local para decidir se o próximo passo é MangaUpdates ou Notion.",
+      panel: "organizationCatalogPendingPanel",
+      text: "Confira quais pastas do Drive ainda não aparecem no PostgreSQL.",
     };
   }
 
@@ -1101,10 +1114,95 @@ async function loadNotionStatus() {
       notionList("Pendentes", data.pending, "warning"),
       notionList("Duplicadas", data.duplicates, "danger"),
     ].join("");
+    renderOrganizationCatalogPending(data);
     renderNotionSyncStatus(data);
   } finally {
     refreshNotion.disabled = false;
   }
+}
+
+function renderOrganizationCatalogPending(data) {
+  if (!organizationCatalogPendingList) return;
+  catalogPendingItems = Array.isArray(data.uncataloged) ? data.uncataloged : [];
+  catalogPendingPage = clampCatalogPendingPage(catalogPendingPage);
+  renderCatalogPendingPage();
+}
+
+function clampCatalogPendingPage(page) {
+  const totalPages = Math.max(1, Math.ceil(catalogPendingItems.length / catalogPendingPageSize));
+  return Math.min(Math.max(1, page || 1), totalPages);
+}
+
+function renderCatalogPendingPage() {
+  const items = catalogPendingItems;
+  if (catalogPendingCount) {
+    catalogPendingCount.textContent = `${items.length} pendente${items.length === 1 ? "" : "s"}`;
+  }
+  if (catalogAllPending) {
+    catalogAllPending.disabled = !items.length;
+  }
+  if (catalogPendingMeta) {
+    const now = new Date().toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    catalogPendingMeta.textContent = `Sincronizado pela última vez às ${now}.`;
+  }
+  if (!items.length) {
+    organizationCatalogPendingList.innerHTML = '<p class="empty">Nenhuma obra fora do catálogo.</p>';
+    return;
+  }
+  catalogPendingPage = clampCatalogPendingPage(catalogPendingPage);
+  const totalPages = Math.max(1, Math.ceil(items.length / catalogPendingPageSize));
+  const start = (catalogPendingPage - 1) * catalogPendingPageSize;
+  const pageItems = items.slice(start, start + catalogPendingPageSize);
+  organizationCatalogPendingList.innerHTML = `
+    <div class="catalog-pending-row catalog-pending-head">
+      <span>Nome da pasta no Drive</span>
+      <span>Ações</span>
+    </div>
+    ${pageItems.map(item => `
+      <div class="catalog-pending-row">
+        <strong>${escapeHtml(item)}</strong>
+        <span class="catalog-pending-action">
+          <button type="button" data-catalog-one="${escapeHtml(item)}">Catalogar</button>
+          <small aria-live="polite"></small>
+        </span>
+      </div>
+    `).join("")}
+    <div class="catalog-pending-footer">
+      <span>Mostrando ${start + 1}-${Math.min(start + catalogPendingPageSize, items.length)} de ${items.length}</span>
+      <span class="catalog-pending-pages">
+        ${renderCatalogPendingPagination(totalPages)}
+      </span>
+    </div>
+  `;
+}
+
+function renderCatalogPendingPagination(totalPages) {
+  const pages = new Set([1, totalPages, catalogPendingPage]);
+  if (catalogPendingPage > 1) pages.add(catalogPendingPage - 1);
+  if (catalogPendingPage < totalPages) pages.add(catalogPendingPage + 1);
+  const ordered = [...pages].sort((a, b) => a - b);
+  const controls = [
+    `<button type="button" class="page-arrow" data-catalog-page="prev" ${catalogPendingPage === 1 ? "disabled" : ""} aria-label="Página anterior">‹</button>`,
+  ];
+  let previous = 0;
+  for (const page of ordered) {
+    if (page - previous > 1) {
+      controls.push('<span class="page-ellipsis">...</span>');
+    }
+    controls.push(
+      page === catalogPendingPage
+        ? `<strong>${page}</strong>`
+        : `<button type="button" data-catalog-page="${page}">${page}</button>`
+    );
+    previous = page;
+  }
+  controls.push(
+    `<button type="button" class="page-arrow" data-catalog-page="next" ${catalogPendingPage === totalPages ? "disabled" : ""} aria-label="Próxima página">›</button>`
+  );
+  return controls.join("");
 }
 
 function renderNotionSyncStatus(data) {
@@ -1715,6 +1813,93 @@ function handlePendingClick(event) {
   .filter(Boolean)
   .forEach(list => list.addEventListener("click", handlePendingClick));
 
+if (catalogAllPending) {
+  catalogAllPending.addEventListener("click", () => {
+    if (!notionUncataloged) return;
+    startTask("catalog_scan", true);
+  });
+}
+
+if (refreshCatalogPending) {
+  refreshCatalogPending.addEventListener("click", async () => {
+    refreshCatalogPending.disabled = true;
+    refreshCatalogPending.classList.add("spinning");
+    try {
+      await Promise.all([loadNotionStatus(), loadPendingActions()]);
+    } finally {
+      refreshCatalogPending.disabled = false;
+      refreshCatalogPending.classList.remove("spinning");
+    }
+  });
+}
+
+if (organizationCatalogPendingList) {
+  organizationCatalogPendingList.addEventListener("click", async event => {
+    const pageButton = event.target.closest("[data-catalog-page]");
+    if (pageButton) {
+      const target = pageButton.dataset.catalogPage;
+      if (target === "next") {
+        catalogPendingPage += 1;
+      } else if (target === "prev") {
+        catalogPendingPage -= 1;
+      } else {
+        catalogPendingPage = Number.parseInt(target, 10) || catalogPendingPage;
+      }
+      catalogPendingPage = clampCatalogPendingPage(catalogPendingPage);
+      renderCatalogPendingPage();
+      return;
+    }
+
+    const button = event.target.closest("[data-catalog-one]");
+    if (!button) return;
+    const name = button.dataset.catalogOne;
+    const row = button.closest(".catalog-pending-row");
+    const feedback = button.parentElement?.querySelector("small");
+    button.disabled = true;
+    button.textContent = "Catalogando...";
+    if (feedback) {
+      feedback.textContent = "Salvando no PostgreSQL...";
+      feedback.className = "";
+    }
+    try {
+      const response = await fetch("/api/catalog/catalog-one", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        if (feedback) {
+          feedback.textContent = payload.error || "Não foi possível catalogar.";
+          feedback.className = "error";
+        } else {
+          window.alert(payload.error || "Não foi possível catalogar a obra.");
+        }
+        button.disabled = false;
+        button.textContent = "Tentar novamente";
+        return;
+      }
+      if (feedback) {
+        feedback.textContent = "Catalogada.";
+        feedback.className = "success";
+      }
+      button.textContent = "Catalogada";
+      catalogPendingItems = catalogPendingItems.filter(item => item !== name);
+      if (row) row.classList.add("catalog-pending-row-done");
+      window.setTimeout(() => {
+        catalogPendingPage = clampCatalogPendingPage(catalogPendingPage);
+        renderCatalogPendingPage();
+      }, 650);
+      await Promise.all([loadCatalog(), loadStatus(), loadPendingActions()]);
+    } finally {
+      if (button.textContent !== "Catalogada" && button.textContent !== "Tentar novamente") {
+        button.disabled = false;
+        button.textContent = "Catalogar";
+      }
+    }
+  });
+}
+
 function pendingRequiresConfirmation(action) {
   return [
     "apply_organization",
@@ -1723,6 +1908,7 @@ function pendingRequiresConfirmation(action) {
     "notion_update_existing",
     "notion_csv_apply",
     "mangaupdates_force_refresh",
+    "catalog_scan",
   ].includes(action);
 }
 

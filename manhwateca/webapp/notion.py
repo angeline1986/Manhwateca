@@ -10,6 +10,7 @@ from manhwateca.library_organizer.grouping import (
     is_legacy_container,
 )
 from manhwateca.library_organizer.discovery import is_manga_folder
+from manhwateca.notion_sync.matching import normalize_title
 from manhwateca.shared.titles import get_canonical_manga_name
 from manhwateca.webapp.data_source import active_catalog_source
 
@@ -29,10 +30,14 @@ def notion_status(project_root):
     except (OSError, json.JSONDecodeError):
         return _empty_status(error="O arquivo de status está inválido.")
     summary = data.get("resumo", {})
-    library_names, catalog_names, source = _local_library_state(project_root)
+    library_names, catalog_names, catalog_keys, source = _local_library_state(project_root)
     status_catalog_total = summary.get("total_catalogo", 0)
     uncataloged = sorted(
-        library_names - catalog_names,
+        [
+            name
+            for name in library_names
+            if normalize_title(name) not in catalog_keys
+        ],
         key=str.casefold,
     )
     stale = status_catalog_total != len(catalog_names)
@@ -63,11 +68,13 @@ def notion_status(project_root):
 def _local_library_state(project_root):
     source = active_catalog_source(project_root)
     if source["kind"] == "postgresql":
+        records = source.get("mangas", [])
         catalog_names = {
             record.title
-            for record in source.get("mangas", [])
+            for record in records
             if getattr(record, "title", None)
         }
+        catalog_keys = _catalog_keys_from_records(records)
     else:
         catalog_path = Path(project_root) / CATALOG_PATH
         try:
@@ -79,13 +86,14 @@ def _local_library_state(project_root):
             for item in catalog
             if isinstance(item, dict) and item.get("nome")
         }
+        catalog_keys = {normalize_title(name) for name in catalog_names if name}
 
     root_value = os.getenv("MANGA_ROOT", "").strip()
     if not root_value:
-        return catalog_names, catalog_names, _public_source(source)
+        return catalog_names, catalog_names, catalog_keys, _public_source(source)
     library_root = Path(root_value).expanduser()
     if not library_root.is_dir():
-        return catalog_names, catalog_names, _public_source(source)
+        return catalog_names, catalog_names, catalog_keys, _public_source(source)
     folders = find_manga_folders(
         library_root,
         is_group_folder,
@@ -99,7 +107,32 @@ def _local_library_state(project_root):
         get_canonical_manga_name(folder.name)
         for folder in folders
     }
-    return library_names, catalog_names, _public_source(source)
+    return library_names, catalog_names, catalog_keys, _public_source(source)
+
+
+def _catalog_keys_from_records(records):
+    keys = set()
+    for record in records:
+        for name in _record_names(record):
+            normalized = normalize_title(name)
+            if normalized:
+                keys.add(normalized)
+    return keys
+
+
+def _record_names(record):
+    title = getattr(record, "title", None)
+    if title:
+        yield title
+    alternative = getattr(record, "alternative_title", None)
+    if not alternative:
+        return
+    for separator in ("|", ",", ";"):
+        alternative = alternative.replace(separator, "\n")
+    for name in alternative.splitlines():
+        name = name.strip()
+        if name:
+            yield name
 
 
 def _public_source(source):
