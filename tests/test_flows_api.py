@@ -112,6 +112,13 @@ class FlowControllerTests(unittest.TestCase):
             for item in payload["data"]["integrations"]
         ))
 
+    def test_from_project_uses_official_backend_by_default(self):
+        controller = FlowController.from_project("/tmp")
+
+        self.assertTrue(hasattr(controller.backend, "get_status"))
+        self.assertTrue(hasattr(controller.backend, "list_history"))
+        self.assertTrue(hasattr(controller.backend, "run_stage"))
+
 
 class FakeBackend:
     def __init__(self):

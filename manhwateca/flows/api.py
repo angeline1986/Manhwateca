@@ -12,7 +12,7 @@ from manhwateca.flows.domain import (
     WorkflowExecution,
 )
 from manhwateca.flows.integrations import FlowIntegrations, IntegrationCheck
-from manhwateca.flows.legacy_adapter import LegacyWorkflowAdapter
+from manhwateca.flows.runtime import OfficialFlowBackend, default_flow_integrations
 
 
 logger = logging.getLogger(__name__)
@@ -39,9 +39,13 @@ class FlowController:
         legacy_manager=None,
         audit_service=None,
     ):
+        selected_integrations = integrations or default_flow_integrations()
         return cls(
-            backend or LegacyWorkflowAdapter(project_root, manager=legacy_manager),
-            integrations=integrations,
+            backend or OfficialFlowBackend(
+                integrations=selected_integrations,
+                audit_service=audit_service,
+            ),
+            integrations=selected_integrations,
             audit_service=audit_service,
         )
 

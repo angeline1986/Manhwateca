@@ -42,6 +42,8 @@ class WorkflowOrchestrator:
         id_factory=None,
         clock=None,
         audit_service=None,
+        on_started=None,
+        on_stage_started=None,
     ):
         self.repository = repository
         self.integrations = integrations
@@ -49,6 +51,8 @@ class WorkflowOrchestrator:
         self.id_factory = id_factory or (lambda: f"wf_{uuid4().hex}")
         self.clock = clock or _now
         self.audit_service = audit_service
+        self.on_started = on_started
+        self.on_stage_started = on_stage_started
 
     def start(self) -> WorkflowExecution:
         active = self.repository.latest_execution()
@@ -58,8 +62,6 @@ class WorkflowOrchestrator:
             WorkflowStatus.CANCELLING,
         }:
             raise RuntimeError("Já existe um Workflow ativo.")
-        self._validate_global_dependencies()
-
         execution = WorkflowExecution(
             execution_id=self.id_factory(),
             status=WorkflowStatus.VALIDATING,
@@ -70,6 +72,38 @@ class WorkflowOrchestrator:
             ),
         )
         self.repository.save_execution(execution)
+        try:
+            self._validate_global_dependencies()
+        except Exception as error:
+            execution = self._with_status(
+                WorkflowExecution(
+                    execution_id=execution.execution_id,
+                    status=execution.status,
+                    started_at=execution.started_at,
+                    stages=execution.stages,
+                    errors=(FlowError(str(error), code="FLOW_VALIDATION_FAILED"),),
+                ),
+                WorkflowStatus.FAILED,
+                finished_at=self.clock(),
+            )
+            self.repository.save_execution(execution)
+            self._persist_final_summary(execution)
+            self.repository.append_log(FlowLogRecord(
+                execution_id=execution.execution_id,
+                operation="start",
+                status=execution.status.value,
+                error_code="FLOW_VALIDATION_FAILED",
+                message="Workflow falhou na validação inicial.",
+            ))
+            self._audit(
+                "workflow.fail",
+                execution,
+                status=AuditStatus.ERROR.value,
+                severity=AuditSeverity.ERROR.value,
+                message="Workflow falhou na validação inicial.",
+            )
+            self._notify_started()
+            return execution
         execution = self._with_status(execution, WorkflowStatus.RUNNING)
         self.repository.save_execution(execution)
         self.repository.append_log(FlowLogRecord(
@@ -138,6 +172,7 @@ class WorkflowOrchestrator:
             ),
         )
         self.repository.save_execution(execution)
+        self._notify_stage_started()
 
         try:
             result = service.finalize(service.execute())
@@ -174,7 +209,15 @@ class WorkflowOrchestrator:
                 finished_at=self.clock(),
             ),
         )
-        execution = self._with_status(execution, workflow_status)
+        execution = self._with_status(
+            execution,
+            workflow_status,
+            finished_at=(
+                self.clock()
+                if workflow_status == WorkflowStatus.FAILED
+                else None
+            ),
+        )
         self.repository.save_execution(execution)
         self.repository.append_log(FlowLogRecord(
             execution_id=execution.execution_id,
@@ -403,6 +446,14 @@ class WorkflowOrchestrator:
             ))
         except Exception:
             logger.exception("Falha ao gravar auditoria de Fluxos.")
+
+    def _notify_started(self) -> None:
+        if self.on_started:
+            self.on_started()
+
+    def _notify_stage_started(self) -> None:
+        if self.on_stage_started:
+            self.on_stage_started()
 
 
 def _now() -> str:

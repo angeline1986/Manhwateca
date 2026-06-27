@@ -81,6 +81,7 @@ class WorkflowOrchestratorTests(unittest.TestCase):
         self.assertEqual("wf_1", repository.summary_execution_id)
         self.assertEqual("failed", repository.summary_metrics["status"])
         self.assertEqual(1, repository.summary_errors_count)
+        self.assertIsNotNone(result.finished_at)
 
     def test_cancel_marks_current_execution_cancelled(self):
         repository = FakeRepository()
@@ -155,11 +156,17 @@ class WorkflowOrchestratorTests(unittest.TestCase):
         orchestrator = WorkflowOrchestrator(
             repository,
             fake_integrations(valid=False),
+            id_factory=lambda: "wf_1",
+            clock=lambda: "2026-06-27T10:05:00-03:00",
         )
 
-        with self.assertRaisesRegex(RuntimeError, "PostgreSQL indisponível"):
-            orchestrator.start()
-        self.assertIsNone(repository.latest_execution())
+        execution = orchestrator.start()
+
+        self.assertEqual(WorkflowStatus.FAILED, execution.status)
+        self.assertEqual("wf_1", repository.latest_execution().execution_id)
+        self.assertEqual("2026-06-27T10:05:00-03:00", execution.finished_at)
+        self.assertTrue(execution.errors)
+        self.assertEqual("failed", repository.summary_metrics["status"])
 
 
 class FakeStageService:
