@@ -118,7 +118,18 @@ class ResolveIdsService(BaseStageService):
     def execute(self) -> StageResult:
         result = self.integrations.mangaupdates.search_series()
         warnings = ()
-        if result.pending or result.not_found:
+        if result.searched == 0:
+            warnings = (
+                FlowWarning(
+                    "Nenhuma obra elegível para resolução de ID.",
+                    code="RESOLVE_IDS_EMPTY",
+                    details={
+                        "catalogWorks": result.metrics.get("catalogWorks", 0),
+                        "alreadyResolved": result.metrics.get("alreadyResolved", 0),
+                    },
+                ),
+            )
+        elif result.pending or result.not_found:
             warnings = (
                 FlowWarning(
                     "Resolução de IDs concluída com pendências.",

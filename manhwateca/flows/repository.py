@@ -32,6 +32,26 @@ class FlowLogRecord:
     details: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True)
+class CatalogWorkRecord:
+    work_id: int
+    title: str
+    work_code: str | None = None
+    alternative_title: str | None = None
+
+
+@dataclass(frozen=True)
+class IdCandidateRecord:
+    execution_id: str
+    work_id: int | None
+    searched_title: str
+    status: str
+    candidate_external_id: str | None = None
+    candidate_title: str | None = None
+    confidence: float | None = None
+    details: dict[str, Any] | None = None
+
+
 class FlowRepository:
     def __init__(self, connection=None, *, connection_factory=None):
         self.connection = connection
@@ -326,6 +346,60 @@ class FlowRepository:
             """
         )
         return row["execution_id"] if row else None
+
+    def list_catalog_works_for_id_resolution(self) -> list[CatalogWorkRecord]:
+        rows = self._fetch_all(
+            """
+            SELECT id, title, work_code, alternative_title
+            FROM vw_mangas
+            ORDER BY title
+            """
+        )
+        return [
+            CatalogWorkRecord(
+                work_id=row["id"],
+                title=row.get("title") or "",
+                work_code=row.get("work_code"),
+                alternative_title=row.get("alternative_title"),
+            )
+            for row in rows
+        ]
+
+    def replace_id_candidates(
+        self,
+        execution_id: str,
+        candidates: list[IdCandidateRecord],
+    ) -> None:
+        self._execute(
+            """
+            DELETE FROM flow_id_candidates
+            WHERE execution_id = %s
+            """,
+            (execution_id,),
+        )
+        with self._cursor() as cursor:
+            for candidate in candidates:
+                cursor.execute(
+                    """
+                    INSERT INTO flow_id_candidates (
+                        execution_id, work_id, searched_title,
+                        candidate_external_id, candidate_title, confidence,
+                        status, details
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                    """,
+                    (
+                        candidate.execution_id,
+                        candidate.work_id,
+                        candidate.searched_title,
+                        candidate.candidate_external_id,
+                        candidate.candidate_title,
+                        candidate.confidence,
+                        candidate.status,
+                        _json(candidate.details or {}),
+                    ),
+                )
+        self._connection().commit()
 
     def _insert_stage(self, cursor, execution_id: str, stage: StageExecution):
         result = stage.result or StageResult()

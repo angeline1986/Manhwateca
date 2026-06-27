@@ -17,6 +17,7 @@ from manhwateca.flows.integrations import (
     SeriesSearchResult,
 )
 from manhwateca.flows.library import LocalLibraryIntegration
+from manhwateca.flows.mangaupdates import MangaUpdatesFlowIntegration
 from manhwateca.flows.orchestrator import WorkflowOrchestrator
 from manhwateca.flows.repository import FlowRepository
 
@@ -167,6 +168,6 @@ def default_flow_integrations() -> FlowIntegrations:
     return FlowIntegrations(
         database=DatabaseHealthIntegration(),
         library=LocalLibraryIntegration(),
-        mangaupdates=DeferredMangaUpdatesIntegration(),
+        mangaupdates=MangaUpdatesFlowIntegration(),
         notion=DeferredNotionIntegration(),
     )
