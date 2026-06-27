@@ -1,6 +1,8 @@
 from datetime import datetime
+import logging
 from typing import Any
 
+from manhwateca.audit.models import AuditEvent, AuditModule
 from manhwateca.flows.domain import (
     OFFICIAL_STAGE_DEFINITIONS,
     FlowError,
@@ -13,10 +15,19 @@ from manhwateca.flows.integrations import FlowIntegrations, IntegrationCheck
 from manhwateca.flows.legacy_adapter import LegacyWorkflowAdapter
 
 
+logger = logging.getLogger(__name__)
+
+
 class FlowController:
-    def __init__(self, backend, integrations: FlowIntegrations | None = None):
+    def __init__(
+        self,
+        backend,
+        integrations: FlowIntegrations | None = None,
+        audit_service=None,
+    ):
         self.backend = backend
         self.integrations = integrations
+        self.audit_service = audit_service
 
     @classmethod
     def from_project(
@@ -26,10 +37,12 @@ class FlowController:
         backend=None,
         integrations=None,
         legacy_manager=None,
+        audit_service=None,
     ):
         return cls(
             backend or LegacyWorkflowAdapter(project_root, manager=legacy_manager),
             integrations=integrations,
+            audit_service=audit_service,
         )
 
     def handle_get(self, path: str):
@@ -43,13 +56,26 @@ class FlowController:
 
     def handle_post(self, path: str, payload: dict[str, Any]):
         if path == "/api/flows/start":
+            self._audit_requested(
+                "workflow.start_requested",
+                "Solicitação de início do Workflow.",
+            )
             return self._run(lambda: self.backend.start(), status=202)
         if path == "/api/flows/cancel":
+            self._audit_requested(
+                "workflow.cancel_requested",
+                "Solicitação de cancelamento do Workflow.",
+            )
             return self._run(self._cancel, status=202)
         prefix = "/api/flows/stages/"
         suffix = "/run"
         if path.startswith(prefix) and path.endswith(suffix):
             stage_slug = path.removeprefix(prefix).removesuffix(suffix)
+            self._audit_requested(
+                "workflow.stage.start_requested",
+                "Solicitação de execução de etapa.",
+                details={"stage": stage_slug},
+            )
             return self._run(lambda: self._run_stage(stage_slug), status=202)
         return None
 
@@ -114,6 +140,27 @@ class FlowController:
         except RuntimeError as error:
             return self._error(str(error), status=409)
         return self._ok({"execution": _execution_to_dict(execution)}, status=status)
+
+    def _audit_requested(
+        self,
+        action: str,
+        message: str,
+        *,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        if self.audit_service is None:
+            return
+        try:
+            self.audit_service.record(AuditEvent(
+                module=AuditModule.FLOWS.value,
+                action=action,
+                message=message,
+                details=details or {},
+            ))
+        except Exception:
+            logger.exception(
+                "Falha ao gravar auditoria de solicitação de Fluxos."
+            )
 
     def _ok(self, data, *, status=200):
         return {
