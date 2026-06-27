@@ -15,7 +15,6 @@
   --danger: #b54b50;
   --shadow: 0 18px 55px rgba(91, 50, 65, .07);
 }
-
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {
@@ -57,6 +56,7 @@ code { font-size: .9em; }
   background: rgba(255,255,255,.65) !important; font-size: 22px; line-height: 1;
 }
 .main-nav { display: grid; gap: 6px; }
+.legacy-nav { display: none; }
 .nav-link {
   display: flex; align-items: center; gap: 12px; width: 100%;
   padding: 12px 14px; border: 0; border-radius: 13px;
@@ -115,6 +115,142 @@ button:not(.nav-link):not(.menu-toggle):hover { background: var(--rose-dark); tr
 .page.active { display: block; }
 @keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
 .page > .panel + .panel { margin-top: 24px; }
+#page-flows {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.flow-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+.flow-steps {
+  display: grid;
+  gap: 13px;
+}
+.flow-stage {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  gap: 15px;
+  align-items: center;
+  padding: 17px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: #fff;
+}
+.flow-stage.loading {
+  display: block;
+  color: var(--muted);
+}
+.flow-stage-marker {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
+  color: var(--rose);
+  background: #f4e4e4;
+  font-weight: 950;
+}
+.flow-stage h3 {
+  margin: 0 0 3px;
+}
+.flow-stage p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.flow-stage-status {
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: #faf7f8;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.flow-stage.current {
+  border-color: #dcaabb;
+  box-shadow: 0 14px 30px rgba(169,77,107,.12);
+}
+.flow-stage.current .flow-stage-status {
+  color: var(--rose);
+  background: #f4e4e4;
+}
+.flow-stage.completed .flow-stage-marker {
+  color: #fff;
+  background: var(--success);
+}
+.flow-stage.completed .flow-stage-status {
+  color: var(--success);
+  background: #e8f3ee;
+}
+.flow-stage.failed .flow-stage-marker,
+.flow-stage.interrupted .flow-stage-marker {
+  color: #fff;
+  background: var(--danger);
+}
+.flow-stage.failed .flow-stage-status,
+.flow-stage.interrupted .flow-stage-status {
+  color: var(--danger);
+  background: #fff1f1;
+}
+.flow-stage.completed_with_warnings .flow-stage-status {
+  color: var(--warning);
+  background: #fff3df;
+}
+.flow-stage.completed_with_warnings .flow-stage-marker {
+  color: var(--warning);
+  background: #fff3df;
+}
+#flowsFeedback {
+  display: block;
+  margin-top: 10px;
+  color: var(--success);
+}
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0;
+}
+.tabs button {
+  border: 1px solid var(--border) !important;
+  border-radius: 999px !important;
+  padding: 9px 13px !important;
+  background: #fff !important;
+  color: var(--muted) !important;
+  font-weight: 850 !important;
+}
+.tabs button.active {
+  color: #fff !important;
+  background: var(--rose) !important;
+  border-color: var(--rose) !important;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.cards .action-card {
+  min-height: 170px;
+  padding: 20px;
+  border-radius: 20px;
+  background: #fff;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+}
+.cards .action-card p {
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 0;
+}
 .collapsible-panel > summary {
   position: relative; display: flex; align-items: flex-start;
   justify-content: space-between; gap: 20px; padding-right: 42px;
@@ -502,7 +638,7 @@ input:focus, select:focus { border-color: var(--rose); box-shadow: 0 0 0 4px rgb
 }
 .secondary-action {
   background: #fff;
-  color: var(--ink);
+  color: var(--rose);
 }
 .primary-action:disabled,
 .secondary-action:disabled {
@@ -816,8 +952,10 @@ input:focus, select:focus { border-color: var(--rose); box-shadow: 0 0 0 4px rgb
 }
 @media (max-width: 560px) {
   .status-grid, .action-grid, .catalog-summary, .candidate-grid, .notion-lists,
-  .diagnostic-grid, .editorial-form, .pending-list { grid-template-columns: 1fr; }
+  .diagnostic-grid, .editorial-form, .pending-list, .cards { grid-template-columns: 1fr; }
   .journey-grid { grid-template-columns: 1fr; }
+  .flow-stage { grid-template-columns: 1fr; }
+  .flow-stage-status { justify-self: start; }
   .review-form div, .manual-decision { align-items: stretch; flex-direction: column; }
   .manual-decision input { width: 100%; }
   .editorial-form .wide, .editorial-context { grid-column: auto; }

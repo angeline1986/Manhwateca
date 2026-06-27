@@ -22,28 +22,31 @@
       </div>
 
       <nav class="main-nav" aria-label="Navegação principal">
-        <button class="nav-link active" data-page="overview">
-          <span class="nav-icon">⌂</span><span>Visão geral</span>
+        <button class="nav-link active" data-page="flows">
+          <span class="nav-icon">▶</span><span>Fluxos</span>
         </button>
-        <button class="nav-link" data-page="library">
+        <button class="nav-link" data-page="overview">
+          <span class="nav-icon">⌂</span><span>Dashboard</span>
+        </button>
+        <button class="nav-link legacy-nav" data-page="library">
           <span class="nav-icon">▤</span><span>Biblioteca</span>
         </button>
-        <button class="nav-link" data-page="organization">
+        <button class="nav-link legacy-nav" data-page="organization">
           <span class="nav-icon">◇</span><span>Organização</span>
         </button>
-        <button class="nav-link" data-page="mangaupdates">
+        <button class="nav-link legacy-nav" data-page="mangaupdates">
           <span class="nav-icon">⌕</span><span>MangaUpdates</span>
         </button>
-        <button class="nav-link" data-page="notion">
+        <button class="nav-link legacy-nav" data-page="notion">
           <span class="nav-icon">↻</span><span>Notion</span>
         </button>
-        <button class="nav-link" data-page="automation">
+        <button class="nav-link legacy-nav" data-page="automation">
           <span class="nav-icon">▶</span><span>Automação</span>
         </button>
       </nav>
 
       <div class="sidebar-footer">
-        <button class="nav-link" data-page="settings">
+        <button class="nav-link legacy-nav" data-page="settings">
           <span class="nav-icon">⚙</span><span>Configurações</span>
         </button>
         <span class="local-badge">Somente local</span>
@@ -55,9 +58,9 @@
         <button class="menu-toggle" id="menuToggle" type="button"
                 aria-label="Abrir menu">☰</button>
         <div>
-          <span class="eyebrow" id="pageEyebrow">PAINEL LOCAL</span>
-          <h1 id="pageTitle">Visão geral</h1>
-          <p id="pageSubtitle">Acompanhe a biblioteca e as integrações.</p>
+          <span class="eyebrow" id="pageEyebrow">FLUXOS</span>
+          <h1 id="pageTitle">Execute o processo guiado</h1>
+          <p id="pageSubtitle">Fluxo operacional da Manhwateca.</p>
         </div>
         <button class="topbar-action" id="refresh" type="button">
           Recarregar Dash
@@ -65,7 +68,48 @@
       </header>
 
       <div class="page-container">
-        <section class="page active" id="page-overview">
+        <section class="page active" id="page-flows">
+          <section class="panel flows-main-panel">
+            <div class="flow-header">
+              <div>
+                <span class="eyebrow">Fluxo guiado</span>
+                <h2>Processo recomendado</h2>
+                <p class="muted">
+                  Um único lugar para executar a jornada completa, sem alternar
+                  entre páginas técnicas.
+                </p>
+              </div>
+              <button class="primary-action" id="flowsStartWorkflow" type="button">
+                Executar próximo passo
+              </button>
+            </div>
+            <div class="flow-steps" id="flowsStageList" aria-live="polite">
+              <article class="flow-stage loading">Carregando etapas...</article>
+            </div>
+          </section>
+
+          <section class="panel flows-current-panel">
+            <span class="eyebrow">Detalhe da etapa atual</span>
+            <h2 id="flowsCurrentTitle">Carregando</h2>
+            <div class="tabs">
+              <button class="active" type="button">Pendências</button>
+              <button type="button">Candidatos</button>
+              <button type="button">Pesquisa manual</button>
+              <button type="button">Histórico</button>
+            </div>
+            <div class="cards" id="flowsCurrentCards">
+              <article class="action-card">
+                <div>
+                  <h3>Consultando workflow</h3>
+                  <p>Carregando o estado atual da próxima etapa.</p>
+                </div>
+              </article>
+            </div>
+            <span id="flowsFeedback" aria-live="polite"></span>
+          </section>
+        </section>
+
+        <section class="page" id="page-overview">
           <div class="status-grid" id="statusGrid" aria-live="polite">
             <article class="status-card loading">Consultando o ambiente...</article>
           </div>
@@ -306,7 +350,7 @@
               <div>
                 <span class="eyebrow">AÇÕES MANGAUPDATES</span>
                 <h2>Buscar e enriquecer dados</h2>
-                <p>Consulte em lotes, revise IDs e atualize o CSV.</p>
+                <p>Consulte em lotes, revise IDs e atualize os dados no PostgreSQL.</p>
               </div>
             </summary>
             <div class="action-grid" id="mangaActionGrid"></div>
@@ -427,7 +471,7 @@
           </details>
         </section>
 
-        <section class="page" id="page-automation">
+        <section class="page legacy-page" id="page-automation">
           <section class="panel workflow-panel">
             <div class="section-heading">
               <div>
@@ -435,24 +479,24 @@
                 <h2>Fluxo completo</h2>
                 <p>Selecione etapas; o fluxo pausa em falhas e decisões manuais.</p>
               </div>
-              <button id="startWorkflow" type="button">Executar selecionadas</button>
+              <button type="button">Executar selecionadas</button>
             </div>
-            <div class="workflow-notice" id="workflowNotice"></div>
-            <div class="workflow-steps" id="workflowSteps"></div>
+            <div class="workflow-notice"></div>
+            <div class="workflow-steps"></div>
             <div class="workflow-actions">
-              <button id="resumeWorkflow" type="button">Retomar fluxo</button>
-              <span id="workflowFeedback" aria-live="polite"></span>
+              <button type="button">Retomar fluxo</button>
+              <span aria-live="polite"></span>
             </div>
           </section>
 
-          <section class="panel task-history" id="taskHistory">
+          <section class="panel task-history">
             <div class="section-heading">
               <div>
                 <span class="eyebrow">ATIVIDADE</span>
                 <h2>Histórico de tarefas</h2>
               </div>
             </div>
-            <div class="task-list" id="taskList">
+            <div class="task-list">
               <p class="empty">Nenhuma tarefa executada nesta sessão.</p>
             </div>
           </section>

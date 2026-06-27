@@ -1,0 +1,136 @@
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Protocol
+
+from manhwateca.flows.domain import FlowError, FlowWarning, StageId
+
+
+class IntegrationStatus(str, Enum):
+    OPERATIONAL = "operational"
+    CHECKING = "checking"
+    WARNING = "warning"
+    UNAVAILABLE = "unavailable"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class IntegrationCheck:
+    name: str
+    status: IntegrationStatus
+    message: str | None = None
+    warnings: tuple[FlowWarning, ...] = ()
+    errors: tuple[FlowError, ...] = ()
+    details: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def available(self) -> bool:
+        return self.status in {
+            IntegrationStatus.OPERATIONAL,
+            IntegrationStatus.WARNING,
+        }
+
+
+@dataclass(frozen=True)
+class IntegrationValidation:
+    stage: StageId | None
+    valid: bool
+    warnings: tuple[FlowWarning, ...] = ()
+    errors: tuple[FlowError, ...] = ()
+
+
+@dataclass(frozen=True)
+class LibraryScanResult:
+    works_found: int = 0
+    chapters_found: int = 0
+    inconsistencies: tuple[FlowWarning, ...] = ()
+    metrics: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class CatalogResult:
+    created: int = 0
+    updated: int = 0
+    duplicates: int = 0
+    pending: int = 0
+    metrics: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class SeriesSearchResult:
+    searched: int = 0
+    matched: int = 0
+    pending: int = 0
+    not_found: int = 0
+    metrics: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class MetadataUpdateResult:
+    updated: int = 0
+    skipped: int = 0
+    failed: int = 0
+    metrics: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class NotionSyncResult:
+    created: int = 0
+    updated: int = 0
+    skipped: int = 0
+    failed: int = 0
+    metrics: dict[str, Any] = field(default_factory=dict)
+
+
+class DatabaseHealthIntegration(Protocol):
+    def check_status(self) -> IntegrationCheck:
+        ...
+
+    def validate(self, stage: StageId | None = None) -> IntegrationValidation:
+        ...
+
+
+class LibraryIntegration(Protocol):
+    def check_status(self) -> IntegrationCheck:
+        ...
+
+    def validate(self, stage: StageId | None = None) -> IntegrationValidation:
+        ...
+
+    def scan_library(self) -> LibraryScanResult:
+        ...
+
+    def catalog_works(self) -> CatalogResult:
+        ...
+
+
+class MangaUpdatesIntegration(Protocol):
+    def check_status(self) -> IntegrationCheck:
+        ...
+
+    def validate(self, stage: StageId | None = None) -> IntegrationValidation:
+        ...
+
+    def search_series(self) -> SeriesSearchResult:
+        ...
+
+    def get_metadata(self) -> MetadataUpdateResult:
+        ...
+
+
+class NotionIntegration(Protocol):
+    def check_status(self) -> IntegrationCheck:
+        ...
+
+    def validate(self, stage: StageId | None = None) -> IntegrationValidation:
+        ...
+
+    def sync_page(self) -> NotionSyncResult:
+        ...
+
+
+@dataclass(frozen=True)
+class FlowIntegrations:
+    database: DatabaseHealthIntegration
+    library: LibraryIntegration
+    mangaupdates: MangaUpdatesIntegration
+    notion: NotionIntegration

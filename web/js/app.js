@@ -60,6 +60,17 @@ const workflowNotice = document.getElementById("workflowNotice");
 const workflowFeedback = document.getElementById("workflowFeedback");
 const startWorkflow = document.getElementById("startWorkflow");
 const resumeWorkflow = document.getElementById("resumeWorkflow");
+const flowsStartWorkflow = document.getElementById("flowsStartWorkflow");
+const flowsResumeWorkflow = document.getElementById("flowsResumeWorkflow");
+const flowsSummary = document.getElementById("flowsSummary");
+const flowsProgress = document.getElementById("flowsProgress");
+const flowsStageList = document.getElementById("flowsStageList");
+const flowsCurrentTitle = document.getElementById("flowsCurrentTitle");
+const flowsCurrentDescription = document.getElementById("flowsCurrentDescription");
+const flowsCurrentMeta = document.getElementById("flowsCurrentMeta");
+const flowsCurrentActions = document.getElementById("flowsCurrentActions");
+const flowsCurrentCards = document.getElementById("flowsCurrentCards");
+const flowsFeedback = document.getElementById("flowsFeedback");
 const taskToast = document.getElementById("taskToast");
 const viewTaskProgress = document.getElementById("viewTaskProgress");
 const taskProgress = document.getElementById("taskProgress");
@@ -90,10 +101,15 @@ let workflowState;
 let workflowTimer;
 
 const pageMeta = {
+  flows: {
+    eyebrow: "FLUXOS",
+    title: "Execute o processo guiado",
+    subtitle: "Fluxo operacional da Manhwateca.",
+  },
   overview: {
-    eyebrow: "MANHWATECA WORKSPACE",
-    title: "Organize os arquivos e mantenha o Notion atualizado.",
-    subtitle: "Esta tela mostra se o catálogo local, a biblioteca no Drive, os dados do MangaUpdates e a conexão com o Notion estão disponíveis para executar as próximas etapas.",
+    eyebrow: "DASHBOARD",
+    title: "Visão geral",
+    subtitle: "Acompanhe a biblioteca e as integrações.",
   },
   library: {
     eyebrow: "ACERVO E CURADORIA",
@@ -170,7 +186,7 @@ setSidebarCollapsed(
   localStorage.getItem("manhwateca-sidebar-collapsed") === "true"
 );
 
-showPage(location.hash.replace("#", "") || "overview", false);
+showPage(location.hash.replace("#", "") || "flows", false);
 
 function card(title, detail, available, label) {
   return `
@@ -217,8 +233,8 @@ async function loadStatus() {
       card(
         "MangaUpdates",
         data.mangaupdates.cache_available && data.mangaupdates.csv_available
-          ? "Cache de detalhes e CSV enriquecido estão disponíveis."
-          : "Ainda faltam o cache de detalhes ou o CSV enriquecido.",
+          ? "Dados externos enriquecidos estão disponíveis."
+          : "Ainda faltam dados externos enriquecidos no catálogo.",
         data.mangaupdates.cache_available && data.mangaupdates.csv_available
       ),
       card(
@@ -321,10 +337,10 @@ async function loadActions() {
     apply_organization: ["Move as obras para os grupos alfabéticos corretos.", "Altera as pastas após confirmação."],
     apply_renaming: ["Padroniza os nomes de capítulos e capas.", "Renomeia os arquivos após confirmação."],
     run_tests: ["Verifica automaticamente as regras principais do sistema.", "Mostra os resultados no histórico."],
-    mangaupdates_search: ["Pesquisa obras ainda sem ID confirmado.", "Atualiza buscaIds.json com candidatos."],
-    mangaupdates_refresh: ["Completa candidatos sem link ou descrição.", "Atualiza os candidatos já pesquisados."],
-    mangaupdates_details: ["Consulta detalhes dos IDs confirmados.", "Atualiza o cache local do MangaUpdates."],
-    mangaupdates_force_refresh: ["Reconsulta IDs confirmados mesmo com cache.", "Use somente quando quiser atualizar dados antigos."],
+    mangaupdates_search: ["Pesquisa obras ainda sem ID confirmado.", "Registra candidatos e decisões no PostgreSQL."],
+    mangaupdates_refresh: ["Completa candidatos sem link ou descrição.", "Atualiza dados de revisão no PostgreSQL."],
+    mangaupdates_details: ["Consulta detalhes dos IDs confirmados.", "Atualiza URL, capa e metadados no PostgreSQL."],
+    mangaupdates_force_refresh: ["Reconsulta IDs confirmados mesmo com dados salvos.", "Use somente quando quiser atualizar dados antigos."],
     mangaupdates_csv: ["Usa os dados já salvos, sem consultar a API.", "Atualiza o CSV preservando campos manuais."],
     notion_simulate_batch: ["Compara o catálogo com as páginas do Notion.", "Mostra o próximo lote sem alterar o Notion."],
     notion_apply_batch: ["Cria as próximas páginas ausentes.", "Publica até 25 obras após confirmação."],
@@ -393,8 +409,8 @@ async function loadActions() {
     }),
     render(entries.filter(([id]) => organizationIds.has(id))),
   ].join("");
-  mangaActionGrid.innerHTML = render(entries.filter(([, action]) =>
-    action.group === "mangaupdates"
+  mangaActionGrid.innerHTML = render(entries.filter(([id, action]) =>
+    action.group === "mangaupdates" && id !== "mangaupdates_csv"
   ));
   notionActionGrid.innerHTML = render(entries.filter(([id]) => notionIds.has(id)));
   supportActionGrid.innerHTML = render(entries.filter(([id]) => id === "run_tests"));
@@ -681,10 +697,11 @@ viewTaskProgress.addEventListener("click", () => {
   }
   showPage("automation");
   window.setTimeout(() => {
+    if (!taskList) return;
     const task = taskList.querySelector(
       `[data-task-id="${CSS.escape(taskToast.dataset.taskId || "")}"]`
     );
-    (task || document.getElementById("taskHistory")).scrollIntoView({
+    (task || document.getElementById("taskHistory"))?.scrollIntoView({
       behavior: "smooth",
       block: "center",
     });
@@ -696,11 +713,13 @@ viewTaskProgress.addEventListener("click", () => {
   }, 120);
 });
 
-taskList.addEventListener("click", event => {
-  const button = event.target.closest("[data-next-page]");
-  if (!button) return;
-  goToNextStep(button.dataset.nextPage, button.dataset.nextPanel);
-});
+if (taskList) {
+  taskList.addEventListener("click", event => {
+    const button = event.target.closest("[data-next-page]");
+    if (!button) return;
+    goToNextStep(button.dataset.nextPage, button.dataset.nextPanel);
+  });
+}
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, character => ({
@@ -711,9 +730,11 @@ function escapeHtml(value) {
 async function loadTasks() {
   const response = await fetch("/api/tasks", { cache: "no-store" });
   const data = await response.json();
-  taskList.innerHTML = data.tasks.length
-    ? data.tasks.map(renderTask).join("")
-    : '<p class="empty">Nenhuma tarefa executada.</p>';
+  if (taskList) {
+    taskList.innerHTML = data.tasks.length
+      ? data.tasks.map(renderTask).join("")
+      : '<p class="empty">Nenhuma tarefa executada.</p>';
+  }
   updateTaskToast(data.tasks);
   const hasRunning = data.tasks.some(task => ["queued", "running"].includes(task.status));
   const catalogTask = data.tasks.find(task =>
@@ -1448,6 +1469,258 @@ editorialList.addEventListener("submit", async event => {
   if (response.ok) await Promise.all([loadEditorial(), loadCatalog()]);
 });
 
+const FLOW_STAGE_GROUPS = [
+  {
+    id: "organize_library",
+    order: 1,
+    title: "Organizar biblioteca",
+    description: "Valida estrutura, nomes, capas e inconsistências locais.",
+    steps: ["previews", "organize"],
+  },
+  {
+    id: "catalog_works",
+    order: 2,
+    title: "Catalogar obras",
+    description: "Lê a biblioteca e atualiza o catálogo local.",
+    steps: ["catalog"],
+  },
+  {
+    id: "resolve_ids",
+    order: 3,
+    title: "Resolver IDs",
+    description: "Busca candidatos e confirma IDs oficiais no MangaUpdates.",
+    steps: ["ids", "review_ids"],
+  },
+  {
+    id: "metadata",
+    order: 4,
+    title: "Atualizar metadados",
+    description: "Consulta detalhes oficiais e prepara dados enriquecidos.",
+    steps: ["details"],
+  },
+  {
+    id: "notion",
+    order: 5,
+    title: "Sincronizar Notion",
+    description: "Reflete no Notion as alterações realizadas durante o Workflow.",
+    steps: ["notion_catalog", "notion_catalog_apply", "notion_metadata", "notion_metadata_apply"],
+  },
+];
+
+const ACTIVE_FLOW_STEPS = FLOW_STAGE_GROUPS.flatMap(group => group.steps);
+
+const FLOW_STATUS_LABELS = {
+  waiting: "Aguardando",
+  validating: "Validando",
+  running: "Processando",
+  completed: "Concluída",
+  completed_with_warnings: "Concluída com alertas",
+  skipped: "Ignorada",
+  failed: "Falhou",
+  cancelled: "Cancelada",
+};
+
+function flowStageStatus(group, run) {
+  const results = run.results || {};
+  const statuses = group.steps.map(step => results[step]?.status).filter(Boolean);
+  if (group.steps.includes(run.current)) return "running";
+  if (statuses.includes("failed")) return "failed";
+  if (statuses.includes("cancelled")) return "cancelled";
+  if (statuses.includes("interrupted")) return "failed";
+  if (statuses.includes("manual")) return "completed_with_warnings";
+  if (group.steps.every(step => results[step]?.status === "completed")) {
+    return "completed";
+  }
+  const firstIncomplete = FLOW_STAGE_GROUPS.find(stage =>
+    !stage.steps.every(step => results[step]?.status === "completed")
+  );
+  if (firstIncomplete?.id === group.id) {
+    return "waiting";
+  }
+  return "waiting";
+}
+
+function currentFlowStage(run) {
+  if (run.current) {
+    return FLOW_STAGE_GROUPS.find(group => group.steps.includes(run.current));
+  }
+  const manual = FLOW_STAGE_GROUPS.find(group =>
+    group.steps.some(step => run.results?.[step]?.status === "manual")
+  );
+  if (manual) return manual;
+  const failed = FLOW_STAGE_GROUPS.find(group =>
+    group.steps.some(step => ["failed", "interrupted"].includes(run.results?.[step]?.status))
+  );
+  if (failed) return failed;
+  return FLOW_STAGE_GROUPS.find(group =>
+    !group.steps.every(step => run.results?.[step]?.status === "completed")
+  ) || FLOW_STAGE_GROUPS[FLOW_STAGE_GROUPS.length - 1];
+}
+
+function flowStageCard(group, run) {
+  const status = flowStageStatus(group, run);
+  const marker = status === "completed" ? "✓" : group.order;
+  const currentClass = ["running", "validating", "completed_with_warnings"].includes(status)
+    ? " current"
+    : "";
+  return `
+    <article class="flow-stage ${status}${currentClass}">
+      <span class="flow-stage-marker">${escapeHtml(marker)}</span>
+      <div>
+        <h3>${group.order}. ${escapeHtml(group.title)}</h3>
+        <p>${escapeHtml(group.description)}</p>
+      </div>
+      <span class="flow-stage-status">${escapeHtml(FLOW_STATUS_LABELS[status] || status)}</span>
+    </article>
+  `;
+}
+
+function flowStageDetail(activeStage, activeStatus, run, completed) {
+  const details = {
+    organize_library: {
+      primaryTitle: "Organizar biblioteca",
+      primaryText: "Gere previews e revise conflitos antes de qualquer alteração física.",
+      primaryAction: "Executar",
+      secondaryTitle: "Validações",
+      secondaryText: "Diretório configurado, permissão de leitura e existência da biblioteca.",
+      secondaryAction: "Ver detalhes",
+      nextText: "Catalogar obras fica disponível.",
+    },
+    catalog_works: {
+      primaryTitle: "Catalogar obras",
+      primaryText: "Leia a biblioteca e atualize os registros persistidos no banco local.",
+      primaryAction: "Executar",
+      secondaryTitle: "Critério de início",
+      secondaryText: "A organização da biblioteca deve estar concluída.",
+      secondaryAction: "Ver detalhes",
+      nextText: "Resolver IDs fica disponível.",
+    },
+    resolve_ids: {
+      primaryTitle: "Resolver IDs",
+      primaryText: "Pesquise candidatos, valide correspondências e registre obras não localizadas.",
+      primaryAction: "Executar",
+      secondaryTitle: "Critério de conclusão",
+      secondaryText: "Todos os IDs possíveis resolvidos e pendências registradas.",
+      secondaryAction: "Ver detalhes",
+      nextText: "Atualizar metadados fica disponível.",
+    },
+    metadata: {
+      primaryTitle: "Atualizar metadados",
+      primaryText: "Atualize dados enriquecidos das obras com ID confirmado.",
+      primaryAction: "Executar",
+      secondaryTitle: "Critério de início",
+      secondaryText: "A obra precisa possuir `mangaupdates_id`.",
+      secondaryAction: "Ver detalhes",
+      nextText: "Sincronizar Notion fica disponível.",
+    },
+    notion: {
+      primaryTitle: "Sincronizar Notion",
+      primaryText: "Crie ou atualize páginas e sincronize propriedades no Notion.",
+      primaryAction: "Executar",
+      secondaryTitle: "Critério de início",
+      secondaryText: "Metadados atualizados e integração disponível.",
+      secondaryAction: "Ver detalhes",
+      nextText: "O Workflow pode ser finalizado.",
+    },
+  };
+  const detail = details[activeStage.id] || details.organize_library;
+  return {
+    ...detail,
+    primaryTitle: activeStatus === "completed"
+      ? `${completed} etapas concluídas`
+      : detail.primaryTitle,
+  };
+}
+
+function renderFlowsOverview(data) {
+  const run = data.run || { status: "idle", results: {} };
+  const stageStatuses = FLOW_STAGE_GROUPS.map(group => flowStageStatus(group, run));
+  const completed = stageStatuses.filter(status => status === "completed").length;
+  const percent = Math.round((completed / FLOW_STAGE_GROUPS.length) * 100);
+  const activeStage = currentFlowStage(run);
+  const activeStatus = flowStageStatus(activeStage, run);
+  const startedAt = run.started_at
+    ? new Date(run.started_at).toLocaleString("pt-BR")
+    : "Ainda não executado";
+  const finishedAt = run.finished_at
+    ? new Date(run.finished_at).toLocaleString("pt-BR")
+    : "Sem finalização registrada";
+
+  if (flowsSummary) {
+    flowsSummary.innerHTML = [
+      `<span class="flow-chip ${run.status === "completed" ? "ok" : ""}">${completed} de ${FLOW_STAGE_GROUPS.length} etapas concluídas</span>`,
+      `<span class="flow-chip">${escapeHtml(FLOW_STATUS_LABELS[activeStatus] || activeStatus)}: ${escapeHtml(activeStage.title)}</span>`,
+      run.status === "failed" || run.status === "interrupted"
+        ? '<span class="flow-chip warn">Requer atenção</span>'
+        : "",
+    ].join("");
+  }
+  if (flowsProgress) {
+    flowsProgress.innerHTML = `
+      <span><b>${percent}%</b> concluído · etapa ${activeStage.order} de ${FLOW_STAGE_GROUPS.length}</span>
+      <div><span style="width:${percent}%"></span></div>
+    `;
+  }
+  flowsStageList.innerHTML = FLOW_STAGE_GROUPS.map(group =>
+    flowStageCard(group, run)
+  ).join("");
+  flowsCurrentTitle.textContent = activeStage.title;
+  if (flowsCurrentDescription) {
+    flowsCurrentDescription.textContent = activeStage.description;
+  }
+  if (flowsCurrentMeta) {
+    flowsCurrentMeta.innerHTML = `
+      <article><strong>Status do fluxo</strong><span>${escapeHtml(run.status || "idle")}</span></article>
+      <article><strong>Início</strong><span>${escapeHtml(startedAt)}</span></article>
+      <article><strong>Última finalização</strong><span>${escapeHtml(finishedAt)}</span></article>
+    `;
+  }
+  if (flowsCurrentActions) {
+    flowsCurrentActions.innerHTML = run.status === "running"
+      ? '<button class="secondary-action" type="button" disabled>Execução em andamento</button>'
+      : run.status === "completed"
+        ? '<button class="primary-action" type="button" data-flow-start>Executar novamente</button>'
+        : '<button class="primary-action" type="button" data-flow-start>Executar próximo passo</button>';
+  }
+  if (flowsCurrentCards) {
+    const nextStage = FLOW_STAGE_GROUPS[activeStage.order] || activeStage;
+    const detail = flowStageDetail(activeStage, activeStatus, run, completed);
+    const hasWarnings = activeStatus === "completed_with_warnings";
+    flowsCurrentCards.innerHTML = `
+      <article class="action-card">
+        <div>
+          <h3>${escapeHtml(detail.primaryTitle)}</h3>
+          <p>${escapeHtml(detail.primaryText)}</p>
+        </div>
+        <button class="primary-action" type="button" data-flow-start>
+          ${escapeHtml(run.status === "running" ? "Acompanhar" : detail.primaryAction)}
+        </button>
+      </article>
+      <article class="action-card">
+        <div>
+          <h3>${escapeHtml(hasWarnings ? "Concluída com alertas" : detail.secondaryTitle)}</h3>
+          <p>${escapeHtml(hasWarnings ? "A etapa registrou pendências que devem aparecer no resumo da execução." : detail.secondaryText)}</p>
+        </div>
+        <button class="secondary-action" type="button" disabled>
+          ${escapeHtml(detail.secondaryAction)}
+        </button>
+      </article>
+      <article class="action-card">
+        <div>
+          <h3>Próximo desbloqueio</h3>
+          <p>Depois de concluir esta etapa, ${escapeHtml(detail.nextText || `${nextStage.title} fica disponível.`)}</p>
+        </div>
+        <button class="ghost-button" type="button" disabled>Ver regra</button>
+      </article>
+    `;
+  }
+
+  flowsStartWorkflow.disabled = run.status === "running";
+  if (flowsResumeWorkflow) {
+    flowsResumeWorkflow.hidden = !["failed", "interrupted"].includes(run.status);
+  }
+}
+
 function workflowStep(step, run) {
   const result = run.results?.[step.id];
   const status = result?.status || "pending";
@@ -1456,8 +1729,8 @@ function workflowStep(step, run) {
     running: "Executando",
     completed: "Concluída",
     failed: "Falhou",
-    manual: "Ação manual",
-    interrupted: "Interrompida",
+    manual: "Concluída com alertas",
+    interrupted: "Falhou",
   };
   const checked = run.selected?.includes(step.id) ?? true;
   const manualAction = status === "manual" && step.action_page
@@ -1493,20 +1766,27 @@ function workflowStep(step, run) {
 
 function renderWorkflow(data) {
   workflowState = data;
-  workflowSteps.innerHTML = data.steps.map(step =>
-    workflowStep(step, data.run)
-  ).join("");
-  workflowNotice.textContent = data.run.notification || (
-    data.run.status === "completed"
-      ? "Fluxo concluído."
-      : data.run.status === "running"
-        ? "Fluxo em execução."
-        : ["failed", "interrupted"].includes(data.run.status)
-          ? "O fluxo foi interrompido. Consulte a etapa destacada."
-          : "Nenhum fluxo iniciado. Selecione as etapas e clique em Executar."
-  );
-  startWorkflow.disabled = data.run.status === "running";
-  resumeWorkflow.hidden = !["failed", "interrupted"].includes(data.run.status);
+  renderFlowsOverview(data);
+  if (workflowSteps) {
+    workflowSteps.innerHTML = data.steps.map(step =>
+      workflowStep(step, data.run)
+    ).join("");
+  }
+  if (workflowNotice) {
+    workflowNotice.textContent = data.run.notification || (
+      data.run.status === "completed"
+        ? "Fluxo concluído."
+        : data.run.status === "running"
+          ? "Fluxo em execução."
+          : ["failed", "interrupted"].includes(data.run.status)
+            ? "O fluxo foi interrompido. Consulte a etapa destacada."
+            : "Nenhum fluxo iniciado. Selecione as etapas e clique em Executar."
+    );
+  }
+  if (startWorkflow) startWorkflow.disabled = data.run.status === "running";
+  if (resumeWorkflow) {
+    resumeWorkflow.hidden = !["failed", "interrupted"].includes(data.run.status);
+  }
 }
 
 async function loadWorkflow() {
@@ -1520,41 +1800,52 @@ async function loadWorkflow() {
 }
 
 async function runWorkflow(resume = false) {
-  const selected = [...workflowSteps.querySelectorAll(
-    'input[type="checkbox"]:checked'
-  )].map(input => input.value);
+  let selected = workflowSteps
+    ? [...workflowSteps.querySelectorAll('input[type="checkbox"]:checked')]
+        .map(input => input.value)
+    : [];
+  if (!selected.length && workflowState?.steps?.length) {
+    selected = workflowState.steps
+      .map(step => step.id)
+      .filter(step => ACTIVE_FLOW_STEPS.includes(step));
+  }
   const response = await fetch("/api/workflow", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ selected, resume })
   });
   const payload = await response.json();
-  workflowFeedback.textContent = response.ok
+  const message = response.ok
     ? "Fluxo iniciado."
     : (payload.error || "Não foi possível iniciar.");
+  if (workflowFeedback) workflowFeedback.textContent = message;
+  flowsFeedback.textContent = message;
   if (response.ok) renderWorkflow(payload);
 }
 
-startWorkflow.addEventListener("click", () => runWorkflow(false));
-resumeWorkflow.addEventListener("click", () => runWorkflow(true));
-workflowSteps.addEventListener("click", async event => {
+if (startWorkflow) startWorkflow.addEventListener("click", () => runWorkflow(false));
+if (resumeWorkflow) resumeWorkflow.addEventListener("click", () => runWorkflow(true));
+flowsStartWorkflow.addEventListener("click", () => runWorkflow(false));
+if (flowsResumeWorkflow) {
+  flowsResumeWorkflow.addEventListener("click", () => runWorkflow(true));
+}
+if (flowsCurrentActions) {
+  flowsCurrentActions.addEventListener("click", event => {
+    if (!event.target.closest("[data-flow-start]")) return;
+    runWorkflow(false);
+  });
+}
+if (flowsCurrentCards) {
+  flowsCurrentCards.addEventListener("click", event => {
+    if (!event.target.closest("[data-flow-start]")) return;
+    runWorkflow(false);
+  });
+}
+if (workflowSteps) workflowSteps.addEventListener("click", event => {
   const target = event.target.closest("[data-workflow-page]");
   if (target) {
     showPage(target.dataset.workflowPage);
-    return;
   }
-  const button = event.target.closest("[data-complete-manual]");
-  if (!button) return;
-  const response = await fetch("/api/workflow/continue", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ step: button.dataset.completeManual })
-  });
-  const payload = await response.json();
-  workflowFeedback.textContent = response.ok
-    ? "Etapa confirmada. Fluxo retomado."
-    : (payload.error || "Não foi possível retomar.");
-  if (response.ok) renderWorkflow(payload);
 });
 
 function handleReviewDecisionClick(event, list, feedback) {
