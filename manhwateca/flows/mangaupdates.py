@@ -1,5 +1,5 @@
 from manhwateca.database.manga_repository import MangaRepository
-from manhwateca.flows.domain import StageId
+from manhwateca.flows.domain import FlowMessage, Progress, StageId
 from manhwateca.flows.integrations import (
     IntegrationCheck,
     IntegrationStatus,
@@ -26,10 +26,14 @@ class MangaUpdatesFlowIntegration:
         flow_repository_factory=FlowRepository,
         manga_repository_factory=MangaRepository,
         search_function=search_series,
+        per_page: int = 5,
+        timeout: int = 15,
     ):
         self.flow_repository_factory = flow_repository_factory
         self.manga_repository_factory = manga_repository_factory
         self.search_function = search_function
+        self.per_page = per_page
+        self.timeout = timeout
 
     def check_status(self) -> IntegrationCheck:
         return IntegrationCheck(
@@ -51,58 +55,138 @@ class MangaUpdatesFlowIntegration:
         eligible = [work for work in works if not str(work.work_code or "").strip()]
         already_resolved = len(works) - len(eligible)
         manga_repository = self.manga_repository_factory()
-        candidates = []
         matched = 0
         pending = 0
         not_found = 0
+        errors = 0
 
+        flow_repository.clear_id_candidates(execution.execution_id)
+        flow_repository.append_message(
+            execution.execution_id,
+            StageId.RESOLVE_IDS,
+            "info",
+            FlowMessage(
+                "Resolução de IDs iniciada.",
+                details={
+                    "eligible": len(eligible),
+                    "alreadyResolved": already_resolved,
+                },
+            ),
+        )
+        flow_repository.update_stage_progress(
+            execution.execution_id,
+            StageId.RESOLVE_IDS,
+            Progress(current=0, total=len(eligible)),
+        )
         for work in eligible:
-            response = self.search_function(work.title, per_page=5)
-            ranked = filter_relevant_candidates(
-                rank_search_results(work.title, response)
+            processed = matched + pending
+            flow_repository.update_stage_progress(
+                execution.execution_id,
+                StageId.RESOLVE_IDS,
+                Progress(current=processed, total=len(eligible)),
+                current_item=work.title,
             )
-            selected, status = select_ranked_candidate(ranked)
-            if selected:
-                manga_repository.confirm_mangaupdates_id(
-                    work.title,
-                    selected["id"],
-                    selected.get("titulo"),
-                )
-                candidates.append(_candidate_record(
+            flow_repository.append_log(
+                _log(
                     execution.execution_id,
-                    work.work_id,
+                    "mangaupdates_search_start",
+                    "running",
+                    f"Consultando MangaUpdates para {work.title}.",
+                    {"workId": work.work_id, "title": work.title},
+                )
+            )
+            try:
+                response = self.search_function(
                     work.title,
-                    selected,
-                    "auto_matched",
-                    {"selectionStatus": status},
-                ))
-                matched += 1
-            elif ranked:
-                candidates.extend(
-                    _candidate_record(
+                    per_page=self.per_page,
+                    timeout=self.timeout,
+                )
+                ranked = filter_relevant_candidates(
+                    rank_search_results(work.title, response)
+                )[:self.per_page]
+                selected, status = select_ranked_candidate(ranked)
+                if selected:
+                    manga_repository.confirm_mangaupdates_id(
+                        work.title,
+                        selected["id"],
+                        selected.get("titulo"),
+                    )
+                    flow_repository.append_id_candidate(_candidate_record(
                         execution.execution_id,
                         work.work_id,
                         work.title,
-                        candidate,
-                        "pending_review",
+                        selected,
+                        "auto_matched",
                         {"selectionStatus": status},
+                    ))
+                    matched += 1
+                elif ranked:
+                    for candidate in ranked:
+                        flow_repository.append_id_candidate(_candidate_record(
+                            execution.execution_id,
+                            work.work_id,
+                            work.title,
+                            candidate,
+                            "pending_review",
+                            {"selectionStatus": status},
+                        ))
+                    _enqueue_review(manga_repository, work, ranked)
+                    pending += 1
+                else:
+                    flow_repository.append_id_candidate(IdCandidateRecord(
+                        execution_id=execution.execution_id,
+                        work_id=work.work_id,
+                        searched_title=work.title,
+                        status="not_found",
+                        details={"selectionStatus": status},
+                    ))
+                    pending += 1
+                    not_found += 1
+                flow_repository.append_log(
+                    _log(
+                        execution.execution_id,
+                        "mangaupdates_search_finish",
+                        "completed",
+                        f"Consulta MangaUpdates finalizada para {work.title}.",
+                        {
+                            "workId": work.work_id,
+                            "title": work.title,
+                            "status": status,
+                            "candidates": len(ranked),
+                        },
                     )
-                    for candidate in ranked
                 )
-                _enqueue_review(manga_repository, work, ranked)
+            except Exception as error:
+                errors += 1
                 pending += 1
-            else:
-                candidates.append(IdCandidateRecord(
+                flow_repository.append_id_candidate(IdCandidateRecord(
                     execution_id=execution.execution_id,
                     work_id=work.work_id,
                     searched_title=work.title,
-                    status="not_found",
-                    details={"selectionStatus": status},
+                    status="error",
+                    details={"error": str(error)},
                 ))
-                pending += 1
-                not_found += 1
+                flow_repository.append_log(
+                    _log(
+                        execution.execution_id,
+                        "mangaupdates_search_error",
+                        "error",
+                        f"Consulta MangaUpdates falhou para {work.title}.",
+                        {"workId": work.work_id, "title": work.title, "error": str(error)},
+                        error_code="MANGAUPDATES_SEARCH_FAILED",
+                    )
+                )
+            finally:
+                flow_repository.update_stage_progress(
+                    execution.execution_id,
+                    StageId.RESOLVE_IDS,
+                    Progress(
+                        current=matched + pending,
+                        total=len(eligible),
+                    ),
+                    current_item=work.title,
+                )
 
-        flow_repository.replace_id_candidates(execution.execution_id, candidates)
         return SeriesSearchResult(
             searched=len(eligible),
             matched=matched,
@@ -111,7 +195,7 @@ class MangaUpdatesFlowIntegration:
             metrics={
                 "catalogWorks": len(works),
                 "alreadyResolved": already_resolved,
-                "candidateRows": len(candidates),
+                "errors": errors,
             },
         )
 
@@ -157,3 +241,25 @@ def _enqueue_review(manga_repository, work, candidates) -> None:
         # A fila de decisão é compatibilidade operacional; o registro oficial
         # da execução continua em flow_id_candidates.
         return
+
+
+def _log(
+    execution_id: str,
+    operation: str,
+    status: str,
+    message: str,
+    details: dict,
+    *,
+    error_code: str | None = None,
+):
+    from manhwateca.flows.repository import FlowLogRecord
+
+    return FlowLogRecord(
+        execution_id=execution_id,
+        stage=StageId.RESOLVE_IDS,
+        operation=operation,
+        status=status,
+        error_code=error_code,
+        message=message,
+        details=details,
+    )

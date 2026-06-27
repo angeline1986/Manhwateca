@@ -89,7 +89,7 @@ class ResolveIdsFlowTests(unittest.TestCase):
         self.assertTrue(result.has_warnings)
         self.assertEqual("RESOLVE_IDS_EMPTY", result.warnings[0].code)
 
-    def test_mangaupdates_failure_propagates_to_orchestrator_as_failed(self):
+    def test_mangaupdates_failure_is_persisted_per_work_without_stalling(self):
         flow_repository = FakeFlowRepository([
             CatalogWorkRecord(1, "Alpha"),
         ])
@@ -99,8 +99,13 @@ class ResolveIdsFlowTests(unittest.TestCase):
             search_function=FailingSearch(),
         )
 
-        with self.assertRaisesRegex(RuntimeError, "MangaUpdates indisponível"):
-            integration.search_series()
+        result = integration.search_series()
+
+        self.assertEqual(1, result.pending)
+        self.assertEqual(1, result.metrics["errors"])
+        self.assertEqual("error", flow_repository.candidates[0].status)
+        self.assertEqual("MANGAUPDATES_SEARCH_FAILED", flow_repository.logs[-1].error_code)
+        self.assertEqual((1, 1, "Alpha"), flow_repository.progress_updates[-1])
 
 
 class FakeExecution:
@@ -111,6 +116,9 @@ class FakeFlowRepository:
     def __init__(self, works):
         self.works = works
         self.candidates = []
+        self.messages = []
+        self.logs = []
+        self.progress_updates = []
 
     def latest_execution(self):
         return FakeExecution()
@@ -120,6 +128,21 @@ class FakeFlowRepository:
 
     def replace_id_candidates(self, execution_id, candidates):
         self.candidates = candidates
+
+    def clear_id_candidates(self, execution_id):
+        self.candidates = []
+
+    def append_id_candidate(self, candidate):
+        self.candidates.append(candidate)
+
+    def append_message(self, execution_id, stage, severity, message):
+        self.messages.append((stage, severity, message))
+
+    def append_log(self, record):
+        self.logs.append(record)
+
+    def update_stage_progress(self, execution_id, stage, progress, current_item=None):
+        self.progress_updates.append((progress.current, progress.total, current_item))
 
 
 class FakeMangaRepository:

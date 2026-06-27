@@ -13,6 +13,7 @@ def request_json(
     payload=None,
     retries=4,
     base_delay=3.0,
+    timeout=30,
 ):
     data = None
     headers = {
@@ -25,7 +26,7 @@ def request_json(
 
     for attempt in range(retries + 1):
         try:
-            with urllib.request.urlopen(request, timeout=30) as response:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
                 return json.load(response)
         except urllib.error.HTTPError as error:
             if error.code != 429 or attempt == retries:
@@ -46,10 +47,11 @@ def request_json(
             time.sleep(wait)
 
 
-def search_series(title, per_page=5):
+def search_series(title, per_page=5, timeout=30):
     return request_json(
         f"{API_BASE}/series/search",
         {"search": title, "page": 1, "perpage": per_page},
+        timeout=timeout,
     )
 
 

@@ -305,6 +305,7 @@ class FlowRepository:
                         warnings = EXCLUDED.warnings,
                         metrics = EXCLUDED.metrics,
                         updated_at = now()
+                    RETURNING id
                     """,
                     (
                         execution_id,
@@ -321,6 +322,31 @@ class FlowRepository:
                         _json(item.metrics),
                     ),
                 )
+                row = cursor.fetchone()
+                inventory_id = row["id"] if row else None
+                for issue in item.issues:
+                    cursor.execute(
+                        """
+                        INSERT INTO flow_library_inventory_issues (
+                            execution_id, inventory_id, work_title,
+                            relative_path, file_name, issue_type, severity,
+                            message, suggestion, details
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                        """,
+                        (
+                            execution_id,
+                            inventory_id,
+                            issue.work_title,
+                            issue.relative_path,
+                            issue.file_name,
+                            issue.issue_type,
+                            issue.severity,
+                            issue.message,
+                            issue.suggestion,
+                            _json(issue.details),
+                        ),
+                    )
         self._connection().commit()
 
     def load_inventory(self, execution_id: str) -> tuple[LibraryInventoryItem, ...]:
@@ -399,6 +425,86 @@ class FlowRepository:
                         _json(candidate.details or {}),
                     ),
                 )
+        self._connection().commit()
+
+    def clear_id_candidates(self, execution_id: str) -> None:
+        self._execute(
+            """
+            DELETE FROM flow_id_candidates
+            WHERE execution_id = %s
+            """,
+            (execution_id,),
+        )
+        self._connection().commit()
+
+    def append_id_candidate(self, candidate: IdCandidateRecord) -> None:
+        self._execute(
+            """
+            INSERT INTO flow_id_candidates (
+                execution_id, work_id, searched_title,
+                candidate_external_id, candidate_title, confidence,
+                status, details
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            """,
+            (
+                candidate.execution_id,
+                candidate.work_id,
+                candidate.searched_title,
+                candidate.candidate_external_id,
+                candidate.candidate_title,
+                candidate.confidence,
+                candidate.status,
+                _json(candidate.details or {}),
+            ),
+        )
+        self._connection().commit()
+
+    def update_stage_progress(
+        self,
+        execution_id: str,
+        stage: StageId,
+        progress: Progress,
+        *,
+        current_item: str | None = None,
+    ) -> None:
+        self._execute(
+            """
+            UPDATE flow_stage_executions
+            SET progress_current = %s,
+                progress_total = %s,
+                progress = %s::jsonb,
+                current_item = %s,
+                updated_at = now()
+            WHERE execution_id = %s
+              AND stage = %s
+            """,
+            (
+                progress.current,
+                progress.total,
+                _json(progress.to_dict()),
+                current_item,
+                execution_id,
+                stage.value,
+            ),
+        )
+        self._connection().commit()
+
+    def append_message(
+        self,
+        execution_id: str,
+        stage: StageId | None,
+        severity: str,
+        message: FlowMessage,
+    ) -> None:
+        with self._cursor() as cursor:
+            self._insert_message(
+                cursor,
+                execution_id,
+                stage.value if stage else None,
+                severity,
+                message,
+            )
         self._connection().commit()
 
     def _insert_stage(self, cursor, execution_id: str, stage: StageExecution):

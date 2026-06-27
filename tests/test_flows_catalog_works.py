@@ -80,6 +80,28 @@ class CatalogWorksIntegrationTests(unittest.TestCase):
         self.assertEqual(1, result.pending)
         self.assertEqual([], manga_repository.saved)
 
+    def test_catalog_works_reports_structural_inventory_issues_as_pending(self):
+        flow_repository = FakeFlowRepository((
+            LibraryInventoryItem(
+                name="Obra com Arquivo Irregular",
+                source_path="/library/Obra com Arquivo Irregular",
+                main_chapters=12,
+                metrics={"chapterIssues": 2},
+            ),
+        ))
+        manga_repository = FakeMangaRepository()
+        integration = LocalLibraryIntegration(
+            flow_repository_factory=lambda: flow_repository,
+            manga_repository_factory=lambda: manga_repository,
+        )
+
+        result = integration.catalog_works()
+
+        self.assertEqual(1, result.created)
+        self.assertEqual(1, result.pending)
+        self.assertEqual(2, result.metrics["structuralIssues"])
+        self.assertEqual("Revisar", manga_repository.saved[0]["count_status"])
+
     def test_catalog_works_propagates_persistence_failure(self):
         flow_repository = FakeFlowRepository((
             LibraryInventoryItem(

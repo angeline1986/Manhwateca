@@ -39,6 +39,18 @@ class IntegrationValidation:
 
 
 @dataclass(frozen=True)
+class LibraryInventoryIssue:
+    work_title: str
+    relative_path: str
+    file_name: str
+    issue_type: str
+    severity: str
+    message: str
+    suggestion: str | None = None
+    details: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class LibraryInventoryItem:
     name: str
     source_path: str
@@ -50,6 +62,7 @@ class LibraryInventoryItem:
     total_chapters: int = 0
     is_valid: bool = True
     warnings: tuple[FlowWarning, ...] = ()
+    issues: tuple[LibraryInventoryIssue, ...] = ()
     metrics: dict[str, Any] = field(default_factory=dict)
 
 
