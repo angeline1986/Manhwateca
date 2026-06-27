@@ -29,7 +29,24 @@ class FlowStageServicesTests(unittest.TestCase):
 
         self.assertEqual(10, result.processed)
         self.assertEqual(40, result.metrics["chaptersFound"])
+        self.assertEqual(8, result.metrics["correctLocations"])
+        self.assertEqual(2, result.metrics["pendingMoves"])
         self.assertEqual(["scan_library"], integrations.library.calls)
+
+    def test_organize_library_empty_library_generates_warning(self):
+        integrations = fake_integrations(library_scan=LibraryScanResult())
+
+        result = OrganizeLibraryService(integrations).execute()
+
+        self.assertEqual(0, result.processed)
+        self.assertTrue(result.has_warnings)
+        self.assertEqual("LIBRARY_EMPTY", result.warnings[0].code)
+
+    def test_organize_library_propagates_integration_failure(self):
+        service = OrganizeLibraryService(fake_integrations(valid=False))
+
+        with self.assertRaisesRegex(RuntimeError, "Integração indisponível"):
+            service.validate()
 
     def test_catalog_works_reports_pending_as_warning(self):
         integrations = fake_integrations()
@@ -87,13 +104,19 @@ class FakeDatabaseIntegration:
 
 
 class FakeLibraryIntegration(FakeDatabaseIntegration):
-    def __init__(self, valid=True):
+    def __init__(self, valid=True, scan_result=None):
         super().__init__(valid)
         self.calls = []
+        self.scan_result = scan_result
 
     def scan_library(self):
         self.calls.append("scan_library")
-        return LibraryScanResult(works_found=10, chapters_found=40)
+        return self.scan_result or LibraryScanResult(
+            works_found=10,
+            chapters_found=40,
+            correct_locations=8,
+            pending_moves=2,
+        )
 
     def catalog_works(self):
         self.calls.append("catalog_works")
@@ -124,10 +147,10 @@ class FakeNotionIntegration(FakeDatabaseIntegration):
         return NotionSyncResult(created=4, updated=3)
 
 
-def fake_integrations(valid=True):
+def fake_integrations(valid=True, library_scan=None):
     return FlowIntegrations(
         database=FakeDatabaseIntegration(valid),
-        library=FakeLibraryIntegration(valid),
+        library=FakeLibraryIntegration(valid, library_scan),
         mangaupdates=FakeMangaUpdatesIntegration(valid),
         notion=FakeNotionIntegration(valid),
     )

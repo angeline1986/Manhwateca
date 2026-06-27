@@ -42,6 +42,11 @@ class IntegrationValidation:
 class LibraryScanResult:
     works_found: int = 0
     chapters_found: int = 0
+    correct_locations: int = 0
+    pending_moves: int = 0
+    conflicts: int = 0
+    duplicates: int = 0
+    empty_folders: int = 0
     inconsistencies: tuple[FlowWarning, ...] = ()
     metrics: dict[str, Any] = field(default_factory=dict)
 

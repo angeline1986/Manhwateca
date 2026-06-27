@@ -31,6 +31,7 @@ from manhwateca.flows.integrations import (
     SeriesSearchResult,
 )
 from manhwateca.flows.legacy_adapter import LegacyWorkflowAdapter
+from manhwateca.flows.library import LocalLibraryIntegration
 from manhwateca.flows.orchestrator import WorkflowOrchestrator
 from manhwateca.flows.repository import FlowLogRecord, FlowRepository
 from manhwateca.flows.services import (
@@ -71,6 +72,7 @@ __all__ = [
     "NotionSyncResult",
     "SeriesSearchResult",
     "LegacyWorkflowAdapter",
+    "LocalLibraryIntegration",
     "WorkflowOrchestrator",
     "BaseStageService",
     "CatalogWorksService",

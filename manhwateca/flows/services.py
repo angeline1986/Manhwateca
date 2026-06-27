@@ -43,12 +43,25 @@ class OrganizeLibraryService(BaseStageService):
 
     def execute(self) -> StageResult:
         result = self.integrations.library.scan_library()
+        warnings = result.inconsistencies
+        if result.works_found == 0 and not warnings:
+            warnings = (
+                FlowWarning(
+                    "Nenhuma obra foi detectada na biblioteca.",
+                    code="LIBRARY_EMPTY",
+                ),
+            )
         return StageResult(
             processed=result.works_found,
-            warnings=result.inconsistencies,
+            warnings=warnings,
             metrics={
                 "worksFound": result.works_found,
                 "chaptersFound": result.chapters_found,
+                "correctLocations": result.correct_locations,
+                "pendingMoves": result.pending_moves,
+                "conflicts": result.conflicts,
+                "duplicates": result.duplicates,
+                "emptyFolders": result.empty_folders,
                 **result.metrics,
             },
         )
