@@ -3,6 +3,7 @@ import unittest
 from manhwateca.flows.domain import (
     FlowError,
     FlowWarning,
+    StageExecution,
     StageId,
     StageResult,
     StageStatus,
@@ -44,6 +45,11 @@ class WorkflowOrchestratorTests(unittest.TestCase):
         ))
         self.assertEqual(100, execution.progress.percent)
         self.assertEqual("wf_1", repository.summary_execution_id)
+        self.assertEqual("completed", repository.summary_metrics["status"])
+        self.assertTrue(all(stage.started_at for stage in execution.stages))
+        self.assertTrue(all(stage.finished_at for stage in execution.stages))
+        self.assertIn("start", [log.operation for log in repository.logs])
+        self.assertIn("finish", [log.operation for log in repository.logs])
 
     def test_run_stage_records_failure_without_legacy_imports(self):
         repository = FakeRepository()
@@ -72,13 +78,20 @@ class WorkflowOrchestratorTests(unittest.TestCase):
         ][0]
         self.assertEqual(StageStatus.FAILED, resolve_ids.status)
         self.assertTrue(resolve_ids.result.has_errors)
+        self.assertEqual("wf_1", repository.summary_execution_id)
+        self.assertEqual("failed", repository.summary_metrics["status"])
+        self.assertEqual(1, repository.summary_errors_count)
 
     def test_cancel_marks_current_execution_cancelled(self):
         repository = FakeRepository()
         repository.save_execution(WorkflowExecution(
             execution_id="wf_1",
             status=WorkflowStatus.RUNNING,
-            stages=tuple(FakeRepository.initial_stages()),
+            stages=(
+                *FakeRepository.initial_stages(
+                    running_stage=StageId.CATALOG_WORKS
+                ),
+            ),
         ))
         orchestrator = WorkflowOrchestrator(
             repository,
@@ -90,6 +103,40 @@ class WorkflowOrchestratorTests(unittest.TestCase):
 
         self.assertEqual(WorkflowStatus.CANCELLED, execution.status)
         self.assertEqual("2026-06-27T10:05:00-03:00", execution.finished_at)
+        catalog_works = [
+            stage for stage in execution.stages
+            if stage.stage_id == StageId.CATALOG_WORKS
+        ][0]
+        self.assertEqual(StageStatus.CANCELLED, catalog_works.status)
+        self.assertEqual("2026-06-27T10:05:00-03:00", catalog_works.finished_at)
+        self.assertEqual("cancelled", repository.summary_metrics["status"])
+
+    def test_finish_with_warning_generates_completed_with_warnings_summary(self):
+        repository = FakeRepository()
+        repository.save_execution(WorkflowExecution(
+            execution_id="wf_1",
+            status=WorkflowStatus.RUNNING,
+            stages=(
+                StageExecution(
+                    StageId.ORGANIZE_LIBRARY,
+                    status=StageStatus.COMPLETED_WITH_WARNINGS,
+                    result=StageResult(
+                        warnings=(FlowWarning("Inconsistência registrada."),)
+                    ),
+                ),
+            ),
+        ))
+        orchestrator = WorkflowOrchestrator(
+            repository,
+            fake_integrations(),
+            clock=lambda: "2026-06-27T10:05:00-03:00",
+        )
+
+        execution = orchestrator.finish()
+
+        self.assertEqual(WorkflowStatus.COMPLETED_WITH_WARNINGS, execution.status)
+        self.assertEqual("completed_with_warnings", repository.summary_metrics["status"])
+        self.assertEqual(1, repository.summary_warnings_count)
 
     def test_active_workflow_blocks_new_start(self):
         repository = FakeRepository()
@@ -138,11 +185,29 @@ class FakeRepository:
         self.execution = None
         self.logs = []
         self.summary_execution_id = None
+        self.summary_metrics = {}
+        self.summary_warnings_count = 0
+        self.summary_errors_count = 0
 
     @staticmethod
-    def initial_stages():
+    def initial_stages(running_stage=None):
         from manhwateca.flows.domain import StageExecution
-        return [StageExecution(stage) for stage in StageId]
+        return [
+            StageExecution(
+                stage,
+                status=(
+                    StageStatus.RUNNING
+                    if stage == running_stage
+                    else StageStatus.WAITING
+                ),
+                started_at=(
+                    "2026-06-27T10:00:00-03:00"
+                    if stage == running_stage
+                    else None
+                ),
+            )
+            for stage in StageId
+        ]
 
     def latest_execution(self):
         return self.execution
@@ -153,9 +218,17 @@ class FakeRepository:
     def append_log(self, record):
         self.logs.append(record)
 
-    def save_summary(self, execution_id, metrics, **_kwargs):
+    def save_summary(
+        self,
+        execution_id,
+        metrics,
+        warnings_count=0,
+        errors_count=0,
+    ):
         self.summary_execution_id = execution_id
         self.summary_metrics = metrics
+        self.summary_warnings_count = warnings_count
+        self.summary_errors_count = errors_count
 
 
 class FakeIntegration:

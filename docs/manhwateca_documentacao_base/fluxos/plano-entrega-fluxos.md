@@ -191,53 +191,61 @@ Critério de aceite:
 
 ### Milestone 7 — Estado, progresso, logs e histórico
 
-Status: **pendente**
+Status: **OK**
 
-- [ ] Persistir estados oficiais do Workflow.
-- [ ] Persistir estados oficiais das etapas.
-- [ ] Registrar progresso global.
-- [ ] Registrar progresso por etapa.
-- [ ] Registrar logs operacionais.
-- [ ] Consolidar histórico de execuções.
-- [ ] Produzir dados de resumo para Dashboard.
+- [x] Persistir início e fim de execução.
+- [x] Persistir início e fim de cada etapa.
+- [x] Persistir estados oficiais do Workflow.
+- [x] Persistir estados oficiais das etapas.
+- [x] Atualizar progresso global.
+- [x] Atualizar progresso por etapa.
+- [x] Registrar mensagens visíveis ao usuário em `flow_messages`.
+- [x] Registrar logs técnicos em `flow_logs`.
+- [x] Registrar resumo final em `flow_summaries`.
+- [x] Garantir que cancelamento gere histórico parcial.
+- [x] Garantir que falha gere status `failed`.
+- [x] Garantir que conclusão com alerta gere `completed_with_warnings`.
 
 Critério de aceite:
 
-- O módulo Fluxos produz dados suficientes para operar a página Fluxos e alimentar o Dashboard futuramente.
+- Após executar o Workflow pelo Orchestrator, o banco responde qual execução ocorreu, qual etapa rodou, qual foi o status final, quais mensagens apareceriam na UI, quais logs técnicos foram gerados e qual resumo alimentaria o Dashboard.
 
 ---
 
 ### Milestone 8 — Contratos oficiais da API de Fluxos
 
-Status: **pendente**
+Status: **OK**
 
-- [ ] Criar `GET /api/flows/status`.
-- [ ] Criar `POST /api/flows/start`.
-- [ ] Criar `POST /api/flows/stages/{stage}/run`.
-- [ ] Criar `POST /api/flows/cancel`.
-- [ ] Criar `GET /api/flows/history`.
-- [ ] Criar `GET /api/flows/integrations`.
-- [ ] Padronizar respostas com `success`, `timestamp`, `data`, `errors` e `warnings`.
-- [ ] Impedir que o contrato oficial exponha detalhes do adapter legado.
+- [x] Criar `GET /api/flows/status`.
+- [x] Criar `POST /api/flows/start`.
+- [x] Criar `POST /api/flows/stages/{stage}/run`.
+- [x] Criar `POST /api/flows/cancel`.
+- [x] Criar `GET /api/flows/history`.
+- [x] Criar `GET /api/flows/integrations`.
+- [x] Padronizar respostas com `success`, `timestamp`, `data`, `errors` e `warnings`.
+- [x] Impedir que o contrato oficial exponha detalhes do adapter legado.
+- [x] Apontar a UI de Fluxos para `/api/flows/...`, sem chamada direta a `/api/workflow`.
 
 Critério de aceite:
 
-- A API pública do módulo Fluxos existe conforme a documentação e pode ser testada sem a interface.
+- A API pública do módulo Fluxos existe conforme a documentação, pode ser testada sem a interface e isola a decisão interna entre Orchestrator oficial e adapter legado.
 
 ---
 
 ### Milestone 9 — Interface dos Fluxos
 
-Status: **parcial**
+Status: **OK**
 
 - [x] Criar primeira estrutura visual baseada em `fluxos_only.html`.
 - [x] Renderizar as cinco etapas documentadas.
 - [x] Remover rótulos de estados não documentados da UI.
-- [ ] Consumir `/api/flows/status`.
-- [ ] Iniciar execução por `/api/flows/start`.
-- [ ] Executar etapa individual por `/api/flows/stages/{stage}/run`.
-- [ ] Cancelar execução por `/api/flows/cancel`.
-- [ ] Exibir progresso, logs e resumo conforme contratos oficiais.
+- [x] Consumir `/api/flows/status`.
+- [x] Iniciar execução por `/api/flows/start`.
+- [x] Executar etapa individual por `/api/flows/stages/{stage}/run`.
+- [x] Cancelar execução por `/api/flows/cancel`.
+- [x] Consumir integrações por `/api/flows/integrations`.
+- [x] Consumir histórico por `/api/flows/history`.
+- [x] Exibir progresso, integrações, histórico e resumo conforme contratos oficiais.
 
 Critério de aceite:
 
@@ -326,13 +334,14 @@ Critério de aceite:
 
 ### Integração temporária com endpoint legado
 
-Status: **OK**
+Status: **substituída**
 
 - [x] Consumir `/api/workflow`.
 - [x] Exibir progresso e notificação operacional.
 - [x] Atualizar estado automaticamente durante execução.
 - [x] Conectar botão de iniciar ou continuar Workflow.
 - [x] Exibir erros de carregamento de forma compreensível.
+- [x] Substituir consumo da UI por `/api/flows/...`.
 
 Critério de aceite:
 
@@ -340,7 +349,7 @@ Critério de aceite:
 
 ---
 
-Essa integração é provisória e deve ser substituída pelos contratos `/api/flows/...`.
+Essa integração foi encerrada na UI. As rotas legadas ainda podem existir no backend, mas a página Fluxos opera pelos contratos `/api/flows/...`.
 
 ---
 
@@ -369,7 +378,7 @@ Essa integração é provisória e deve ser substituída pelos contratos `/api/f
 | Data | Marco | Status | Observações |
 | ---- | ----- | ------ | ----------- |
 | 2026-06-26 | Plano criado | OK | Documento inicial criado antes das alterações de UI. |
-| 2026-06-26 | Milestones 0 a 3 | OK | Página Fluxos criada, definida como entrada principal e conectada ao `/api/workflow`. |
+| 2026-06-26 | Milestones 0 a 3 | OK | Página Fluxos criada e definida como entrada principal. A primeira integração com `/api/workflow` foi substituída depois por `/api/flows/...`. |
 | 2026-06-26 | Validação inicial | Parcial | HTML e API carregaram via servidor local. `pytest` não está instalado; `unittest` revelou falhas pré-existentes nos testes de retomada do workflow. |
 | 2026-06-26 | Simplificação visual | OK | Página Fluxos reduzida aos blocos do `fluxos_only.html`: processo recomendado e detalhe da etapa atual. |
 | 2026-06-26 | Notion fora do foco atual | Substituído | A documentação oficial mantém Notion como etapa 5. A UI deve exibir a etapa com estados documentados, mesmo que a implementação completa fique para fase posterior. |

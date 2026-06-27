@@ -80,9 +80,11 @@
                 </p>
               </div>
               <button class="primary-action" id="flowsStartWorkflow" type="button">
-                Executar próximo passo
+                Executar workflow
               </button>
             </div>
+            <div class="flow-summary" id="flowsSummary"></div>
+            <div class="flow-progress" id="flowsProgress"></div>
             <div class="flow-steps" id="flowsStageList" aria-live="polite">
               <article class="flow-stage loading">Carregando etapas...</article>
             </div>
@@ -92,10 +94,21 @@
             <span class="eyebrow">Detalhe da etapa atual</span>
             <h2 id="flowsCurrentTitle">Carregando</h2>
             <div class="tabs">
-              <button class="active" type="button">Pendências</button>
-              <button type="button">Candidatos</button>
-              <button type="button">Pesquisa manual</button>
+              <button class="active" type="button">Etapa</button>
+              <button type="button">Integrações</button>
               <button type="button">Histórico</button>
+            </div>
+            <p class="muted" id="flowsCurrentDescription">
+              Carregando estado do workflow.
+            </p>
+            <div class="flow-meta" id="flowsCurrentMeta"></div>
+            <div class="workflow-actions" id="flowsCurrentActions">
+              <button class="secondary-action" type="button" data-flow-run-stage>
+                Executar etapa atual
+              </button>
+              <button class="ghost-button" type="button" data-flow-cancel>
+                Cancelar
+              </button>
             </div>
             <div class="cards" id="flowsCurrentCards">
               <article class="action-card">

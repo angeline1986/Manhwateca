@@ -130,6 +130,51 @@ button:not(.nav-link):not(.menu-toggle):hover { background: var(--rose-dark); tr
   display: grid;
   gap: 13px;
 }
+.flow-summary,
+.flow-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.flow-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: #faf7f8;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+.flow-chip.ok {
+  color: var(--success);
+  background: #e8f3ee;
+}
+.flow-chip.warn {
+  color: var(--danger);
+  background: #fff1f1;
+}
+.flow-progress {
+  margin: 10px 0 18px;
+}
+.flow-progress span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+.flow-progress div {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f4e4e4;
+}
+.flow-progress div span {
+  height: 100%;
+  margin: 0;
+  background: var(--rose);
+}
 .flow-stage {
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr) auto;

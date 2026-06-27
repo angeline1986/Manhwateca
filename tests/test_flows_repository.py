@@ -27,6 +27,8 @@ class FlowRepositoryTests(unittest.TestCase):
                     StageId.ORGANIZE_LIBRARY,
                     status=StageStatus.COMPLETED_WITH_WARNINGS,
                     progress=Progress(current=8, total=10),
+                    started_at="2026-06-27T10:01:00-03:00",
+                    finished_at="2026-06-27T10:02:00-03:00",
                     result=StageResult(
                         processed=8,
                         skipped=2,
@@ -69,6 +71,8 @@ class FlowRepositoryTests(unittest.TestCase):
             "elapsed_seconds": 10,
             "estimated_remaining_seconds": None,
             "current_item": None,
+            "started_at": "2026-06-27T10:01:00-03:00",
+            "finished_at": "2026-06-27T10:02:00-03:00",
             "processed": 3,
             "skipped": 0,
             "metrics": {"created": 3},
@@ -88,6 +92,8 @@ class FlowRepositoryTests(unittest.TestCase):
         self.assertEqual(StageId.CATALOG_WORKS, execution.stages[0].stage_id)
         self.assertEqual(3, execution.stages[0].result.processed)
         self.assertEqual({"created": 3}, execution.stages[0].result.metrics)
+        self.assertEqual("2026-06-27T10:01:00-03:00", execution.stages[0].started_at)
+        self.assertEqual("2026-06-27T10:02:00-03:00", execution.stages[0].finished_at)
 
     def test_append_log_and_summary_use_database_tables(self):
         connection = FakeConnection()
@@ -176,6 +182,8 @@ class FakeCursor:
                 processed,
                 skipped,
                 metrics,
+                started_at,
+                finished_at,
             ) = params
             self.connection.stages.append({
                 "execution_id": execution_id,
@@ -189,6 +197,8 @@ class FakeCursor:
                 "processed": processed,
                 "skipped": skipped,
                 "metrics": _json_dict(metrics),
+                "started_at": started_at,
+                "finished_at": finished_at,
             })
         elif normalized.startswith("insert into flow_messages"):
             execution_id, stage, severity, code, message, details = params

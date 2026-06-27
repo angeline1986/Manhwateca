@@ -64,6 +64,7 @@ class WorkflowOrchestrator:
             execution_id=execution.execution_id,
             operation="start",
             status=execution.status.value,
+            message="Workflow iniciado.",
         ))
 
         for stage in OFFICIAL_STAGE_DEFINITIONS:
@@ -84,16 +85,31 @@ class WorkflowOrchestrator:
         service = self.stage_services[stage_id]
         execution = self._replace_stage(
             execution,
-            StageExecution(stage_id, status=StageStatus.VALIDATING),
+            StageExecution(
+                stage_id,
+                status=StageStatus.VALIDATING,
+                started_at=self.clock(),
+                messages=(FlowMessage("Etapa em validação."),),
+            ),
         )
         self.repository.save_execution(execution)
+        self.repository.append_log(FlowLogRecord(
+            execution_id=execution.execution_id,
+            stage=stage_id,
+            operation="stage_start",
+            status=StageStatus.VALIDATING.value,
+            message="Etapa iniciada.",
+        ))
 
         warnings = service.validate()
+        stage_started_at = self._stage_started_at(execution, stage_id)
         execution = self._replace_stage(
             execution,
             StageExecution(
                 stage_id,
                 status=StageStatus.RUNNING,
+                started_at=stage_started_at,
+                progress=Progress(current=0, total=1),
                 messages=(FlowMessage("Etapa em processamento."),),
             ),
         )
@@ -130,6 +146,8 @@ class WorkflowOrchestrator:
                 status=status,
                 progress=Progress(current=1, total=1),
                 result=merged_result,
+                started_at=stage_started_at,
+                finished_at=self.clock(),
             ),
         )
         execution = self._with_status(execution, workflow_status)
@@ -145,7 +163,10 @@ class WorkflowOrchestrator:
                 if result.errors and result.errors[0].code
                 else None
             ),
+            message="Etapa finalizada.",
         ))
+        if workflow_status == WorkflowStatus.FAILED:
+            self._persist_final_summary(execution)
         return execution
 
     def _validate_global_dependencies(self) -> None:
@@ -166,16 +187,19 @@ class WorkflowOrchestrator:
         execution = self.get_status()
         if execution is None:
             raise RuntimeError("Nenhum Workflow iniciado.")
+        execution = self._cancel_running_stage(execution)
         execution = self._with_status(
             execution,
             WorkflowStatus.CANCELLED,
             finished_at=self.clock(),
         )
         self.repository.save_execution(execution)
+        self._persist_final_summary(execution)
         self.repository.append_log(FlowLogRecord(
             execution_id=execution.execution_id,
             operation="cancel",
             status=execution.status.value,
+            message="Workflow cancelado.",
         ))
         return execution
 
@@ -197,27 +221,12 @@ class WorkflowOrchestrator:
             finished_at=self.clock(),
         )
         self.repository.save_execution(execution)
-        self.repository.save_summary(
-            execution.execution_id,
-            {
-                "stages": len(execution.stages),
-                "progressPercent": execution.progress.percent,
-            },
-            warnings_count=sum(
-                len(stage.result.warnings)
-                for stage in execution.stages
-                if stage.result
-            ),
-            errors_count=sum(
-                len(stage.result.errors)
-                for stage in execution.stages
-                if stage.result
-            ),
-        )
+        self._persist_final_summary(execution)
         self.repository.append_log(FlowLogRecord(
             execution_id=execution.execution_id,
             operation="finish",
             status=execution.status.value,
+            message="Workflow finalizado.",
         ))
         return execution
 
@@ -255,6 +264,61 @@ class WorkflowOrchestrator:
             stages=execution.stages,
             warnings=execution.warnings,
             errors=execution.errors,
+        )
+
+    def _stage_started_at(
+        self,
+        execution: WorkflowExecution,
+        stage_id: StageId,
+    ) -> str | None:
+        for stage in execution.stages:
+            if stage.stage_id == stage_id:
+                return stage.started_at
+        return None
+
+    def _cancel_running_stage(
+        self,
+        execution: WorkflowExecution,
+    ) -> WorkflowExecution:
+        current_stage = execution.current_stage
+        if current_stage is None:
+            return execution
+        return self._replace_stage(
+            execution,
+            StageExecution(
+                current_stage.stage_id,
+                status=StageStatus.CANCELLED,
+                progress=current_stage.progress,
+                result=current_stage.result,
+                current_item=current_stage.current_item,
+                messages=(
+                    *current_stage.messages,
+                    FlowMessage("Etapa cancelada."),
+                ),
+                started_at=current_stage.started_at,
+                finished_at=self.clock(),
+            ),
+        )
+
+    def _persist_final_summary(self, execution: WorkflowExecution) -> None:
+        self.repository.save_summary(
+            execution.execution_id,
+            {
+                "status": execution.status.value,
+                "stages": len(execution.stages),
+                "finishedStages": execution.progress.current,
+                "progressPercent": execution.progress.percent,
+            },
+            warnings_count=sum(
+                len(stage.result.warnings)
+                for stage in execution.stages
+                if stage.result
+            ) + len(execution.warnings),
+            errors_count=sum(
+                len(stage.result.errors)
+                for stage in execution.stages
+                if stage.result
+            ) + len(execution.errors),
         )
 
 

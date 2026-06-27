@@ -125,6 +125,8 @@ class StageExecution:
     result: StageResult | None = None
     current_item: str | None = None
     messages: tuple[FlowMessage, ...] = ()
+    started_at: str | None = None
+    finished_at: str | None = None
 
     @property
     def is_finished(self) -> bool:
@@ -144,6 +146,8 @@ class StageExecution:
             result=self.result,
             current_item=self.current_item,
             messages=self.messages,
+            started_at=self.started_at,
+            finished_at=self.finished_at,
         )
 
 

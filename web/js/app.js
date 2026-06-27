@@ -1475,35 +1475,35 @@ const FLOW_STAGE_GROUPS = [
     order: 1,
     title: "Organizar biblioteca",
     description: "Valida estrutura, nomes, capas e inconsistências locais.",
-    steps: ["previews", "organize"],
+    steps: ["organize_library"],
   },
   {
     id: "catalog_works",
     order: 2,
     title: "Catalogar obras",
     description: "Lê a biblioteca e atualiza o catálogo local.",
-    steps: ["catalog"],
+    steps: ["catalog_works"],
   },
   {
     id: "resolve_ids",
     order: 3,
     title: "Resolver IDs",
     description: "Busca candidatos e confirma IDs oficiais no MangaUpdates.",
-    steps: ["ids", "review_ids"],
+    steps: ["resolve_ids"],
   },
   {
-    id: "metadata",
+    id: "update_metadata",
     order: 4,
     title: "Atualizar metadados",
     description: "Consulta detalhes oficiais e prepara dados enriquecidos.",
-    steps: ["details"],
+    steps: ["update_metadata"],
   },
   {
-    id: "notion",
+    id: "sync_notion",
     order: 5,
     title: "Sincronizar Notion",
     description: "Reflete no Notion as alterações realizadas durante o Workflow.",
-    steps: ["notion_catalog", "notion_catalog_apply", "notion_metadata", "notion_metadata_apply"],
+    steps: ["sync_notion"],
   },
 ];
 
@@ -1519,6 +1519,66 @@ const FLOW_STATUS_LABELS = {
   failed: "Falhou",
   cancelled: "Cancelada",
 };
+
+function normalizeFlowsPayload(payload) {
+  const execution = payload?.data?.execution;
+  if (!execution) {
+    return {
+      steps: FLOW_STAGE_GROUPS.map(group => ({
+        id: group.id,
+        label: group.title,
+      })),
+      run: { status: "idle", results: {} },
+    };
+  }
+  const results = {};
+  for (const stage of execution.stages || []) {
+    const messages = [
+      ...(stage.messages || []).map(item => item.message),
+      ...((stage.result?.warnings || []).map(item => item.message)),
+      ...((stage.result?.errors || []).map(item => item.message)),
+    ].filter(Boolean);
+    results[stage.id] = {
+      status: stage.status,
+      messages,
+      note: messages[0],
+    };
+  }
+  return {
+    steps: (execution.definitions || []).map(definition => ({
+      id: definition.id,
+      label: definition.name,
+      manual: false,
+    })),
+    run: {
+      status: execution.status,
+      current: execution.currentStage,
+      started_at: execution.startedAt,
+      finished_at: execution.finishedAt,
+      results,
+      notification: execution.errors?.[0]?.message
+        || execution.warnings?.[0]?.message
+        || null,
+    },
+  };
+}
+
+async function loadFlowsApiState() {
+  const [statusResponse, integrationsResponse, historyResponse] = await Promise.all([
+    fetch("/api/flows/status", { cache: "no-store" }),
+    fetch("/api/flows/integrations", { cache: "no-store" }),
+    fetch("/api/flows/history", { cache: "no-store" }),
+  ]);
+  const [statusPayload, integrationsPayload, historyPayload] = await Promise.all([
+    statusResponse.json(),
+    integrationsResponse.json(),
+    historyResponse.json(),
+  ]);
+  const data = normalizeFlowsPayload(statusPayload);
+  data.integrations = integrationsPayload?.data?.integrations || [];
+  data.history = historyPayload?.data?.history || [];
+  return data;
+}
 
 function flowStageStatus(group, run) {
   const results = run.results || {};
@@ -1604,7 +1664,7 @@ function flowStageDetail(activeStage, activeStatus, run, completed) {
       secondaryAction: "Ver detalhes",
       nextText: "Atualizar metadados fica disponível.",
     },
-    metadata: {
+    update_metadata: {
       primaryTitle: "Atualizar metadados",
       primaryText: "Atualize dados enriquecidos das obras com ID confirmado.",
       primaryAction: "Executar",
@@ -1613,7 +1673,7 @@ function flowStageDetail(activeStage, activeStatus, run, completed) {
       secondaryAction: "Ver detalhes",
       nextText: "Sincronizar Notion fica disponível.",
     },
-    notion: {
+    sync_notion: {
       primaryTitle: "Sincronizar Notion",
       primaryText: "Crie ou atualize páginas e sincronize propriedades no Notion.",
       primaryAction: "Executar",
@@ -1676,16 +1736,30 @@ function renderFlowsOverview(data) {
     `;
   }
   if (flowsCurrentActions) {
-    flowsCurrentActions.innerHTML = run.status === "running"
-      ? '<button class="secondary-action" type="button" disabled>Execução em andamento</button>'
-      : run.status === "completed"
-        ? '<button class="primary-action" type="button" data-flow-start>Executar novamente</button>'
-        : '<button class="primary-action" type="button" data-flow-start>Executar próximo passo</button>';
+    flowsCurrentActions.innerHTML = `
+      <button class="primary-action" type="button" data-flow-start
+        ${run.status === "running" ? "disabled" : ""}>
+        ${run.status === "completed" ? "Executar novamente" : "Executar workflow"}
+      </button>
+      <button class="secondary-action" type="button" data-flow-run-stage
+        ${run.status === "running" ? "disabled" : ""}>
+        Executar etapa atual
+      </button>
+      <button class="ghost-button" type="button" data-flow-cancel>
+        Cancelar
+      </button>
+    `;
   }
   if (flowsCurrentCards) {
-    const nextStage = FLOW_STAGE_GROUPS[activeStage.order] || activeStage;
     const detail = flowStageDetail(activeStage, activeStatus, run, completed);
-    const hasWarnings = activeStatus === "completed_with_warnings";
+    const integrations = data.integrations || [];
+    const history = data.history || [];
+    const integrationText = integrations.length
+      ? integrations
+          .map(item => `${item.name || item.id}: ${item.status}`)
+          .join(" · ")
+      : "Integrações ainda não carregadas.";
+    const lastHistory = history[0];
     flowsCurrentCards.innerHTML = `
       <article class="action-card">
         <div>
@@ -1698,19 +1772,19 @@ function renderFlowsOverview(data) {
       </article>
       <article class="action-card">
         <div>
-          <h3>${escapeHtml(hasWarnings ? "Concluída com alertas" : detail.secondaryTitle)}</h3>
-          <p>${escapeHtml(hasWarnings ? "A etapa registrou pendências que devem aparecer no resumo da execução." : detail.secondaryText)}</p>
+          <h3>Integrações</h3>
+          <p>${escapeHtml(integrationText)}</p>
         </div>
-        <button class="secondary-action" type="button" disabled>
-          ${escapeHtml(detail.secondaryAction)}
-        </button>
+        <button class="secondary-action" type="button" data-flow-refresh>Atualizar</button>
       </article>
       <article class="action-card">
         <div>
-          <h3>Próximo desbloqueio</h3>
-          <p>Depois de concluir esta etapa, ${escapeHtml(detail.nextText || `${nextStage.title} fica disponível.`)}</p>
+          <h3>Histórico</h3>
+          <p>${escapeHtml(lastHistory
+            ? `${lastHistory.status} · ${lastHistory.finishedAt || lastHistory.startedAt || "sem data"}`
+            : "Nenhuma execução registrada.")}</p>
         </div>
-        <button class="ghost-button" type="button" disabled>Ver regra</button>
+        <button class="ghost-button" type="button" data-flow-refresh>Recarregar</button>
       </article>
     `;
   }
@@ -1790,8 +1864,7 @@ function renderWorkflow(data) {
 }
 
 async function loadWorkflow() {
-  const response = await fetch("/api/workflow", { cache: "no-store" });
-  const data = await response.json();
+  const data = await loadFlowsApiState();
   renderWorkflow(data);
   clearTimeout(workflowTimer);
   workflowTimer = setTimeout(
@@ -1809,7 +1882,7 @@ async function runWorkflow(resume = false) {
       .map(step => step.id)
       .filter(step => ACTIVE_FLOW_STEPS.includes(step));
   }
-  const response = await fetch("/api/workflow", {
+  const response = await fetch("/api/flows/start", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ selected, resume })
@@ -1817,10 +1890,44 @@ async function runWorkflow(resume = false) {
   const payload = await response.json();
   const message = response.ok
     ? "Fluxo iniciado."
-    : (payload.error || "Não foi possível iniciar.");
+    : (payload.errors?.[0]?.message || "Não foi possível iniciar.");
   if (workflowFeedback) workflowFeedback.textContent = message;
   flowsFeedback.textContent = message;
-  if (response.ok) renderWorkflow(payload);
+  if (response.ok) renderWorkflow(normalizeFlowsPayload(payload));
+  await loadWorkflow();
+}
+
+async function runCurrentFlowStage() {
+  const run = workflowState?.run || { status: "idle", results: {} };
+  const stage = currentFlowStage(run);
+  if (!stage) return;
+  const response = await fetch(`/api/flows/stages/${stage.id}/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const payload = await response.json();
+  const message = response.ok
+    ? "Etapa iniciada."
+    : (payload.errors?.[0]?.message || "Não foi possível executar a etapa.");
+  if (workflowFeedback) workflowFeedback.textContent = message;
+  flowsFeedback.textContent = message;
+  await loadWorkflow();
+}
+
+async function cancelWorkflow() {
+  const response = await fetch("/api/flows/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const payload = await response.json();
+  const message = response.ok
+    ? "Cancelamento solicitado."
+    : (payload.errors?.[0]?.message || "Não foi possível cancelar.");
+  if (workflowFeedback) workflowFeedback.textContent = message;
+  flowsFeedback.textContent = message;
+  await loadWorkflow();
 }
 
 if (startWorkflow) startWorkflow.addEventListener("click", () => runWorkflow(false));
@@ -1831,12 +1938,24 @@ if (flowsResumeWorkflow) {
 }
 if (flowsCurrentActions) {
   flowsCurrentActions.addEventListener("click", event => {
+    if (event.target.closest("[data-flow-run-stage]")) {
+      runCurrentFlowStage();
+      return;
+    }
+    if (event.target.closest("[data-flow-cancel]")) {
+      cancelWorkflow();
+      return;
+    }
     if (!event.target.closest("[data-flow-start]")) return;
     runWorkflow(false);
   });
 }
 if (flowsCurrentCards) {
   flowsCurrentCards.addEventListener("click", event => {
+    if (event.target.closest("[data-flow-refresh]")) {
+      loadWorkflow();
+      return;
+    }
     if (!event.target.closest("[data-flow-start]")) return;
     runWorkflow(false);
   });

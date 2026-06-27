@@ -4,6 +4,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from manhwateca.flows.api import FlowController
 from manhwateca.webapp.actions import public_actions
 from manhwateca.webapp.catalog import catalog_payload
 from manhwateca.webapp.editorial import dashboard_payload
@@ -31,12 +32,20 @@ def create_server(project_root, host="127.0.0.1", port=8000):
 
 def create_handler(project_root, task_manager, workflow_manager=None):
     workflow_manager = workflow_manager or WorkflowManager(project_root)
+    flow_controller = FlowController.from_project(
+        project_root,
+        legacy_manager=workflow_manager,
+    )
     web_root = project_root / "web"
     reports_root = project_root / "reports"
 
     class ManhwatecaHandler(BaseHTTPRequestHandler):
         def do_GET(self):
             path = urlparse(self.path).path
+            flow_response = flow_controller.handle_get(path)
+            if flow_response:
+                self._send_json(*flow_response)
+                return
             if path == "/api/status":
                 self._send_json(build_status(project_root))
                 return
@@ -94,6 +103,10 @@ def create_handler(project_root, task_manager, workflow_manager=None):
             path = urlparse(self.path).path
             payload = self._read_json()
             if payload is None:
+                return
+            flow_response = flow_controller.handle_post(path, payload)
+            if flow_response:
+                self._send_json(*flow_response)
                 return
             direct = handle_direct_post(
                 path, payload, project_root, workflow_manager

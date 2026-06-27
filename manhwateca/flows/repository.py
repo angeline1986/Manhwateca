@@ -235,9 +235,9 @@ class FlowRepository:
                 execution_id, stage, status, progress_current,
                 progress_total, elapsed_seconds,
                 estimated_remaining_seconds, current_item, processed,
-                skipped, metrics
+                skipped, metrics, started_at, finished_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
             """,
             (
                 execution_id,
@@ -251,6 +251,8 @@ class FlowRepository:
                 result.processed,
                 result.skipped,
                 _json(result.metrics),
+                stage.started_at,
+                stage.finished_at,
             ),
         )
         for message in stage.messages:
@@ -338,6 +340,8 @@ class FlowRepository:
                 ),
             ),
             current_item=row.get("current_item"),
+            started_at=_string_or_none(row.get("started_at")),
+            finished_at=_string_or_none(row.get("finished_at")),
             result=StageResult(
                 processed=row.get("processed") or 0,
                 skipped=row.get("skipped") or 0,
