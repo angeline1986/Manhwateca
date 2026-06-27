@@ -12,6 +12,7 @@ from manhwateca.flows.domain import (
     WorkflowStatus,
 )
 from manhwateca.flows.repository import FlowLogRecord, FlowRepository
+from manhwateca.flows.integrations import LibraryInventoryItem
 
 
 class FlowRepositoryTests(unittest.TestCase):
@@ -117,6 +118,28 @@ class FlowRepositoryTests(unittest.TestCase):
         self.assertEqual({"ids_resolved": 12}, connection.summaries["wf_1"]["metrics"])
         self.assertEqual(2, connection.commit_count)
 
+    def test_save_and_load_inventory(self):
+        connection = FakeConnection()
+        repository = FlowRepository(connection)
+
+        repository.save_inventory("wf_1", (
+            LibraryInventoryItem(
+                name="Obra A",
+                source_path="/library/A",
+                destination_path="/library/O/Obra A",
+                group="O",
+                main_chapters=10,
+                total_chapters=11,
+            ),
+        ))
+
+        inventory = repository.load_inventory("wf_1")
+
+        self.assertEqual(1, len(inventory))
+        self.assertEqual("Obra A", inventory[0].name)
+        self.assertEqual(10, inventory[0].main_chapters)
+        self.assertEqual("wf_1", repository.latest_inventory_execution_id())
+
 
 class FakeConnection:
     def __init__(self):
@@ -125,6 +148,7 @@ class FakeConnection:
         self.messages = []
         self.logs = []
         self.summaries = {}
+        self.inventory = []
         self.committed = False
         self.commit_count = 0
 
@@ -150,12 +174,25 @@ class FakeCursor:
     def execute(self, query, params=()):
         normalized = " ".join(query.split()).lower()
         if normalized.startswith("insert into flow_executions"):
-            execution_id, status, started_at, finished_at = params
+            (
+                execution_id,
+                status,
+                started_at,
+                finished_at,
+                current_stage,
+                progress,
+                error_message,
+                summary,
+            ) = params
             self.connection.executions[execution_id] = {
                 "execution_id": execution_id,
                 "status": status,
                 "started_at": started_at,
                 "finished_at": finished_at,
+                "current_stage": current_stage,
+                "progress": _json_dict(progress),
+                "error_message": error_message,
+                "summary": _json_dict(summary),
             }
         elif normalized.startswith("delete from flow_stage_executions"):
             execution_id = params[0]
@@ -182,6 +219,8 @@ class FakeCursor:
                 processed,
                 skipped,
                 metrics,
+                progress,
+                error_message,
                 started_at,
                 finished_at,
             ) = params
@@ -197,15 +236,18 @@ class FakeCursor:
                 "processed": processed,
                 "skipped": skipped,
                 "metrics": _json_dict(metrics),
+                "progress": _json_dict(progress),
+                "error_message": error_message,
                 "started_at": started_at,
                 "finished_at": finished_at,
             })
         elif normalized.startswith("insert into flow_messages"):
-            execution_id, stage, severity, code, message, details = params
+            execution_id, stage, severity, code, message, details, level = params
             self.connection.messages.append({
                 "execution_id": execution_id,
                 "stage": stage,
                 "severity": severity,
+                "level": level,
                 "code": code,
                 "message": message,
                 "details": _json_dict(details),
@@ -243,6 +285,8 @@ class FakeCursor:
                 error_code,
                 message,
                 details,
+                level,
+                event,
             ) = params
             self.connection.logs.append({
                 "execution_id": execution_id,
@@ -254,15 +298,75 @@ class FakeCursor:
                 "error_code": error_code,
                 "message": message,
                 "details": _json_dict(details),
+                "level": level,
+                "event": event,
             })
         elif normalized.startswith("insert into flow_summaries"):
-            execution_id, metrics, warnings_count, errors_count = params
+            (
+                execution_id,
+                metrics,
+                warnings_count,
+                errors_count,
+                status,
+                warnings,
+                errors,
+            ) = params
             self.connection.summaries[execution_id] = {
                 "execution_id": execution_id,
                 "metrics": _json_dict(metrics),
                 "warnings_count": warnings_count,
                 "errors_count": errors_count,
+                "status": status,
+                "warnings": _json_list(warnings),
+                "errors": _json_list(errors),
             }
+        elif normalized.startswith("delete from flow_library_inventory"):
+            execution_id = params[0]
+            self.connection.inventory = [
+                row for row in self.connection.inventory
+                if row["execution_id"] != execution_id
+            ]
+        elif normalized.startswith("insert into flow_library_inventory"):
+            (
+                execution_id,
+                work_name,
+                source_path,
+                destination_path,
+                group_name,
+                current_group,
+                main_chapters,
+                side_chapters,
+                total_chapters,
+                is_valid,
+                warnings,
+                metrics,
+            ) = params
+            self.connection.inventory.append({
+                "id": len(self.connection.inventory) + 1,
+                "execution_id": execution_id,
+                "work_name": work_name,
+                "source_path": source_path,
+                "destination_path": destination_path,
+                "group_name": group_name,
+                "current_group": current_group,
+                "main_chapters": main_chapters,
+                "side_chapters": side_chapters,
+                "total_chapters": total_chapters,
+                "is_valid": is_valid,
+                "warnings": _json_list(warnings),
+                "metrics": _json_dict(metrics),
+            })
+        elif normalized.startswith("select * from flow_library_inventory"):
+            execution_id = params[0]
+            self.result = [
+                row for row in self.connection.inventory
+                if row["execution_id"] == execution_id
+            ]
+        elif normalized.startswith("select i.execution_id"):
+            self.result = (
+                [{"execution_id": self.connection.inventory[-1]["execution_id"]}]
+                if self.connection.inventory else []
+            )
         else:
             self.result = []
 
@@ -278,6 +382,17 @@ def _json_dict(value):
     if isinstance(value, str):
         return json.loads(value)
     return value or {}
+
+
+def _json_list(value):
+    import json
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return json.loads(value)
+    if isinstance(value, list):
+        return value
+    return list(value)
 
 
 if __name__ == "__main__":

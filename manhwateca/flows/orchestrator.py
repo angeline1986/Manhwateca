@@ -196,8 +196,14 @@ class WorkflowOrchestrator:
             skipped=result.skipped,
             warnings=(*warnings, *result.warnings),
             errors=result.errors,
+            inventory=result.inventory,
             metrics=result.metrics,
         )
+        if stage_id == StageId.ORGANIZE_LIBRARY and merged_result.inventory:
+            self.repository.save_inventory(
+                execution.execution_id,
+                merged_result.inventory,
+            )
         execution = self._replace_stage(
             execution,
             StageExecution(
@@ -419,6 +425,18 @@ class WorkflowOrchestrator:
                 for stage in execution.stages
                 if stage.result
             ) + len(execution.errors),
+            warnings=[
+                _message_dict(warning, stage.stage_id.value)
+                for stage in execution.stages
+                if stage.result
+                for warning in stage.result.warnings
+            ] + [_message_dict(warning, None) for warning in execution.warnings],
+            errors=[
+                _message_dict(error, stage.stage_id.value)
+                for stage in execution.stages
+                if stage.result
+                for error in stage.result.errors
+            ] + [_message_dict(error, None) for error in execution.errors],
         )
 
     def _audit(
@@ -481,3 +499,12 @@ def _audit_severity_for_workflow(status: WorkflowStatus) -> str:
     if status == WorkflowStatus.COMPLETED_WITH_WARNINGS:
         return AuditSeverity.WARNING.value
     return AuditSeverity.INFO.value
+
+
+def _message_dict(message: FlowMessage, stage: str | None) -> dict:
+    return {
+        "stage": stage,
+        "message": message.message,
+        "code": message.code,
+        "details": message.details,
+    }

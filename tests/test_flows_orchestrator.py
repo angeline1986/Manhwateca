@@ -15,6 +15,7 @@ from manhwateca.flows.integrations import (
     IntegrationCheck,
     IntegrationStatus,
     IntegrationValidation,
+    LibraryInventoryItem,
 )
 from manhwateca.flows.orchestrator import WorkflowOrchestrator
 
@@ -82,6 +83,34 @@ class WorkflowOrchestratorTests(unittest.TestCase):
         self.assertEqual("failed", repository.summary_metrics["status"])
         self.assertEqual(1, repository.summary_errors_count)
         self.assertIsNotNone(result.finished_at)
+
+    def test_organize_stage_persists_inventory_for_next_stage(self):
+        repository = FakeRepository()
+        repository.save_execution(WorkflowExecution(
+            execution_id="wf_1",
+            status=WorkflowStatus.RUNNING,
+            stages=tuple(FakeRepository.initial_stages()),
+        ))
+        orchestrator = WorkflowOrchestrator(
+            repository,
+            fake_integrations(),
+            stage_services={
+                StageId.ORGANIZE_LIBRARY: FakeStageService(
+                    processed=1,
+                    inventory=(
+                        LibraryInventoryItem(
+                            name="Obra A",
+                            source_path="/library/Obra A",
+                        ),
+                    ),
+                )
+            },
+        )
+
+        orchestrator.run_stage(StageId.ORGANIZE_LIBRARY)
+
+        self.assertEqual("wf_1", repository.inventory_execution_id)
+        self.assertEqual("Obra A", repository.inventory[0].name)
 
     def test_cancel_marks_current_execution_cancelled(self):
         repository = FakeRepository()
@@ -170,10 +199,11 @@ class WorkflowOrchestratorTests(unittest.TestCase):
 
 
 class FakeStageService:
-    def __init__(self, processed=0, warning=None, error=None):
+    def __init__(self, processed=0, warning=None, error=None, inventory=()):
         self.processed = processed
         self.warning = warning
         self.error = error
+        self.inventory = inventory
 
     def validate(self):
         return (self.warning,) if self.warning else ()
@@ -181,7 +211,7 @@ class FakeStageService:
     def execute(self):
         if self.error:
             return StageResult(errors=(self.error,))
-        return StageResult(processed=self.processed)
+        return StageResult(processed=self.processed, inventory=self.inventory)
 
     def finalize(self, result):
         return result
@@ -195,6 +225,8 @@ class FakeRepository:
         self.summary_metrics = {}
         self.summary_warnings_count = 0
         self.summary_errors_count = 0
+        self.inventory_execution_id = None
+        self.inventory = ()
 
     @staticmethod
     def initial_stages(running_stage=None):
@@ -231,11 +263,17 @@ class FakeRepository:
         metrics,
         warnings_count=0,
         errors_count=0,
+        warnings=None,
+        errors=None,
     ):
         self.summary_execution_id = execution_id
         self.summary_metrics = metrics
         self.summary_warnings_count = warnings_count
         self.summary_errors_count = errors_count
+
+    def save_inventory(self, execution_id, inventory):
+        self.inventory_execution_id = execution_id
+        self.inventory = inventory
 
 
 class FakeIntegration:

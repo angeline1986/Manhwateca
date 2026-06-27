@@ -39,6 +39,21 @@ class IntegrationValidation:
 
 
 @dataclass(frozen=True)
+class LibraryInventoryItem:
+    name: str
+    source_path: str
+    destination_path: str | None = None
+    group: str | None = None
+    current_group: str | None = None
+    main_chapters: int = 0
+    side_chapters: int = 0
+    total_chapters: int = 0
+    is_valid: bool = True
+    warnings: tuple[FlowWarning, ...] = ()
+    metrics: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class LibraryScanResult:
     works_found: int = 0
     chapters_found: int = 0
@@ -48,6 +63,7 @@ class LibraryScanResult:
     duplicates: int = 0
     empty_folders: int = 0
     inconsistencies: tuple[FlowWarning, ...] = ()
+    inventory: tuple[LibraryInventoryItem, ...] = ()
     metrics: dict[str, Any] = field(default_factory=dict)
 
 

@@ -54,6 +54,7 @@ class OrganizeLibraryService(BaseStageService):
         return StageResult(
             processed=result.works_found,
             warnings=warnings,
+            inventory=result.inventory,
             metrics={
                 "worksFound": result.works_found,
                 "chaptersFound": result.chapters_found,
@@ -77,7 +78,14 @@ class CatalogWorksService(BaseStageService):
     def execute(self) -> StageResult:
         result = self.integrations.library.catalog_works()
         warnings = ()
-        if result.pending or result.duplicates:
+        if result.created + result.updated == 0 and result.pending == 0:
+            warnings = (
+                FlowWarning(
+                    "Nenhuma obra válida foi catalogada.",
+                    code="CATALOG_EMPTY",
+                ),
+            )
+        elif result.pending or result.duplicates:
             warnings = (
                 FlowWarning(
                     "Catalogação concluída com pendências.",

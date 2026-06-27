@@ -106,6 +106,7 @@ class StageResult:
     skipped: int = 0
     warnings: tuple[FlowWarning, ...] = ()
     errors: tuple[FlowError, ...] = ()
+    inventory: tuple = ()
     metrics: dict[str, Any] = field(default_factory=dict)
 
     @property
