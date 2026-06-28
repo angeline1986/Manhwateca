@@ -5,11 +5,11 @@
 /* 1. CONFIGURAÇÕES BASE E VARIÁVEIS */
 @import "base.css";
 
-/* 2. LAYOUT (Estrutura fixa da aplicação) */
+/* 2. LAYOUT */
 @import "layout/sidebar.css";
 @import "layout/topbar.css";
 
-/* 3. COMPONENTES (Reutilizáveis em várias partes) */
+/* 3. COMPONENTES */
 @import "components/buttons.css";
 @import "components/cards.css";
 @import "components/tables.css";
@@ -17,9 +17,14 @@
 @import "components/forms.css";
 
 /* 4. ESTILOS ESPECÍFICOS DE PÁGINAS */
-@import "pages/flows.css";
 @import "pages/dashboard.css";
 @import "pages/library.css";
+@import "pages/organization.css";
+@import "pages/mangaupdates.css";
+@import "pages/notion.css";
+@import "pages/automation.css";
+@import "pages/flows.css";
+@import "pages/settings.css";
 
 /* ==========================================================================
    ESTILOS GLOBAIS DE TRANSIÇÃO E UTILITÁRIOS

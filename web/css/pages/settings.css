@@ -1,0 +1,41 @@
+/* --- Settings Page Styles --- */
+.settings-layout {
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr;
+  gap: 22px;
+}
+
+.diagnostic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 18px;
+}
+
+.diagnostic-item {
+  padding: 13px 15px;
+  border-radius: 11px;
+  background: #faf8f9;
+  border-left: 4px solid var(--border);
+}
+
+.diagnostic-item.ok { border-left-color: var(--success); }
+.diagnostic-item.warn { border-left-color: var(--warning); }
+
+.settings-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.settings-list div {
+  display: flex;
+  justify-content: space-between;
+  padding: 15px;
+  border-radius: 12px;
+  background: var(--soft-2);
+}
+
+@media (max-width: 820px) {
+  .settings-layout { grid-template-columns: 1fr; }
+}

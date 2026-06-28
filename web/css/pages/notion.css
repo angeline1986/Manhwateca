@@ -1,0 +1,38 @@
+/* --- Notion Page Styles --- */
+.notion-sync-status {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  margin-bottom: 24px;
+  padding: 17px 19px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  color: var(--text) !important;
+  background: #fff !important;
+  text-align: left;
+  box-shadow: var(--shadow);
+}
+
+.notion-sync-indicator {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.notion-sync-status.ok .notion-sync-indicator { background: var(--success); }
+.notion-sync-status.warning .notion-sync-indicator { background: var(--warning); }
+
+.metadata-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+  gap: 14px;
+}
+
+.notion-lists {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
