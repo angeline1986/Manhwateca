@@ -16,7 +16,11 @@ from manhwateca.flows.domain import (
     WorkflowExecution,
     WorkflowStatus,
 )
-from manhwateca.flows.integrations import LibraryInventoryItem
+from manhwateca.flows.integrations import (
+    FileNormalizationItem,
+    FileNormalizationPlan,
+    LibraryInventoryItem,
+)
 
 
 @dataclass(frozen=True)
@@ -165,6 +169,138 @@ class FlowRepository:
         if row is None:
             return None
         return self.load_execution(row["execution_id"])
+
+    def recover_stale_execution(
+        self,
+        *,
+        timeout_minutes: int,
+        reason: str | None = None,
+    ) -> bool:
+        reason = reason or (
+            "Execução marcada como falha por ausência de progresso recente."
+        )
+        row = self._fetch_one(
+            """
+            WITH active AS (
+                SELECT
+                    e.execution_id,
+                    s.stage,
+                    s.started_at,
+                    GREATEST(
+                        COALESCE(
+                            s.updated_at,
+                            s.started_at,
+                            e.updated_at,
+                            e.started_at,
+                            e.created_at
+                        ),
+                        COALESCE((
+                            SELECT max(l.created_at)
+                            FROM flow_logs l
+                            WHERE l.execution_id = e.execution_id
+                              AND l.stage = s.stage
+                        ), TIMESTAMP 'epoch'),
+                        COALESCE((
+                            SELECT max(m.created_at)
+                            FROM flow_messages m
+                            WHERE m.execution_id = e.execution_id
+                              AND m.stage = s.stage
+                        ), TIMESTAMP 'epoch'),
+                        COALESCE((
+                            SELECT max(c.created_at)
+                            FROM flow_id_candidates c
+                            WHERE c.execution_id = e.execution_id
+                        ), TIMESTAMP 'epoch')
+                    ) AS last_activity
+                FROM flow_executions e
+                JOIN flow_stage_executions s
+                  ON s.execution_id = e.execution_id
+                WHERE e.status = 'running'
+                  AND s.status = 'running'
+                  AND s.finished_at IS NULL
+                ORDER BY e.created_at DESC, s.id DESC
+                LIMIT 1
+            )
+            SELECT execution_id, stage
+            FROM active
+            WHERE COALESCE(started_at, last_activity)
+                < now() - (%s * interval '1 minute')
+              AND last_activity
+                < now() - (%s * interval '1 minute')
+            """,
+            (timeout_minutes, timeout_minutes),
+        )
+        if row is None:
+            return False
+
+        execution_id = row["execution_id"]
+        stage = row["stage"]
+        with self._cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE flow_stage_executions
+                SET status = 'failed',
+                    finished_at = now(),
+                    error_message = %s,
+                    updated_at = now()
+                WHERE execution_id = %s
+                  AND stage = %s
+                  AND status = 'running'
+                """,
+                (reason, execution_id, stage),
+            )
+            cursor.execute(
+                """
+                UPDATE flow_executions
+                SET status = 'failed',
+                    finished_at = now(),
+                    current_stage = NULL,
+                    error_message = %s,
+                    summary = jsonb_set(
+                        COALESCE(summary, '{}'::jsonb),
+                        '{status}',
+                        '"failed"'::jsonb,
+                        true
+                    ),
+                    updated_at = now()
+                WHERE execution_id = %s
+                  AND status = 'running'
+                """,
+                (reason, execution_id),
+            )
+            self._insert_message(
+                cursor,
+                execution_id,
+                stage,
+                "error",
+                FlowError(reason, code="FLOW_STALE_EXECUTION"),
+            )
+            cursor.execute(
+                """
+                INSERT INTO flow_logs (
+                    execution_id, stage, operation, status, duration, processed,
+                    error_code, message, details, level, event
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s
+                )
+                """,
+                (
+                    execution_id,
+                    stage,
+                    "stale_recovery",
+                    "failed",
+                    None,
+                    None,
+                    "FLOW_STALE_EXECUTION",
+                    reason,
+                    _json({"timeoutMinutes": timeout_minutes}),
+                    "error",
+                    "stale_recovery",
+                ),
+            )
+        self._connection().commit()
+        return True
 
     def list_history(self, limit: int = 20) -> list[WorkflowExecution]:
         rows = self._fetch_all(
@@ -372,6 +508,171 @@ class FlowRepository:
             """
         )
         return row["execution_id"] if row else None
+
+    def save_normalization_plan(
+        self,
+        plan: FileNormalizationPlan,
+    ) -> FileNormalizationPlan:
+        with self._cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO flow_file_normalization_plans (
+                    execution_id, status, total_items, total_conflicts,
+                    total_errors, error_message
+                )
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    plan.execution_id,
+                    plan.status,
+                    plan.total_items,
+                    plan.total_conflicts,
+                    plan.total_errors,
+                    plan.error_message,
+                ),
+            )
+            row = cursor.fetchone()
+            plan_id = row["id"] if row else None
+            saved_items = []
+            for item in plan.items:
+                cursor.execute(
+                    """
+                    INSERT INTO flow_file_normalization_items (
+                        plan_id, execution_id, inventory_issue_id, work_title,
+                        original_path, proposed_path, operation, status,
+                        severity, message, details
+                    )
+                    VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb
+                    )
+                    RETURNING id
+                    """,
+                    (
+                        plan_id,
+                        plan.execution_id,
+                        item.inventory_issue_id,
+                        item.work_title,
+                        item.original_path,
+                        item.proposed_path,
+                        item.operation,
+                        item.status,
+                        item.severity,
+                        item.message,
+                        _json(item.details),
+                    ),
+                )
+                item_row = cursor.fetchone()
+                saved_items.append(FileNormalizationItem(
+                    **{
+                        **item.__dict__,
+                        "item_id": item_row["id"] if item_row else None,
+                    }
+                ))
+        self._connection().commit()
+        return FileNormalizationPlan(
+            execution_id=plan.execution_id,
+            status=plan.status,
+            items=tuple(saved_items),
+            plan_id=plan_id,
+            total_conflicts=plan.total_conflicts,
+            total_errors=plan.total_errors,
+            error_message=plan.error_message,
+        )
+
+    def latest_normalization_plan(self) -> FileNormalizationPlan | None:
+        row = self._fetch_one(
+            """
+            SELECT *
+            FROM flow_file_normalization_plans
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """
+        )
+        if row is None:
+            return None
+        return self.load_normalization_plan(row["id"])
+
+    def load_normalization_plan(self, plan_id: int) -> FileNormalizationPlan | None:
+        row = self._fetch_one(
+            """
+            SELECT *
+            FROM flow_file_normalization_plans
+            WHERE id = %s
+            """,
+            (plan_id,),
+        )
+        if row is None:
+            return None
+        item_rows = self._fetch_all(
+            """
+            SELECT *
+            FROM flow_file_normalization_items
+            WHERE plan_id = %s
+            ORDER BY id
+            """,
+            (plan_id,),
+        )
+        return _normalization_plan_from_rows(row, item_rows)
+
+    def update_normalization_plan(
+        self,
+        plan: FileNormalizationPlan,
+    ) -> FileNormalizationPlan:
+        if plan.plan_id is None:
+            raise ValueError("plan_id é obrigatório para atualizar normalização.")
+        with self._cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE flow_file_normalization_plans
+                SET status = %s,
+                    total_items = %s,
+                    total_conflicts = %s,
+                    total_errors = %s,
+                    error_message = %s,
+                    applied_at = CASE
+                        WHEN %s THEN now()
+                        ELSE applied_at
+                    END
+                WHERE id = %s
+                """,
+                (
+                    plan.status,
+                    plan.total_items,
+                    plan.total_conflicts,
+                    plan.total_errors,
+                    plan.error_message,
+                    plan.status in {"applied", "partially_applied", "failed"},
+                    plan.plan_id,
+                ),
+            )
+            for item in plan.items:
+                if item.item_id is None:
+                    continue
+                cursor.execute(
+                    """
+                    UPDATE flow_file_normalization_items
+                    SET status = %s,
+                        severity = %s,
+                        message = %s,
+                        details = %s::jsonb,
+                        applied_at = CASE
+                            WHEN %s THEN now()
+                            ELSE applied_at
+                        END
+                    WHERE id = %s
+                    """,
+                    (
+                        item.status,
+                        item.severity,
+                        item.message,
+                        _json(item.details),
+                        item.status in {"applied", "failed", "skipped"},
+                        item.item_id,
+                    ),
+                )
+        self._connection().commit()
+        return self.load_normalization_plan(plan.plan_id) or plan
 
     def list_catalog_works_for_id_resolution(self) -> list[CatalogWorkRecord]:
         rows = self._fetch_all(
@@ -755,6 +1056,34 @@ def _inventory_from_row(row) -> LibraryInventoryItem:
             for item in _list(row.get("warnings"))
         ),
         metrics=_dict(row.get("metrics")),
+    )
+
+
+def _normalization_plan_from_rows(row, item_rows) -> FileNormalizationPlan:
+    items = tuple(_normalization_item_from_row(item) for item in item_rows)
+    return FileNormalizationPlan(
+        execution_id=row["execution_id"],
+        status=row["status"],
+        items=items,
+        plan_id=row["id"],
+        total_conflicts=row.get("total_conflicts") or 0,
+        total_errors=row.get("total_errors") or 0,
+        error_message=row.get("error_message"),
+    )
+
+
+def _normalization_item_from_row(row) -> FileNormalizationItem:
+    return FileNormalizationItem(
+        item_id=row.get("id"),
+        inventory_issue_id=row.get("inventory_issue_id"),
+        work_title=row["work_title"],
+        original_path=row["original_path"],
+        proposed_path=row["proposed_path"],
+        operation=row["operation"],
+        status=row["status"],
+        severity=row.get("severity") or "info",
+        message=row.get("message"),
+        details=_dict(row.get("details")),
     )
 
 

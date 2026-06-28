@@ -56,9 +56,21 @@ class FlowController:
             return self._ok({"history": self._history()})
         if path == "/api/flows/integrations":
             return self._ok({"integrations": self._integrations_status()})
+        if path == "/api/flows/normalization/latest":
+            return self._latest_normalization_response()
         return None
 
     def handle_post(self, path: str, payload: dict[str, Any]):
+        if path == "/api/flows/normalization/preview":
+            return self._run_normalization(
+                lambda: self.backend.generate_normalization_preview(),
+                status=201,
+            )
+        if path == "/api/flows/normalization/apply":
+            return self._run_normalization(
+                lambda: self.backend.apply_normalization(),
+                status=202,
+            )
         if path == "/api/flows/start":
             self._audit_requested(
                 "workflow.start_requested",
@@ -145,6 +157,40 @@ class FlowController:
             return self._error(str(error), status=409)
         return self._ok({"execution": _execution_to_dict(execution)}, status=status)
 
+    def _run_normalization(self, callback, *, status: int):
+        try:
+            plan = callback()
+        except AttributeError:
+            return self._error(
+                "Padronização ainda não disponível neste backend.",
+                status=501,
+            )
+        except ValueError as error:
+            return self._error(str(error), status=400)
+        except RuntimeError as error:
+            return self._error(str(error), status=409)
+        return self._ok(
+            {"normalization": _normalization_plan_to_dict(plan)},
+            status=status,
+        )
+
+    def _latest_normalization(self):
+        if not hasattr(self.backend, "latest_normalization"):
+            return None
+        return _normalization_plan_to_dict(self.backend.latest_normalization())
+
+    def _latest_normalization_response(self):
+        try:
+            latest = self._latest_normalization()
+        except Exception:
+            logger.exception("Falha ao consultar último plano de padronização.")
+            return self._error(
+                "Não foi possível consultar o último plano de normalização.",
+                status=500,
+                code="FLOW_NORMALIZATION_LATEST_ERROR",
+            )
+        return self._ok({"latestPlan": latest})
+
     def _audit_requested(
         self,
         action: str,
@@ -175,12 +221,12 @@ class FlowController:
             "warnings": [],
         }, status
 
-    def _error(self, message: str, *, status: int):
+    def _error(self, message: str, *, status: int, code: str | None = None):
         return {
             "success": False,
             "timestamp": _now(),
             "data": None,
-            "errors": [{"message": message}],
+            "errors": [{"code": code, "message": message}],
             "warnings": [],
         }, status
 
@@ -244,6 +290,35 @@ def _integration_to_dict(identifier: str, check: IntegrationCheck):
         "warnings": [_message_to_dict(warning) for warning in check.warnings],
         "errors": [_message_to_dict(error) for error in check.errors],
         "details": check.details,
+    }
+
+
+def _normalization_plan_to_dict(plan):
+    if plan is None:
+        return None
+    return {
+        "id": plan.plan_id,
+        "executionId": plan.execution_id,
+        "status": plan.status,
+        "totalItems": plan.total_items,
+        "totalConflicts": plan.total_conflicts,
+        "totalErrors": plan.total_errors,
+        "errorMessage": plan.error_message,
+        "items": [
+            {
+                "id": item.item_id,
+                "inventoryIssueId": item.inventory_issue_id,
+                "workTitle": item.work_title,
+                "originalPath": item.original_path,
+                "proposedPath": item.proposed_path,
+                "operation": item.operation,
+                "status": item.status,
+                "severity": item.severity,
+                "message": item.message,
+                "details": item.details,
+            }
+            for item in plan.items
+        ],
     }
 
 

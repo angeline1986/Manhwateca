@@ -12,7 +12,11 @@ from manhwateca.flows.domain import (
     WorkflowStatus,
 )
 from manhwateca.flows.repository import FlowLogRecord, FlowRepository
-from manhwateca.flows.integrations import LibraryInventoryItem
+from manhwateca.flows.integrations import (
+    FileNormalizationItem,
+    FileNormalizationPlan,
+    LibraryInventoryItem,
+)
 
 
 class FlowRepositoryTests(unittest.TestCase):
@@ -140,6 +144,82 @@ class FlowRepositoryTests(unittest.TestCase):
         self.assertEqual(10, inventory[0].main_chapters)
         self.assertEqual("wf_1", repository.latest_inventory_execution_id())
 
+    def test_save_load_and_update_normalization_plan(self):
+        connection = FakeConnection()
+        repository = FlowRepository(connection)
+
+        saved = repository.save_normalization_plan(FileNormalizationPlan(
+            execution_id="wf_1",
+            status="ready",
+            items=(
+                FileNormalizationItem(
+                    work_title="Obra A",
+                    original_path="/library/Obra A/capitulo 01.pdf",
+                    proposed_path="/library/Obra A/Obra A cap 1.pdf",
+                    operation="rename_file",
+                    status="ready",
+                ),
+            ),
+        ))
+        updated = repository.update_normalization_plan(FileNormalizationPlan(
+            execution_id="wf_1",
+            plan_id=saved.plan_id,
+            status="applied",
+            items=(
+                FileNormalizationItem(
+                    item_id=saved.items[0].item_id,
+                    work_title="Obra A",
+                    original_path="/library/Obra A/capitulo 01.pdf",
+                    proposed_path="/library/Obra A/Obra A cap 1.pdf",
+                    operation="rename_file",
+                    status="applied",
+                    message="Padronização aplicada.",
+                ),
+            ),
+        ))
+
+        latest = repository.latest_normalization_plan()
+
+        self.assertEqual("applied", updated.status)
+        self.assertEqual(saved.plan_id, latest.plan_id)
+        self.assertEqual("applied", latest.items[0].status)
+        self.assertEqual("Padronização aplicada.", latest.items[0].message)
+
+    def test_recover_stale_execution_marks_running_stage_failed(self):
+        connection = FakeConnection()
+        connection.executions["wf_stale"] = {
+            "execution_id": "wf_stale",
+            "status": "running",
+            "started_at": "2026-06-28T13:00:00-03:00",
+            "finished_at": None,
+            "current_stage": "resolve_ids",
+            "error_message": None,
+            "summary": {"status": "running"},
+        }
+        connection.stages.append({
+            "execution_id": "wf_stale",
+            "stage": "resolve_ids",
+            "status": "running",
+            "progress_current": 0,
+            "progress_total": 10,
+            "started_at": "2026-06-28T13:01:00-03:00",
+            "finished_at": None,
+            "error_message": None,
+        })
+        connection.stale_execution = ("wf_stale", "resolve_ids")
+
+        recovered = FlowRepository(connection).recover_stale_execution(
+            timeout_minutes=15,
+            reason="Sem atividade recente.",
+        )
+
+        self.assertTrue(recovered)
+        self.assertEqual("failed", connection.executions["wf_stale"]["status"])
+        self.assertEqual("failed", connection.stages[0]["status"])
+        self.assertEqual("Sem atividade recente.", connection.stages[0]["error_message"])
+        self.assertEqual("FLOW_STALE_EXECUTION", connection.messages[0]["code"])
+        self.assertEqual("stale_recovery", connection.logs[0]["operation"])
+
 
 class FakeConnection:
     def __init__(self):
@@ -149,6 +229,9 @@ class FakeConnection:
         self.logs = []
         self.summaries = {}
         self.inventory = []
+        self.normalization_plans = []
+        self.normalization_items = []
+        self.stale_execution = None
         self.committed = False
         self.commit_count = 0
 
@@ -255,6 +338,12 @@ class FakeCursor:
         elif normalized.startswith("select * from flow_executions"):
             execution = self.connection.executions.get(params[0])
             self.result = [execution] if execution else []
+        elif normalized.startswith("with active as"):
+            if self.connection.stale_execution:
+                execution_id, stage = self.connection.stale_execution
+                self.result = [{"execution_id": execution_id, "stage": stage}]
+            else:
+                self.result = []
         elif normalized.startswith("select * from flow_stage_executions"):
             execution_id = params[0]
             self.result = [
@@ -301,6 +390,24 @@ class FakeCursor:
                 "level": level,
                 "event": event,
             })
+        elif (
+            normalized.startswith("update flow_stage_executions")
+            and "set status = 'failed'" in normalized
+        ):
+            reason, execution_id, stage = params
+            for row in self.connection.stages:
+                if row["execution_id"] == execution_id and row["stage"] == stage:
+                    row["status"] = "failed"
+                    row["finished_at"] = "now"
+                    row["error_message"] = reason
+        elif normalized.startswith("update flow_executions"):
+            reason, execution_id = params
+            row = self.connection.executions[execution_id]
+            row["status"] = "failed"
+            row["finished_at"] = "now"
+            row["current_stage"] = None
+            row["error_message"] = reason
+            row["summary"] = {"status": "failed"}
         elif normalized.startswith("insert into flow_summaries"):
             (
                 execution_id,
@@ -367,6 +474,109 @@ class FakeCursor:
                 [{"execution_id": self.connection.inventory[-1]["execution_id"]}]
                 if self.connection.inventory else []
             )
+        elif normalized.startswith("insert into flow_file_normalization_plans"):
+            (
+                execution_id,
+                status,
+                total_items,
+                total_conflicts,
+                total_errors,
+                error_message,
+            ) = params
+            plan = {
+                "id": len(self.connection.normalization_plans) + 1,
+                "execution_id": execution_id,
+                "status": status,
+                "total_items": total_items,
+                "total_conflicts": total_conflicts,
+                "total_errors": total_errors,
+                "error_message": error_message,
+            }
+            self.connection.normalization_plans.append(plan)
+            self.result = [{"id": plan["id"]}]
+        elif normalized.startswith("insert into flow_file_normalization_items"):
+            (
+                plan_id,
+                execution_id,
+                inventory_issue_id,
+                work_title,
+                original_path,
+                proposed_path,
+                operation,
+                status,
+                severity,
+                message,
+                details,
+            ) = params
+            item = {
+                "id": len(self.connection.normalization_items) + 1,
+                "plan_id": plan_id,
+                "execution_id": execution_id,
+                "inventory_issue_id": inventory_issue_id,
+                "work_title": work_title,
+                "original_path": original_path,
+                "proposed_path": proposed_path,
+                "operation": operation,
+                "status": status,
+                "severity": severity,
+                "message": message,
+                "details": _json_dict(details),
+            }
+            self.connection.normalization_items.append(item)
+            self.result = [{"id": item["id"]}]
+        elif normalized.startswith("select * from flow_file_normalization_plans where id"):
+            plan_id = params[0]
+            self.result = [
+                row for row in self.connection.normalization_plans
+                if row["id"] == plan_id
+            ]
+        elif normalized.startswith("select * from flow_file_normalization_plans"):
+            self.result = (
+                [self.connection.normalization_plans[-1]]
+                if self.connection.normalization_plans else []
+            )
+        elif normalized.startswith("select * from flow_file_normalization_items"):
+            plan_id = params[0]
+            self.result = [
+                row for row in self.connection.normalization_items
+                if row["plan_id"] == plan_id
+            ]
+        elif normalized.startswith("update flow_file_normalization_plans"):
+            (
+                status,
+                total_items,
+                total_conflicts,
+                total_errors,
+                error_message,
+                _sets_applied_at,
+                plan_id,
+            ) = params
+            for row in self.connection.normalization_plans:
+                if row["id"] == plan_id:
+                    row.update({
+                        "status": status,
+                        "total_items": total_items,
+                        "total_conflicts": total_conflicts,
+                        "total_errors": total_errors,
+                        "error_message": error_message,
+                    })
+        elif normalized.startswith("update flow_file_normalization_items"):
+            (
+                status,
+                severity,
+                message,
+                details,
+                _sets_applied_at,
+                item_id,
+            ) = params
+            for row in self.connection.normalization_items:
+                if row["id"] == item_id:
+                    row.update({
+                        "status": status,
+                        "severity": severity,
+                        "message": message,
+                        "details": _json_dict(details),
+                    })
         else:
             self.result = []
 

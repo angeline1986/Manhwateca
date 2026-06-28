@@ -1,4 +1,5 @@
 import logging
+import os
 import threading
 
 from manhwateca.database.connection import (
@@ -18,6 +19,10 @@ from manhwateca.flows.integrations import (
 )
 from manhwateca.flows.library import LocalLibraryIntegration
 from manhwateca.flows.mangaupdates import MangaUpdatesFlowIntegration
+from manhwateca.flows.normalization import (
+    FileNormalizationService,
+    LocalFileNormalizationIntegration,
+)
 from manhwateca.flows.orchestrator import WorkflowOrchestrator
 from manhwateca.flows.repository import FlowRepository
 
@@ -40,7 +45,12 @@ class OfficialFlowBackend:
         self.start_timeout = start_timeout
 
     def get_status(self):
-        return self.repository_factory().latest_execution()
+        repository = self.repository_factory()
+        if hasattr(repository, "recover_stale_execution"):
+            repository.recover_stale_execution(
+                timeout_minutes=_stale_timeout_minutes(),
+            )
+        return repository.latest_execution()
 
     def list_history(self):
         return self.repository_factory().list_history()
@@ -76,6 +86,15 @@ class OfficialFlowBackend:
     def cancel(self):
         return self._orchestrator().cancel()
 
+    def generate_normalization_preview(self):
+        return self._normalization_service().generate_preview()
+
+    def apply_normalization(self):
+        return self._normalization_service().apply_latest()
+
+    def latest_normalization(self):
+        return self._normalization_service().latest()
+
     def _run_start(self, started: threading.Event) -> None:
         try:
             self._orchestrator(
@@ -100,6 +119,14 @@ class OfficialFlowBackend:
             audit_service=self.audit_service,
             **callbacks,
         )
+
+    def _normalization_service(self):
+        integration = (
+            self.integrations.normalization
+            if self.integrations.normalization is not None
+            else LocalFileNormalizationIntegration()
+        )
+        return FileNormalizationService(self.repository_factory(), integration)
 
 
 class DatabaseHealthIntegration:
@@ -170,4 +197,14 @@ def default_flow_integrations() -> FlowIntegrations:
         library=LocalLibraryIntegration(),
         mangaupdates=MangaUpdatesFlowIntegration(),
         notion=DeferredNotionIntegration(),
+        normalization=LocalFileNormalizationIntegration(),
     )
+
+
+def _stale_timeout_minutes() -> int:
+    raw = os.environ.get("FLOW_STALE_TIMEOUT_MINUTES", "15")
+    try:
+        value = int(raw)
+    except ValueError:
+        return 15
+    return max(1, value)

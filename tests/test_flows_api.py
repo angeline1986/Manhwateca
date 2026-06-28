@@ -14,6 +14,8 @@ from manhwateca.flows.integrations import (
     FlowIntegrations,
     IntegrationCheck,
     IntegrationStatus,
+    FileNormalizationItem,
+    FileNormalizationPlan,
 )
 
 
@@ -119,10 +121,69 @@ class FlowControllerTests(unittest.TestCase):
         self.assertTrue(hasattr(controller.backend, "list_history"))
         self.assertTrue(hasattr(controller.backend, "run_stage"))
 
+    def test_normalization_preview_delegates_to_backend(self):
+        backend = FakeBackend()
+        controller = FlowController(backend)
+
+        payload, status = controller.handle_post(
+            "/api/flows/normalization/preview",
+            {},
+        )
+
+        self.assertEqual(201, status)
+        self.assertEqual(["normalization_preview"], backend.calls)
+        normalization = payload["data"]["normalization"]
+        self.assertEqual("ready", normalization["status"])
+        self.assertEqual("rename_file", normalization["items"][0]["operation"])
+
+    def test_normalization_apply_delegates_to_backend(self):
+        backend = FakeBackend()
+        controller = FlowController(backend)
+
+        payload, status = controller.handle_post(
+            "/api/flows/normalization/apply",
+            {},
+        )
+
+        self.assertEqual(202, status)
+        self.assertEqual(["normalization_apply"], backend.calls)
+        self.assertEqual("applied", payload["data"]["normalization"]["status"])
+
+    def test_latest_normalization_uses_backend_state(self):
+        controller = FlowController(FakeBackend())
+
+        payload, status = controller.handle_get("/api/flows/normalization/latest")
+
+        self.assertEqual(200, status)
+        self.assertEqual(1, payload["data"]["latestPlan"]["id"])
+
+    def test_latest_normalization_without_plan_returns_null_plan(self):
+        controller = FlowController(FakeBackend(latest_normalization=None))
+
+        payload, status = controller.handle_get("/api/flows/normalization/latest")
+
+        self.assertEqual(200, status)
+        self.assertTrue(payload["success"])
+        self.assertIsNone(payload["data"]["latestPlan"])
+
+    def test_latest_normalization_error_returns_error_envelope(self):
+        controller = FlowController(FailingNormalizationBackend())
+
+        with self.assertLogs("manhwateca.flows.api", level="ERROR"):
+            payload, status = controller.handle_get("/api/flows/normalization/latest")
+
+        self.assertEqual(500, status)
+        self.assertFalse(payload["success"])
+        self.assertEqual(
+            "FLOW_NORMALIZATION_LATEST_ERROR",
+            payload["errors"][0]["code"],
+        )
+
 
 class FakeBackend:
-    def __init__(self):
+    def __init__(self, latest_normalization="plan"):
         self.calls = []
+        self._latest_normalization = latest_normalization
 
     def get_status(self):
         return _execution(WorkflowStatus.RUNNING)
@@ -141,6 +202,24 @@ class FakeBackend:
 
     def list_history(self):
         return [_execution(WorkflowStatus.COMPLETED)]
+
+    def generate_normalization_preview(self):
+        self.calls.append("normalization_preview")
+        return _normalization("ready")
+
+    def apply_normalization(self):
+        self.calls.append("normalization_apply")
+        return _normalization("applied")
+
+    def latest_normalization(self):
+        if self._latest_normalization is None:
+            return None
+        return _normalization("ready")
+
+
+class FailingNormalizationBackend(FakeBackend):
+    def latest_normalization(self):
+        raise RuntimeError("database unavailable")
 
 
 class FakeIntegration:
@@ -179,6 +258,24 @@ def _execution(status):
                     else StageStatus.COMPLETED
                 ),
                 started_at="2026-06-27T10:01:00-03:00",
+            ),
+        ),
+    )
+
+
+def _normalization(status):
+    return FileNormalizationPlan(
+        plan_id=1,
+        execution_id="wf_1",
+        status=status,
+        items=(
+            FileNormalizationItem(
+                item_id=2,
+                work_title="Obra",
+                original_path="/library/Obra/capitulo 01.pdf",
+                proposed_path="/library/Obra/Obra cap 1.pdf",
+                operation="rename_file",
+                status="applied" if status == "applied" else "ready",
             ),
         ),
     )

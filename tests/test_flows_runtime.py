@@ -25,6 +25,7 @@ class OfficialFlowBackendTests(unittest.TestCase):
         execution = backend.get_status()
 
         self.assertEqual("wf_1", execution.execution_id)
+        self.assertEqual(1, repository.recover_calls)
 
     def test_start_returns_persisted_running_execution_from_repository(self):
         repository = FakeRepository()
@@ -43,9 +44,14 @@ class OfficialFlowBackendTests(unittest.TestCase):
 class FakeRepository:
     def __init__(self):
         self.execution = None
+        self.recover_calls = 0
 
     def latest_execution(self):
         return self.execution
+
+    def recover_stale_execution(self, **_kwargs):
+        self.recover_calls += 1
+        return False
 
     def list_history(self):
         return [self.execution] if self.execution else []

@@ -115,6 +115,35 @@ class NotionSyncResult:
     metrics: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class FileNormalizationItem:
+    work_title: str
+    original_path: str
+    proposed_path: str
+    operation: str
+    status: str = "ready"
+    severity: str = "info"
+    message: str | None = None
+    inventory_issue_id: int | None = None
+    details: dict[str, Any] = field(default_factory=dict)
+    item_id: int | None = None
+
+
+@dataclass(frozen=True)
+class FileNormalizationPlan:
+    execution_id: str
+    status: str
+    items: tuple[FileNormalizationItem, ...] = ()
+    plan_id: int | None = None
+    total_conflicts: int = 0
+    total_errors: int = 0
+    error_message: str | None = None
+
+    @property
+    def total_items(self) -> int:
+        return len(self.items)
+
+
 class DatabaseHealthIntegration(Protocol):
     def check_status(self) -> IntegrationCheck:
         ...
@@ -162,9 +191,21 @@ class NotionIntegration(Protocol):
         ...
 
 
+class FileNormalizationIntegration(Protocol):
+    def generate_preview(self, execution_id: str) -> FileNormalizationPlan:
+        ...
+
+    def validate_plan(self, plan: FileNormalizationPlan) -> FileNormalizationPlan:
+        ...
+
+    def apply_plan(self, plan: FileNormalizationPlan) -> FileNormalizationPlan:
+        ...
+
+
 @dataclass(frozen=True)
 class FlowIntegrations:
     database: DatabaseHealthIntegration
     library: LibraryIntegration
     mangaupdates: MangaUpdatesIntegration
     notion: NotionIntegration
+    normalization: FileNormalizationIntegration | None = None
