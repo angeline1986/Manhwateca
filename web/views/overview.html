@@ -1,0 +1,87 @@
+<!-- STATUS PRINCIPAL -->
+<div class="status-grid" id="statusGrid" aria-live="polite">
+  <article class="status-card loading">Consultando o ambiente...</article>
+</div>
+
+<!-- PENDÊNCIAS -->
+<section class="panel pending-panel">
+  <div class="section-heading">
+    <div>
+      <span class="eyebrow">PRÓXIMAS AÇÕES</span>
+      <h2>Pendências acionáveis</h2>
+      <p>
+        Mostra somente o que ainda precisa de execução ou decisão.
+        Cada card leva para o próximo passo.
+      </p>
+    </div>
+  </div>
+  <div class="pending-list" id="pendingList" aria-live="polite">
+    <article class="pending-card loading">Calculando pendências...</article>
+  </div>
+</section>
+
+<!-- GUIA RÁPIDO (JORNADA) -->
+<section class="panel quick-guide">
+    <span class="eyebrow">O QUE DESEJA FAZER?</span>
+    <h2>Escolha o caminho conforme sua necessidade</h2>
+    <div class="journey-grid">
+      
+      <button type="button" class="journey-card" data-page="organization">
+        <span class="journey-face">
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M5 13h14l4 5h20v22H5z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="36" cy="35" r="7" fill="none" stroke="currentColor" stroke-width="3"/>
+            <path d="M36 24v4M36 42v4M25 35h4M43 35h4" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+          <b>Organizar<br>Arquivos</b>
+        </span>
+        <span class="journey-description">
+          <span>Verifica nomes, capas e pastas antes de qualquer alteração.</span>
+          <em class="tile-action">Simular</em>
+        </span>
+      </button>
+
+      <button type="button" class="journey-card" data-action="catalog_scan">
+        <span class="journey-face">
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <circle cx="24" cy="24" r="18" fill="none" stroke="currentColor" stroke-width="3"/>
+            <path d="M24 15v18M15 24h18" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+          <b>Novos<br>Capítulos</b>
+        </span>
+        <span class="journey-description">
+          <span>Lê o Drive novamente e atualiza o banco de dados local.</span>
+          <em class="tile-action">Atualizar</em>
+        </span>
+      </button>
+
+      <button type="button" class="journey-card" data-page="mangaupdates">
+        <span class="journey-face">
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <circle cx="21" cy="21" r="14" fill="none" stroke="currentColor" stroke-width="3"/>
+            <path d="m31 31 12 12" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+          <b>Metadados<br>API</b>
+        </span>
+        <span class="journey-description">
+          <span>Busca IDs e detalhes no MangaUpdates sem alterar Drive ou Notion.</span>
+          <em class="tile-action">Consultar</em>
+        </span>
+      </button>
+
+      <button type="button" class="journey-card featured" data-page="notion">
+        <span class="journey-face">
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M39 17a17 17 0 0 0-29-5l-4 5M9 31a17 17 0 0 0 29 5l4-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+            <path d="M6 7v10h10M42 41V31H32" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+          <b>Notion Sync</b>
+        </span>
+        <span class="journey-description">
+          <span>Simule primeiro. A aplicação exige confirmação explícita.</span>
+          <em class="tile-action">Publicar</em>
+        </span>
+      </button>
+
+    </div>
+</section>

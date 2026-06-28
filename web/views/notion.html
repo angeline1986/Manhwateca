@@ -1,0 +1,57 @@
+<section class="page-container">
+  <!-- STATUS DE SINCRONIZAÇÃO -->
+  <button class="notion-sync-status" id="notionSyncStatus" type="button">
+    <span class="notion-sync-indicator" aria-hidden="true"></span>
+    <span>
+      <strong id="notionStatusTitle">Verificando obras pendentes...</strong>
+      <small id="notionStatusDetail">Consultando o último status da sincronização.</small>
+    </span>
+    <span class="notion-sync-action">Ver detalhes</span>
+  </button>
+
+  <!-- GRID DE AÇÕES -->
+  <section class="panel">
+    <div class="section-heading">
+      <div>
+        <span class="eyebrow">AÇÕES NOTION</span>
+        <h2>Simular e sincronizar</h2>
+        <p>Criações e alterações no Notion exigem confirmação explícita.</p>
+      </div>
+    </div>
+    <div class="action-grid" id="notionActionGrid">
+      <!-- Botões injetados via JS -->
+    </div>
+  </section>
+
+  <!-- PAINEL: CATÁLOGO -> NOTION -->
+  <details class="panel collapsible-panel" id="notionCatalogPanel">
+    <summary>
+      <div>
+        <span class="eyebrow">CONFERÊNCIA DE PÁGINAS</span>
+        <h2>Lotes de Importação</h2>
+        <p>Visualização das obras que serão criadas ou que estão duplicadas.</p>
+      </div>
+    </summary>
+    <div class="notion-meta" id="notionMeta"></div>
+    <div class="notion-lists" id="notionLists">
+      <article class="notion-list" id="listPending"><strong>Pendentes</strong><ul></ul></article>
+      <article class="notion-list danger" id="listDuplicates"><strong>Duplicadas</strong><ul></ul></article>
+    </div>
+  </details>
+
+  <!-- PAINEL: CSV -> NOTION (METADADOS) -->
+  <details class="panel collapsible-panel" id="metadataPanel">
+    <summary>
+      <div>
+        <span class="eyebrow">ATUALIZAÇÃO DE CAMPOS</span>
+        <h2>Metadados Enriquecidos</h2>
+        <p>Prévia dos campos que serão enviados para as páginas existentes.</p>
+      </div>
+    </summary>
+    <div class="metadata-layout">
+      <div id="metadataUpdates" class="metadata-table-wrap">
+        <p class="empty">Execute a simulação para ver as atualizações.</p>
+      </div>
+    </div>
+  </details>
+</section>

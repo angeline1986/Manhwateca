@@ -1,0 +1,14 @@
+.flow-stage {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  gap: 15px;
+  align-items: center;
+  padding: 17px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: #fff;
+  margin-bottom: 12px;
+}
+.flow-stage.current { border-color: #dcaabb; box-shadow: 0 14px 30px rgba(169,77,107,.12); }
+.flow-stage.completed .flow-stage-marker { background: var(--success); color: white; }
+.flow-stage-marker { width: 46px; height: 46px; border-radius: 15px; background: #f4e4e4; display: grid; place-items: center; font-weight: 950; }

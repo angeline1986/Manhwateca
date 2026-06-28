@@ -1,0 +1,166 @@
+/* ==========================================================================
+   TABLE COMPONENTS & DATA GRIDS
+   ========================================================================== */
+
+/* --- Wrapper for horizontal scrolling on mobile --- */
+.catalog-table-wrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+/* --- Standard Catalog Table --- */
+.catalog-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.catalog-table th, 
+.catalog-table td {
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.catalog-table th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  background: #faf8f9;
+}
+
+.catalog-table td:first-child {
+  min-width: 230px;
+  white-space: normal;
+}
+
+.catalog-table strong {
+  display: block;
+  color: var(--text);
+}
+
+.catalog-table small {
+  display: block;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* --- Issue/Alert Details Row --- */
+.issue-details td {
+  padding: 0 15px 16px !important;
+  background: #fffcf7;
+}
+
+.issue-details td > div {
+  padding: 17px;
+  border: 1px solid #f0d9b8;
+  border-radius: 12px;
+}
+
+.issue-guidance {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 18px;
+}
+
+.issue-guidance article {
+  padding: 13px 15px;
+  border-left: 3px solid var(--rose);
+  border-radius: 0 10px 10px 0;
+  background: #fff;
+}
+
+/* --- Metadata / Tag Cells --- */
+.property-tags {
+  white-space: normal !important;
+}
+
+.property-tags span {
+  display: inline-block;
+  margin: 2px 4px 2px 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--rose-dark);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* --- Grid-based Pending Table (Organization Page) --- */
+.catalog-pending-table {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.catalog-pending-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(231, 203, 211, .55);
+}
+
+.catalog-pending-row:first-child { border-top: 0; }
+.catalog-pending-row:nth-child(even) { background: #fffafa; }
+
+.catalog-pending-head {
+  background: #faf5f7;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.catalog-pending-row-done {
+  background: #f7fbf8 !important;
+  color: #557565;
+}
+
+/* --- Pagination Controls --- */
+.catalog-pending-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  background: #faf8f9;
+}
+
+.catalog-pending-pages {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.catalog-pending-pages strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--rose);
+  color: #fff;
+}
+
+.catalog-pending-pages button {
+  color: var(--muted) !important;
+  font-weight: 600;
+}
+
+.catalog-pending-pages .page-arrow {
+  font-size: 20px;
+  color: var(--rose) !important;
+}

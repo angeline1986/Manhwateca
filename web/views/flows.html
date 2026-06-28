@@ -1,0 +1,57 @@
+<section class="page-container">
+  <!-- PAINEL PRINCIPAL DO WORKFLOW -->
+  <section class="panel flows-main-panel">
+    <div class="flow-header">
+      <div>
+        <span class="eyebrow">Fluxo guiado</span>
+        <h2>Processo recomendado</h2>
+        <p class="muted">
+          Um único lugar para executar a jornada completa, sem alternar entre páginas técnicas.
+        </p>
+      </div>
+      <button class="primary-action" id="flowsStartWorkflow" type="button">
+        Executar workflow
+      </button>
+    </div>
+
+    <div class="flow-summary" id="flowsSummary"></div>
+    <div class="flow-progress" id="flowsProgress"></div>
+    
+    <div class="flow-steps" id="flowsStageList" aria-live="polite">
+      <article class="flow-stage loading">Carregando etapas...</article>
+    </div>
+  </section>
+
+  <!-- PAINEL DE DETALHE DA ETAPA ATUAL -->
+  <section class="panel flows-current-panel">
+    <span class="eyebrow">Detalhe da etapa atual</span>
+    <h2 id="flowsCurrentTitle">Carregando</h2>
+    
+    <div class="tabs">
+      <button class="active" type="button">Etapa</button>
+      <button type="button">Integrações</button>
+      <button type="button">Histórico</button>
+    </div>
+
+    <p class="muted" id="flowsCurrentDescription">
+      Carregando estado do workflow.
+    </p>
+
+    <div class="flow-meta" id="flowsCurrentMeta"></div>
+
+    <div class="workflow-actions" id="flowsCurrentActions">
+      <!-- Botões gerados via JS -->
+    </div>
+
+    <div class="cards" id="flowsCurrentCards">
+      <article class="action-card">
+        <div>
+          <h3>Consultando workflow</h3>
+          <p>Carregando o estado atual da próxima etapa.</p>
+        </div>
+      </article>
+    </div>
+    
+    <span id="flowsFeedback" class="form-feedback" aria-live="polite"></span>
+  </section>
+</section>

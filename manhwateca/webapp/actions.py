@@ -60,7 +60,7 @@ SAFE_ACTIONS = {
     "mangaupdates_search": {
         "label": "Buscar próximo lote de IDs",
         "description": "Pesquisa até 10 obras ainda sem correspondência confirmada.",
-        "result": "Atualiza buscaIds.json; resultados duvidosos aparecem abaixo.",
+        "result": "Atualiza o banco; resultados duvidosos aparecem abaixo.",
         "command": [
             "scripts/mangaupdates.py", "--fill-ids",
             "reports/integrations/buscaIds.json",
@@ -73,7 +73,7 @@ SAFE_ACTIONS = {
     "mangaupdates_refresh": {
         "label": "Atualizar candidatos incompletos",
         "description": "Refaz consultas de candidatos sem link, descrição ou classificação.",
-        "result": "Completa os candidatos existentes em buscaIds.json.",
+        "result": "Completa dados de candidatos ainda em revisão.",
         "command": [
             "scripts/mangaupdates.py", "--refresh-incomplete-candidates",
             "reports/integrations/buscaIds.json",
@@ -84,8 +84,8 @@ SAFE_ACTIONS = {
     },
     "mangaupdates_details": {
         "label": "Consultar detalhes dos IDs",
-        "description": "Consulta detalhes das obras cujos IDs já foram confirmados.",
-        "result": "Atualiza o cache local em data/mangaupdates.json.",
+        "description": "Consulta detalhes das obras com ID confirmado e dados externos incompletos.",
+        "result": "Atualiza URL, capa e metadados do MangaUpdates no PostgreSQL.",
         "command": [
             "scripts/mangaupdates.py", "--fetch-details-from-ids",
             "reports/integrations/buscaIds.json",
@@ -97,7 +97,7 @@ SAFE_ACTIONS = {
     "mangaupdates_force_refresh": {
         "label": "Forçar atualização do cache",
         "description": "Reconsulta IDs confirmados mesmo quando já existe cache válido.",
-        "result": "Consome chamadas externas de propósito e respeita o delay.",
+        "result": "Atualiza novamente os dados externos no PostgreSQL.",
         "command": [
             "scripts/mangaupdates.py", "--fetch-details-from-ids",
             "reports/integrations/buscaIds.json",

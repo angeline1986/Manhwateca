@@ -254,6 +254,7 @@ class MangaRepository:
         if themes:
             self.replace_manga_themes(manga.id, themes)
 
+        self._connection().commit()
         return True
 
     def confirm_mangaupdates_id(

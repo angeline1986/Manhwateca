@@ -1,0 +1,31 @@
+<section class="page-container">
+  <section class="panel task-panel">
+    <div class="section-heading">
+      <div>
+        <span class="eyebrow">ORGANIZAÇÃO LOCAL</span>
+        <h2>Verificar e padronizar</h2>
+        <p>Gere previews antes de qualquer alteração física na biblioteca.</p>
+      </div>
+    </div>
+    <div class="action-grid" id="actionGrid">
+      <!-- Botões: organization_preview, rename_preview, apply... -->
+    </div>
+  </section>
+
+  <details class="panel collapsible-panel" id="catalogPendingPanel">
+    <summary>
+      <div>
+        <span class="eyebrow">PENDÊNCIAS DE CATÁLOGO</span>
+        <h2>Obras Fora do Catálogo <span class="count-pill" id="catalogPendingCount">0</span></h2>
+        <p>Pastas detectadas no Drive que ainda não existem no banco de dados.</p>
+      </div>
+    </summary>
+    <div class="catalog-pending-actions">
+      <button type="button" class="primary-action" id="catalogAllPending">Catalogar Tudo</button>
+      <button type="button" class="secondary-action" id="refreshCatalogPending">Sincronizar Aliases</button>
+    </div>
+    <div class="catalog-pending-table" id="catalogPendingList">
+      <p class="empty">Calculando pendências...</p>
+    </div>
+  </details>
+</section>

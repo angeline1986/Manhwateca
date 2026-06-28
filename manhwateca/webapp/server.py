@@ -4,6 +4,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from manhwateca.audit.service import AuditService
 from manhwateca.flows.api import FlowController
 from manhwateca.webapp.actions import public_actions
 from manhwateca.webapp.catalog import catalog_payload
@@ -35,6 +36,7 @@ def create_handler(project_root, task_manager, workflow_manager=None):
     flow_controller = FlowController.from_project(
         project_root,
         legacy_manager=workflow_manager,
+        audit_service=AuditService(),
     )
     web_root = project_root / "web"
     reports_root = project_root / "reports"

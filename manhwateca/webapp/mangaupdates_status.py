@@ -46,9 +46,9 @@ def _database_status(repository, *, batch_size, ttl_days):
     ]
     missing_details = [
         record for record in confirmed
-        if not (
-            getattr(record, "mangaupdates_url", None)
-            or getattr(record, "latest_mangaupdates_chapter", None)
+        if (
+            not getattr(record, "mangaupdates_url", None)
+            or not getattr(record, "cover_url", None)
         )
     ]
     calls = [_public_record(record) for record in missing_details]

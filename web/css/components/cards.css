@@ -1,0 +1,192 @@
+/* ==========================================================================
+   CARD COMPONENTS
+   ========================================================================== */
+
+/* --- Base Card Style (Status Cards) --- */
+.status-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 174px;
+  padding: 22px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(91, 50, 65, .045);
+}
+
+.status-card h3 {
+  margin-bottom: 8px;
+  font-size: 1.1rem;
+}
+
+.status-card p {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* --- State Badges inside Cards --- */
+.state {
+  display: inline-flex;
+  align-self: flex-end;
+  margin-top: auto;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.state.ok { color: #94445f; background: #f4e4e4; }
+.state.warn { color: var(--warning); background: #fff3df; }
+
+/* --- Action Cards (Workflow & Actions) --- */
+.action-card {
+  min-height: 150px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.action-card h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.action-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.action-card-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* --- Pending Action Cards --- */
+.pending-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  min-height: 132px;
+  padding: 18px !important;
+  text-align: left;
+  color: var(--text) !important;
+  background: #fff !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 8px 26px rgba(91, 50, 65, .04);
+  transition: transform 0.2s ease, border-color 0.2s ease !important;
+}
+
+button.pending-card:hover {
+  transform: translateY(-2px) !important;
+  border-color: var(--rose-border) !important;
+  background: var(--soft-2) !important;
+}
+
+.pending-kind {
+  display: inline-flex;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: var(--rose) !important;
+  background: #f4e4e4;
+  font-size: 11px !important;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.pending-card.success { border-color: var(--rose-border) !important; background: #fffafa !important; }
+.pending-card.warning { border-color: #e8cf9f !important; background: #fffaf0 !important; }
+.pending-card.danger { border-color: #efb9b9 !important; background: #fff5f5 !important; }
+
+/* --- Journey Cards (Dashboard Tiles) --- */
+.journey-card {
+  position: relative;
+  aspect-ratio: 1;
+  min-height: 185px;
+  overflow: hidden;
+  padding: 24px !important;
+  color: var(--text) !important;
+  background: #fff !important;
+  border: 1px solid var(--rose-border) !important;
+  border-radius: 48px !important;
+  box-shadow: 8px 12px 28px rgba(169, 77, 107, .06);
+  transition: transform .35s cubic-bezier(.23, 1, .32, 1), box-shadow .35s ease !important;
+}
+
+.journey-card:hover {
+  transform: translateY(-6px) !important;
+  box-shadow: 12px 22px 38px rgba(169, 77, 107, .13);
+}
+
+.journey-face, .journey-description {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  transition: opacity .35s ease, transform .45s cubic-bezier(.23, 1, .32, 1);
+}
+
+.journey-face svg {
+  width: 52px;
+  height: 52px;
+  margin-bottom: 17px;
+  fill: none;
+  stroke: var(--rose);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.journey-description {
+  opacity: 0;
+  transform: translateY(14px);
+  background: #fff;
+}
+
+.journey-card:hover .journey-face { opacity: 0; transform: scale(.82) translateY(-16px); }
+.journey-card:hover .journey-description { opacity: 1; transform: translateY(0); }
+
+.journey-card.featured {
+  color: #fff !important;
+  background: var(--rose) !important;
+  border: 4px solid #fff !important;
+}
+
+.journey-card.featured .journey-face svg { stroke: #fff; }
+
+/* --- Catalog Summary Item --- */
+.catalog-summary article {
+  padding: 16px;
+  border-radius: 13px;
+  background: var(--soft-2);
+  border: 1px solid rgba(231, 203, 211, .5);
+}
+
+.catalog-summary strong {
+  display: block;
+  color: var(--rose);
+  font-size: 24px;
+}
+
+.catalog-summary span {
+  color: var(--muted);
+  font-size: 12px;
+}

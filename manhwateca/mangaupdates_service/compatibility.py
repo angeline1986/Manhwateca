@@ -2,6 +2,8 @@ import time
 import urllib.error
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 
 from manhwateca.database.connection import (
     DatabaseConfigurationError,
@@ -197,6 +199,21 @@ def fetch_confirmed_details(
     ttl_days=30,
     force_refresh=False,
 ):
+    repository = _optional_decision_repository()
+    if repository is not None:
+        try:
+            return _fetch_database_confirmed_details(
+                repository,
+                detail_function=get_series,
+                summarize_function=summarize_series,
+                wait_function=wait_between_requests,
+                delay=delay,
+                limit=limit,
+                force_refresh=force_refresh,
+            )
+        except (DatabaseConfigurationError, DatabaseConnectionError):
+            pass
+
     return _fetch_confirmed_details(
         ids_path,
         detail_function=get_series,
@@ -209,6 +226,41 @@ def fetch_confirmed_details(
         ttl_days=ttl_days,
         force_refresh=force_refresh,
     )
+
+
+def _fetch_database_confirmed_details(
+    repository,
+    detail_function,
+    summarize_function,
+    wait_function,
+    delay=3.0,
+    limit=None,
+    force_refresh=False,
+):
+    confirmed = [
+        manga for manga in repository.list_mangas()
+        if getattr(manga, "work_code", None)
+    ]
+    pending = [
+        manga for manga in confirmed
+        if force_refresh
+        or not getattr(manga, "mangaupdates_url", None)
+        or not getattr(manga, "cover_url", None)
+    ]
+    selected = pending[:limit] if limit is not None else pending
+
+    for manga in selected:
+        series_id = manga.work_code
+        print(f"[DETALHAR] {manga.title} ({series_id})")
+        summary = summarize_function(detail_function(series_id))
+        repository.update_mangaupdates_fields(
+            manga.title,
+            series_id,
+            summary,
+        )
+        wait_function(delay)
+
+    return len(selected), len(pending) - len(selected)
 
 
 def refresh_cache(mappings_path=MAPPINGS_FILE, cache_path=CACHE_FILE):
@@ -228,6 +280,7 @@ def _optional_decision_repository():
 
 
 def main():
+    load_dotenv()
     args = build_parser().parse_args()
     operations = {
         "search_series": search_series,

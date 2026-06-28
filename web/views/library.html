@@ -1,0 +1,53 @@
+<!-- PAINEL DE CATÁLOGO TÉCNICO -->
+<section class="panel catalog-panel">
+  <div class="catalog-heading">
+    <div>
+      <span class="eyebrow">CATÁLOGO LOCAL</span>
+      <h2>Obras e progresso</h2>
+      <p>O que foi detectado na última catalogação técnica.</p>
+      <span class="data-source" id="catalogSource"></span>
+    </div>
+    <input id="catalogSearch" type="search" placeholder="Buscar obra ou alias">
+  </div>
+
+  <div class="catalog-summary" id="catalogSummary"></div>
+  <div class="catalog-changes" id="catalogChanges"></div>
+
+  <div class="catalog-table-wrap">
+    <table class="catalog-table">
+      <thead>
+        <tr>
+          <th>Obra</th><th>Último lido</th>
+          <th>Disponível</th><th>Tamanho</th><th>Arquivos</th>
+          <th>Situação</th>
+        </tr>
+      </thead>
+      <tbody id="catalogList"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- PAINEL DE CURADORIA (EDITORIAL) -->
+<section class="panel editorial-panel">
+  <div class="catalog-heading">
+    <div>
+      <span class="eyebrow">CURADORIA</span>
+      <h2>Dados editoriais</h2>
+      <p>Edite os dados locais antes de sincronizar com o Notion.</p>
+    </div>
+    <input id="editorialSearch" type="search" placeholder="Buscar obra">
+  </div>
+
+  <div class="catalog-summary" id="editorialSummary"></div>
+
+  <div class="editorial-filters" id="editorialFilters">
+    <button type="button" data-filter="all" class="active">Todas</button>
+    <button type="button" data-filter="reading">Em leitura</button>
+    <button type="button" data-filter="without-id">Sem ID</button>
+    <button type="button" data-filter="incomplete">Incompletas</button>
+    <button type="button" data-filter="new-chapters">Com capítulos</button>
+  </div>
+
+  <div class="editorial-list" id="editorialList"></div>
+  <span id="editorialFeedback" class="form-feedback" aria-live="polite"></span>
+</section>

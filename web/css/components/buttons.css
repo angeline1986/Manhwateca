@@ -1,0 +1,153 @@
+/* ==========================================================================
+   BUTTON COMPONENTS
+   ========================================================================== */
+
+/* --- Reset & Base Button --- */
+button:not(.nav-link):not(.menu-toggle) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 13px;
+  padding: 11px 16px;
+  color: #fff;
+  background: var(--rose);
+  font-weight: 800;
+  line-height: 1.2;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+button:not(.nav-link):not(.menu-toggle):hover {
+  background: var(--rose-dark);
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.58;
+  filter: grayscale(0.15);
+  transform: none !important;
+}
+
+/* --- Action Variants --- */
+
+.primary-action {
+  border-color: var(--rose) !important;
+  background: var(--rose) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 24px rgba(169, 77, 107, 0.18);
+}
+
+.secondary-action {
+  background: #fff !important;
+  color: var(--rose) !important;
+  border: 1px solid var(--border) !important;
+}
+
+.secondary-action:hover {
+  background: var(--soft-2) !important;
+  border-color: var(--rose-border) !important;
+}
+
+.ghost-button {
+  color: var(--rose) !important;
+  background: var(--soft-2) !important;
+  border: 1px solid var(--rose-border) !important;
+}
+
+.ghost-button:hover {
+  background: #f4e4e4 !important;
+}
+
+.destructive {
+  color: var(--danger) !important;
+  background: #fff6f6 !important;
+  border: 1px solid #efb9b9 !important;
+}
+
+/* --- Icon Buttons --- */
+
+.refresh-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0 !important;
+  border: 1px solid var(--rose-border) !important;
+  border-radius: 50% !important;
+  color: var(--rose) !important;
+  background: var(--soft-2) !important;
+}
+
+.refresh-icon svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.refresh-icon:hover {
+  background: #f4e4e4 !important;
+  transform: rotate(20deg);
+}
+
+/* --- Specialized Buttons --- */
+
+.issue-button {
+  padding: 6px 10px !important;
+  color: var(--warning) !important;
+  background: #fff1db !important;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.compact {
+  min-height: 0;
+  padding: 10px 12px !important;
+  text-align: center;
+  background: #fff !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+}
+
+.compact strong {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* --- States & Animations --- */
+
+.spinning::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border: 2px solid rgba(169, 77, 107, 0.25);
+  border-top-color: var(--rose);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* --- Specific Button Grids (Ex: Catalog Pending) --- */
+.catalog-pending-row button {
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--rose) !important;
+  font-weight: 800;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.catalog-pending-row button:hover {
+  color: var(--rose-dark) !important;
+  text-decoration: underline;
+}

@@ -3995,9 +3995,11 @@
     "status": "50 Chapters (Complete)\n\n**S1:** 24 Chapters + Review (1\\~24)  \n**S2:** 26 Chapters + Review (25\\~50)",
     "completed": true,
     "genres": [
+      "Adult",
       "Comedy",
       "Drama",
       "Fantasy",
+      "Mature",
       "Romance",
       "Sci-fi",
       "Smut",
@@ -4093,7 +4095,7 @@
       "Adapted to Audio Drama",
       "Adult Male Lead",
       "Adult Protagonist",
-      "Ambiguous Relationship",
+      "Ambiguous Relationship/s",
       "Anal Creampie",
       "Anal Fingering",
       "Anal Intercourse",
@@ -8693,6 +8695,7 @@
       "Korean BL",
       "Light-Haired Seme",
       "Money Problems",
+      "Muscular Uke",
       "Older Uke Younger Seme",
       "Oyaji",
       "Past Plays a Big Role",
@@ -8803,7 +8806,7 @@
     "format": "Manhua",
     "year": "2023",
     "latest_chapter": 65,
-    "status": "65 Chapters + Prologue + Preview + 3 bonus chapters (Ongoing)\n\n**S1:** 14 Chapters (1\\~14)    \n**S2:** 26 Chapters (5\\~40)    \n**S3:** 24 Chapters (41\\~65)  \n**S4:** TBA",
+    "status": "65 Chapters + Prologue + Preview + 3 bonus chapters (Ongoing)\n\n**S1:** 14 Chapters (01\\~14)    \n**S2:** 26 Chapters (05\\~40)    \n**S3:** 24 Chapters (41\\~65)  \n**S4:** TBA",
     "completed": false,
     "genres": [
       "Drama",
@@ -12052,5 +12055,69 @@
       "시작은 이삭으로부터"
     ],
     "universe": []
+  },
+  "69053946376": {
+    "series_id": 69053946376,
+    "title": "High School Salty Heart",
+    "url": "https://www.mangaupdates.com/series/vq0xq14/high-school-salty-heart",
+    "type": "Manhwa",
+    "format": "Manhwa",
+    "year": "2025",
+    "latest_chapter": 0,
+    "status": "21 Chapters (Ongoing)",
+    "completed": false,
+    "genres": [
+      "Mature",
+      "Romance",
+      "Yaoi"
+    ],
+    "categories": [
+      "Adult Couple",
+      "Affectionate Seme",
+      "Affectionate Uke",
+      "Alpha Seme",
+      "Alpha x Omega",
+      "Big Penis",
+      "Black-Haired Seme",
+      "Brown-Haired Uke",
+      "Childhood Crush",
+      "Childhood Friend/s",
+      "Childhood Friends Become Lovers",
+      "Crush/es",
+      "Experienced Seme",
+      "First Love",
+      "Full Color",
+      "Knotting",
+      "Korean BL",
+      "Male Pregnancy",
+      "Misunderstanding/s",
+      "Modern Era",
+      "Muscular Uke",
+      "Official English Uncensored",
+      "Omega Uke",
+      "Omegaverse",
+      "Pathetic Uke",
+      "Promiscuous Seme",
+      "Pushover Uke",
+      "R18/R19",
+      "Reunion/s",
+      "Reunited Friends",
+      "Sex Friend/s",
+      "Sex Partner/s",
+      "Sexually Insatiable Seme",
+      "Uncensored Version Available",
+      "University/College",
+      "University/Post-Secondary Student/s",
+      "Unrequited Love",
+      "Wanko Seme",
+      "Webtoon/Webcomic"
+    ],
+    "associated_titles": [
+      "ハイスクール・ソルティ・ハート",
+      "하이스쿨 솔티 하트"
+    ],
+    "universe": [
+      "Omegaverse"
+    ]
   }
 }

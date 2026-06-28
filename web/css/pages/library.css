@@ -1,0 +1,4 @@
+.editorial-list { display: grid; gap: 10px; }
+.editorial-work summary { display: flex; justify-content: space-between; padding: 17px 18px; cursor: pointer; }
+.editorial-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+.editorial-filters button.active { background: var(--rose) !important; color: white !important; }

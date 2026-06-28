@@ -1,0 +1,143 @@
+/* ==========================================================================
+   FORMS & INPUT COMPONENTS
+   ========================================================================== */
+
+/* --- Base Input & Select Styles --- */
+input, select, textarea {
+  border: 1px solid #dacdd1;
+  border-radius: 11px;
+  padding: 11px 13px;
+  color: var(--text);
+  background: #fff;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  width: 100%;
+}
+
+input:focus, select:focus {
+  border-color: var(--rose);
+  box-shadow: 0 0 0 4px rgba(169, 107, 107, 0.08);
+}
+
+input::placeholder {
+  color: #b9abb0;
+}
+
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* --- Search Controls (Topbar & Section Headers) --- */
+input[type="search"] {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23827277' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='m11 11 3 3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 12px center;
+  padding-left: 38px;
+}
+
+/* --- Form Layouts (Inline Search Groups) --- */
+.api-search-form, 
+.review-form div {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.api-search-form input,
+.review-form input {
+  flex: 1;
+}
+
+/* --- Review Form (Boxed style) --- */
+.review-form {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid var(--rose-border);
+  border-radius: 15px;
+  background: var(--soft-2);
+}
+
+/* --- Editorial Grid Form (Library Page) --- */
+.editorial-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px;
+  border-top: 1px solid var(--border);
+  background: white;
+}
+
+.editorial-form .wide {
+  grid-column: span 2;
+}
+
+.editorial-context {
+  grid-column: 1 / -2;
+  align-self: center;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* --- Status & Feedback Text --- */
+[id$="Feedback"], 
+[id$="Meta"],
+.form-feedback {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--success);
+  min-height: 1.2em;
+}
+
+[id$="Feedback"].error {
+  color: var(--danger);
+}
+
+/* --- Manual Decision Row (MangaUpdates) --- */
+.manual-decision {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 15px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--soft-2);
+}
+
+.manual-decision input {
+  width: 190px;
+}
+
+/* --- Responsividade --- */
+@media (max-width: 820px) {
+  .editorial-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .api-search-form,
+  .review-form div,
+  .manual-decision {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .editorial-form {
+    grid-template-columns: 1fr;
+  }
+  
+  .editorial-form .wide,
+  .editorial-context {
+    grid-column: auto;
+  }
+
+  .manual-decision input {
+    width: 100%;
+  }
+}

@@ -86,9 +86,9 @@ def _mangaupdates_database_pending(repository_factory=MangaRepository):
         1
         for manga in mangas
         if getattr(manga, "work_code", None)
-        and not (
-            getattr(manga, "mangaupdates_url", None)
-            or getattr(manga, "latest_mangaupdates_chapter", None)
+        and (
+            not getattr(manga, "mangaupdates_url", None)
+            or not getattr(manga, "cover_url", None)
         )
     )
     without_id = sum(
