@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
+
 from manhwateca.database.manga_repository import MangaRepository
 from manhwateca.flows.domain import FlowMessage, Progress, StageId
 from manhwateca.flows.integrations import (
@@ -27,13 +29,15 @@ class MangaUpdatesFlowIntegration:
         manga_repository_factory=MangaRepository,
         search_function=search_series,
         per_page: int = 5,
-        timeout: int = 15,
+        timeout: int = 8,
+        retries: int = 0,
     ):
         self.flow_repository_factory = flow_repository_factory
         self.manga_repository_factory = manga_repository_factory
         self.search_function = search_function
         self.per_page = per_page
         self.timeout = timeout
+        self.retries = retries
 
     def check_status(self) -> IntegrationCheck:
         return IntegrationCheck(
@@ -96,10 +100,15 @@ class MangaUpdatesFlowIntegration:
                 )
             )
             try:
-                response = self.search_function(
+                response = _search_with_deadline(
+                    self.search_function,
                     work.title,
-                    per_page=self.per_page,
-                    timeout=self.timeout,
+                    self.timeout,
+                    {
+                        "per_page": self.per_page,
+                        "timeout": self.timeout,
+                        "retries": self.retries,
+                    },
                 )
                 ranked = filter_relevant_candidates(
                     rank_search_results(work.title, response)
@@ -111,6 +120,7 @@ class MangaUpdatesFlowIntegration:
                         selected["id"],
                         selected.get("titulo"),
                     )
+                    _commit_repository(manga_repository)
                     flow_repository.append_id_candidate(_candidate_record(
                         execution.execution_id,
                         work.work_id,
@@ -237,10 +247,30 @@ def _enqueue_review(manga_repository, work, candidates) -> None:
                 "candidatos": candidates,
             },
         )
+        _commit_repository(manga_repository)
     except Exception:
         # A fila de decisão é compatibilidade operacional; o registro oficial
         # da execução continua em flow_id_candidates.
         return
+
+
+def _commit_repository(repository) -> None:
+    if hasattr(repository, "_connection"):
+        repository._connection().commit()
+
+
+def _search_with_deadline(search_function, title: str, timeout: int, kwargs: dict):
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(search_function, title, **kwargs)
+    try:
+        return future.result(timeout=timeout + 1)
+    except TimeoutError as error:
+        future.cancel()
+        raise TimeoutError(
+            f"Consulta MangaUpdates excedeu {timeout}s para {title}."
+        ) from error
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def _log(

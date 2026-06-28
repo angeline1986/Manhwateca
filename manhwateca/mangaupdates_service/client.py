@@ -47,11 +47,12 @@ def request_json(
             time.sleep(wait)
 
 
-def search_series(title, per_page=5, timeout=30):
+def search_series(title, per_page=5, timeout=30, retries=4):
     return request_json(
         f"{API_BASE}/series/search",
         {"search": title, "page": 1, "perpage": per_page},
         timeout=timeout,
+        retries=retries,
     )
 
 
