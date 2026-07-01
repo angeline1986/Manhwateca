@@ -8,7 +8,9 @@ export function initRouter(options = {}) {
 
   function showPage(pageName, updateHash = true) {
     const page = pageMeta[pageName] ? pageName : "overview";
-    document.getElementById("topbar").classList.toggle("overview", page === "overview");
+    const topbar = document.getElementById("topbar");
+    topbar.classList.toggle("overview", page === "overview");
+    topbar.classList.toggle("flows", page === "flows");
     document.getElementById("refresh").hidden = page !== "overview";
     document.querySelectorAll(".page").forEach(section =>
       section.classList.toggle("active", section.id === `page-${page}`)

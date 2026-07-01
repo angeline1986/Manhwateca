@@ -44,8 +44,8 @@ const startWorkflow = byId("startWorkflow"), resumeWorkflow = byId("resumeWorkfl
 const flowsStartWorkflow = byId("flowsStartWorkflow"), flowsResumeWorkflow = byId("flowsResumeWorkflow");
 const flowsSummary = byId("flowsSummary"), flowsProgress = byId("flowsProgress"), flowsStageList = byId("flowsStageList");
 const flowsCurrentTitle = byId("flowsCurrentTitle"), flowsCurrentDescription = byId("flowsCurrentDescription");
-const flowsCurrentMeta = byId("flowsCurrentMeta"), flowsCurrentActions = byId("flowsCurrentActions");
-const flowsCurrentCards = byId("flowsCurrentCards"), flowsFeedback = byId("flowsFeedback");
+const flowsCurrentMeta = byId("flowsCurrentMeta"), flowsCurrentCards = byId("flowsCurrentCards");
+const flowsFeedback = byId("flowsFeedback");
 const confirmationDialog = byId("confirmationDialog"), confirmationTitle = byId("confirmationTitle");
 const confirmationText = byId("confirmationText");
 const sidebarLayout = initSidebar();
@@ -200,7 +200,6 @@ const flowsPage = initFlowsPage({
   flowsCurrentTitle,
   flowsCurrentDescription,
   flowsCurrentMeta,
-  flowsCurrentActions,
   flowsCurrentCards,
   flowsFeedback,
 }, { showPage });

@@ -20,9 +20,7 @@ export function initSidebar() {
     document.querySelectorAll("[data-sidebar-flow-subtab]").forEach(button =>
       button.classList.toggle("active", button.dataset.sidebarFlowSubtab === subtab)
     );
-    setTimeout(() =>
-      document.querySelector(`#flowsCurrentActions [data-flow-subtab="${subtab}"]`)?.click()
-    );
+    window.dispatchEvent(new CustomEvent("manhwateca:flow-subtab", { detail: { subtab } }));
   }
 
   function setSidebarCollapsed(collapsed) {

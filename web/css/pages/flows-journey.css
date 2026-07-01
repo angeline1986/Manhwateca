@@ -1,42 +1,5 @@
 .flows-journey-shell {
-  display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
-}
-.flows-journey-side {
-  display: grid;
-  gap: 14px;
-}
-.flows-journey-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 20px 14px;
-  border: 1px solid var(--rose-border);
-  border-radius: 20px;
-  background: var(--rose);
-}
-.flows-journey-nav button {
   width: 100%;
-  border: 0;
-  border-radius: 13px;
-  background: transparent;
-  color: rgba(255, 255, 255, .78);
-  cursor: pointer;
-  font-size: 15px;
-  font-weight: 850;
-  padding: 12px 16px;
-  text-align: left;
-}
-.flows-journey-nav button:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, .12);
-}
-.flows-journey-nav button.active {
-  color: var(--rose);
-  background: #fff;
-  box-shadow: 0 10px 25px rgba(113, 55, 74, .08);
 }
 .flows-journey-content {
   min-width: 0;
@@ -73,12 +36,13 @@
   color: var(--text);
   font-weight: 850;
 }
-.flows-journey-side .flow-meta {
-  grid-template-columns: 1fr;
-  margin: 0;
+.topbar.flows .topbar-flow-meta {
+  display: block;
+  width: min(360px, 36vw);
+  margin: 0 0 0 auto;
 }
-.flows-journey-side .flow-meta article {
-  padding: 18px 20px;
+.topbar.flows .status-minimalist {
+  text-align: right;
 }
 .flow-meta-card {
   display: grid;
@@ -239,7 +203,6 @@
   font-weight: 750;
 }
 @media (max-width: 900px) {
-  .flows-journey-shell,
   .flow-meta,
   .flow-subgrid,
   .flow-choice-panel {

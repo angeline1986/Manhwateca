@@ -93,16 +93,52 @@
 .topbar.overview { padding-top: 34px; padding-bottom: 34px; }
 .topbar.overview > div { max-width: 850px; }
 .topbar.overview h1 { font-size: clamp(28px, 3.6vw, 45px); }
+.topbar.flows h1 { font-size: 28px; }
+.topbar .topbar-flow-meta { display: none; }
+.topbar.flows .topbar-flow-meta {
+  display: block;
+  width: min(360px, 36vw);
+  margin: 0 0 0 auto;
+}
+.status-minimalist { text-align: right; }
+.main-status {
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  color: var(--rose); font-size: 16px; font-weight: 850;
+}
+.main-status b,
+.dates-row b {
+  border-radius: 8px;
+  background: #f4e8ec;
+  color: var(--rose-dark);
+  font-size: 12px;
+  letter-spacing: .04em;
+  padding: 5px 9px;
+}
+.pulse-icon {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #f59e0b; box-shadow: 0 0 0 rgba(245,158,11,.4);
+  animation: pulse 2s infinite;
+}
+.dates-row {
+  display: flex; align-items: center; justify-content: flex-end; gap: 7px;
+  margin-top: 8px; color: var(--muted); font-size: 11px;
+  font-weight: 850; letter-spacing: .08em;
+}
+@keyframes pulse {
+  0% { transform: scale(.95); }
+  70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(245,158,11,0); }
+  100% { transform: scale(.95); }
+}
 .topbar-action { margin-left: auto; flex: none; box-shadow: 0 13px 26px rgba(169,77,107,.17); }
 .topbar > div { min-width: 0; }
 .topbar p { margin: 0; color: var(--muted); }
 .eyebrow { color: var(--rose); font-size: 11px; font-weight: 850; letter-spacing: .17em; }
-button:not(.nav-link):not(.menu-toggle):not(.flow-page-link):not(.flow-candidate):not(.back-button) {
+button:not(.nav-link):not(.menu-toggle):not(.flow-page-link):not(.flow-candidate):not(.flow-queue-item):not(.back-button) {
   border: 0; border-radius: 13px; padding: 11px 16px;
   color: #fff; background: var(--rose); font-weight: 800;
   transition: .2s ease;
 }
-button:not(.nav-link):not(.menu-toggle):not(.flow-page-link):not(.flow-candidate):not(.back-button):hover { background: var(--rose-dark); transform: translateY(-1px); }
+button:not(.nav-link):not(.menu-toggle):not(.flow-page-link):not(.flow-candidate):not(.flow-queue-item):not(.back-button):hover { background: var(--rose-dark); transform: translateY(-1px); }
 .menu-toggle { display: none; border: 0; background: transparent; color: var(--text); font-size: 24px; }
 
 .page-container { width: min(1480px, 100%); margin: 0 auto; padding: 34px clamp(22px, 4vw, 52px) 70px; }

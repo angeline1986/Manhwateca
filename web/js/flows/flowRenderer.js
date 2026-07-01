@@ -31,6 +31,7 @@ export function renderFlowsOverview(elements, data, options = {}) {
     run,
     visibleRunning,
     activeSubtab: options.activeSubtab || "buscar",
+    activeReviewKey: options.activeReviewKey || "",
     selectedDecisions: options.selectedDecisions || {},
     visibleStatuses,
     review: options.review,
@@ -88,7 +89,6 @@ function renderCurrentPanel(elements, context) {
   if (elements.flowsCurrentDescription) {
     elements.flowsCurrentDescription.textContent = "Jornada operacional";
   }
-  renderJourneyNav(elements, context.activeSubtab);
   renderMeta(elements, run, selectedStatus);
   renderTopAction(elements, selectedStage, selectedStatus, visibleRunning);
   if (!elements.flowsCurrentCards) return;
@@ -102,33 +102,42 @@ function journeyTitle(activeSubtab, selectedStage) {
     || selectedStage.title;
 }
 
-function renderJourneyNav(elements, activeSubtab) {
-  if (!elements.flowsCurrentActions) return;
-  elements.flowsCurrentActions.innerHTML = [
-    ...RESOLVE_ID_STEPS.map(step => `
-      <button type="button" class="${activeSubtab === step.id ? "active" : ""}"
-        data-flow-subtab="${step.id}">
-        ${escapeHtml(step.title)}
-      </button>
-    `),
-    `<button type="button" class="${activeSubtab === "update_metadata" ? "active" : ""}"
-      data-flow-subtab="update_metadata">Atualizar metadados</button>`,
-    `<button type="button" class="${activeSubtab === "sync_notion" ? "active" : ""}"
-      data-flow-subtab="sync_notion">Sincronizar Notion</button>`,
-  ].join("");
-}
-
 function renderMeta(elements, run, activeStatus) {
   if (!elements.flowsCurrentMeta) return;
-  const startedAt = run.started_at ? new Date(run.started_at).toLocaleString("pt-BR") : "Ainda não executado";
-  const finishedAt = run.finished_at ? new Date(run.finished_at).toLocaleString("pt-BR") : "Sem finalização registrada";
+  const finishedDate = shortDate(run.finished_at || run.started_at);
+  const startedTime = shortTime(run.started_at);
+  const finishedTime = shortTime(run.finished_at);
   elements.flowsCurrentMeta.innerHTML = `
-    <article class="flow-meta-card">
-      <div><strong>Status desta etapa</strong><span class="flow-meta-status">${escapeHtml(FLOW_STATUS_LABELS[activeStatus] || activeStatus)}</span></div>
-      <div><strong>Início</strong><span class="flow-meta-date">${escapeHtml(startedAt)}</span></div>
-      <div><strong>Última finalização</strong><span class="flow-meta-date">${escapeHtml(finishedAt)}</span></div>
-    </article>
+    <div class="status-minimalist">
+      <div class="main-status">
+        <span class="pulse-icon"></span>
+        <span>${escapeHtml(FLOW_STATUS_LABELS[activeStatus] || activeStatus)}</span>
+        <b>${escapeHtml(finishedDate)}</b>
+      </div>
+      <div class="dates-row">
+        INÍCIO: <b>${escapeHtml(startedTime)}</b>
+        <span>•</span>
+        FIM: <b>${escapeHtml(finishedTime)}</b>
+      </div>
+    </div>
   `;
+}
+
+function shortDate(value) {
+  if (!value) return "--/--";
+  return new Date(value).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+}
+
+function shortTime(value) {
+  if (!value) return "--:--:--";
+  return new Date(value).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 export function primaryLabel(activeStage, activeStatus) {

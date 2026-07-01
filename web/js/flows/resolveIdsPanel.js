@@ -3,6 +3,7 @@ import { decisionsTab, pendingTab } from "./pendingReviewPanel.js";
 
 export function renderResolveIdsPanel({
   activeSubtab,
+  activeReviewKey,
   review,
   run,
   selectedDecisions,
@@ -12,7 +13,7 @@ export function renderResolveIdsPanel({
   const metrics = run.results?.resolve_ids?.metrics || {};
   return `
     ${activeSubtab === "buscar" ? searchTab(metrics, summary, review, works) : ""}
-    ${activeSubtab === "pendencias" ? pendingTab(review, selectedDecisions) : ""}
+    ${activeSubtab === "pendencias" ? pendingTab(review, selectedDecisions, activeReviewKey) : ""}
     ${activeSubtab === "decisoes" ? decisionsTab(review, selectedDecisions) : ""}
   `;
 }

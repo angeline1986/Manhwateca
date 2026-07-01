@@ -28,6 +28,7 @@ export function initFlowsPage(elements, options = {}) {
   let pendingRequest = false;
   let activeSubtab = "buscar";
   let worksPage = 1;
+  let activeReviewKey = "";
   let reviewState = { summary: {}, items: [] };
   let selectedDecisions = {};
   let worksState = { kpis: {}, items: [], pagination: {} };
@@ -50,9 +51,7 @@ export function initFlowsPage(elements, options = {}) {
     scheduleWorkflowPolling(data);
   }
 
-  function stopWorkflowPolling() {
-    clearTimeout(workflowTimer);
-  }
+  function stopWorkflowPolling() { clearTimeout(workflowTimer); }
 
   function scheduleWorkflowPolling(data) {
     clearTimeout(workflowTimer);
@@ -70,9 +69,7 @@ export function initFlowsPage(elements, options = {}) {
   }
 
   function withDetails(data, flowState = {}) {
-    data.integrations = flowState.integrations?.data?.integrations
-      || workflowState?.integrations
-      || [];
+    data.integrations = flowState.integrations?.data?.integrations || workflowState?.integrations || [];
     data.history = flowState.history?.data?.history || workflowState?.history || [];
     return data;
   }
@@ -103,6 +100,7 @@ export function initFlowsPage(elements, options = {}) {
     workflowState = data;
     renderFlowsOverview(elements, data, {
       activeSubtab,
+      activeReviewKey,
       review: reviewState,
       selectedDecisions,
       works: worksState,
@@ -176,21 +174,22 @@ export function initFlowsPage(elements, options = {}) {
     return payload?.errors?.[0]?.message || payload?.error || "Não foi possível executar.";
   }
 
-  function selectedFlowStage(run) {
-    return FLOW_STAGE_GROUPS.find(group => group.id === activeSubtab) || currentFlowStage(run);
-  }
+  function selectedFlowStage(run) { return FLOW_STAGE_GROUPS.find(group => group.id === activeSubtab) || currentFlowStage(run); }
+
+  function setActiveSubtab(subtab) { activeSubtab = subtab || "buscar"; renderWorkflow(workflowState); }
 
   elements.startWorkflow?.addEventListener("click", () => runWorkflow(false));
   elements.resumeWorkflow?.addEventListener("click", () => runWorkflow(true));
   elements.flowsStartWorkflow?.addEventListener("click", () => runCurrentFlowStage());
   elements.flowsResumeWorkflow?.addEventListener("click", () => runWorkflow(true));
 
-  for (const area of [elements.flowsCurrentActions, elements.flowsCurrentCards]) {
-    area?.addEventListener("click", event => {
+  window.addEventListener("manhwateca:flow-subtab", event => setActiveSubtab(event.detail?.subtab));
+
+  const area = elements.flowsCurrentCards;
+  area?.addEventListener("click", event => {
       const subtab = event.target.closest("[data-flow-subtab]");
       if (subtab) {
-        activeSubtab = subtab.dataset.flowSubtab;
-        renderWorkflow(workflowState);
+        setActiveSubtab(subtab.dataset.flowSubtab);
         return;
       }
       const worksPageAction = event.target.closest("[data-flow-works-page]");
@@ -203,6 +202,12 @@ export function initFlowsPage(elements, options = {}) {
       if (selectedCandidate) {
         selectedDecisions = selectCandidate(selectedDecisions, selectedCandidate);
         setFeedback("Decisão marcada para aplicação.", "info");
+        renderWorkflow(workflowState);
+        return;
+      }
+      const reviewWork = event.target.closest("[data-flow-review-work]");
+      if (reviewWork) {
+        activeReviewKey = reviewWork.dataset.flowReviewWork;
         renderWorkflow(workflowState);
         return;
       }
@@ -237,8 +242,7 @@ export function initFlowsPage(elements, options = {}) {
       if (event.target.closest("[data-flow-run-stage], [data-flow-start]")) {
         runCurrentFlowStage();
       }
-    });
-  }
+  });
 
   return { loadWorkflow, stopWorkflowPolling };
 }

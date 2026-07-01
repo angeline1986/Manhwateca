@@ -1,8 +1,8 @@
 export const pageMeta = {
   flows: {
     eyebrow: "FLUXOS",
-    title: "Execute o processo guiado",
-    subtitle: "Fluxo operacional da Manhwateca.",
+    title: "Fluxo operacional da Manhwateca",
+    subtitle: "",
   },
   overview: {
     eyebrow: "DASHBOARD",
