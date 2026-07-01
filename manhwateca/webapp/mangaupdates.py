@@ -7,6 +7,7 @@ from manhwateca.database.connection import (
     connect,
 )
 from manhwateca.database.manga_repository import MangaRepository
+from manhwateca.webapp.candidate_filters import ranked_unique_candidates
 from manhwateca.webapp.mangaupdates_review import flow_candidates_review_payload
 from manhwateca.mangaupdates_service.review.data import (
     CONFIRMED_STATUSES,
@@ -220,9 +221,7 @@ def _payload_dict(value):
 def _public_item(item):
     candidates = [
         _public_candidate(candidate)
-        for candidate in item.get("IDs", [])
-        if float(candidate.get("pontuacao") or 0) > 0.70
-        and candidate.get("bl") is not False
+        for candidate in ranked_unique_candidates(item.get("IDs", []))
     ]
     return {
         "nome": item.get("Nome"),

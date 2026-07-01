@@ -182,6 +182,42 @@ class WebMangaUpdatesTests(unittest.TestCase):
             candidate["id"] for candidate in payload["items"][0]["candidates"]
         ])
 
+    def test_review_payload_deduplicates_orders_filters_and_limits_candidates(self):
+        rows = []
+        for index, (external_id, confidence) in enumerate([
+            ("101", "0.72"),
+            ("102", "0.95"),
+            ("101", "0.88"),
+            ("103", "0.64"),
+            ("104", "0.65"),
+            ("105", "0.77"),
+            ("106", "0.81"),
+            ("107", "0.70"),
+            ("108", "0.69"),
+        ], start=1):
+            rows.append({
+                "id": index,
+                "work_id": 7,
+                "searched_title": "Alpha",
+                "candidate_external_id": external_id,
+                "candidate_title": f"Candidate {external_id}",
+                "confidence": Decimal(confidence),
+                "status": "pending_review",
+                "details": {},
+                "created_at": "2026-07-01 10:00:00",
+                "local_title": "Alpha",
+            })
+        with tempfile.TemporaryDirectory() as directory:
+            payload = review_payload(
+                self._project(directory, []),
+                repository_factory=lambda: FakeReviewRepository(),
+                connection_factory=lambda: FakeFlowConnection(rows),
+            )
+
+        self.assertEqual(["102", "101", "106", "105", "107"], [
+            candidate["id"] for candidate in payload["items"][0]["candidates"]
+        ])
+
     def test_apply_manual_decision_updates_json_and_creates_backup(self):
         items = [{"Nome": "Alpha", "Status": "Revisar", "IDs": []}]
         decision = {

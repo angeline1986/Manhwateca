@@ -5,6 +5,7 @@ from manhwateca.database.connection import (
     DatabaseConnectionError,
     connect,
 )
+from manhwateca.webapp.candidate_filters import ranked_unique_candidates
 
 
 def flow_candidates_review_payload(connection_factory=connect):
@@ -58,7 +59,7 @@ def _fetch_rows(connection):
               )
             ORDER BY
               CASE WHEN c.status = 'pending_review' THEN 1 ELSE 2 END,
-              c.confidence ASC NULLS FIRST,
+              c.confidence DESC NULLS LAST,
               c.created_at DESC,
               c.searched_title ASC
             """
@@ -73,6 +74,12 @@ def _rows_to_items(rows):
         item = grouped.setdefault(key, _item(row))
         if row.get("status") == "pending_review":
             item["candidates"].append(_candidate(row))
+    for item in grouped.values():
+        item["candidates"] = ranked_unique_candidates(
+            item["candidates"],
+            title_key="title",
+            score_key="confidence",
+        )
     return list(grouped.values())
 
 
