@@ -1,0 +1,49 @@
+.task-toast {
+  position: fixed; right: 24px; bottom: 24px; z-index: 80;
+  display: flex; align-items: center; gap: 18px; width: min(470px, calc(100% - 32px));
+  padding: 16px 18px; border: 1px solid var(--rose-border); border-radius: 16px;
+  background: #fff; box-shadow: 0 22px 55px rgba(82,42,56,.18);
+}
+.task-toast[hidden] { display: none; }
+.task-toast-content { flex: 1; min-width: 0; }
+.task-toast strong, .task-toast span { display: block; }
+.task-toast span { color: var(--muted); font-size: 13px; }
+.task-toast button { flex: none; }
+.task-toast > a {
+  flex: none; padding: 11px 16px; border-radius: 11px;
+  color: #fff; background: var(--rose); font-weight: 800; text-decoration: none;
+}
+.task-progress {
+  overflow: hidden; height: 6px; margin-top: 11px;
+  border-radius: 999px; background: #f4e4e4;
+}
+.task-progress span {
+  width: 38%; height: 100%; border-radius: inherit;
+  background: var(--rose);
+}
+.task-toast.running .task-progress span {
+  animation: task-progress 1.15s ease-in-out infinite;
+}
+.task-toast.completed .task-progress span,
+.task-toast.failed .task-progress span { width: 100%; animation: none; }
+.task-toast.failed .task-progress span { background: var(--danger); }
+.confirmation-dialog {
+  width: min(470px, calc(100% - 32px)); padding: 0;
+  border: 1px solid var(--rose-border); border-radius: 18px;
+  color: var(--text); background: #fff;
+  box-shadow: 0 26px 75px rgba(82,42,56,.24);
+}
+.confirmation-dialog::backdrop {
+  background: rgba(57,43,48,.36); backdrop-filter: blur(3px);
+}
+.confirmation-dialog form { padding: 26px; }
+.confirmation-dialog h2 { margin: 7px 0 10px; }
+.confirmation-dialog p { margin-bottom: 24px; color: var(--muted); }
+.confirmation-actions {
+  display: flex; justify-content: flex-end; gap: 10px;
+}
+@keyframes task-progress {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(275%); }
+}
+

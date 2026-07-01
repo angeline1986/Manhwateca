@@ -1,5 +1,6 @@
 from datetime import datetime
 import logging
+from time import perf_counter
 from uuid import uuid4
 
 from manhwateca.audit.models import (
@@ -130,6 +131,8 @@ class WorkflowOrchestrator:
         self,
         stage_id: StageId,
         execution: WorkflowExecution | None = None,
+        *,
+        finish_after_stage: bool = False,
     ) -> WorkflowExecution:
         execution = execution or self.get_status()
         if execution is None:
@@ -159,7 +162,22 @@ class WorkflowOrchestrator:
             details={"stage": stage_id.value},
         )
 
+        self.repository.append_log(FlowLogRecord(
+            execution_id=execution.execution_id,
+            stage=stage_id,
+            operation="stage_validate_start",
+            status=StageStatus.VALIDATING.value,
+            message="Validação da etapa iniciada.",
+        ))
         warnings = service.validate()
+        self.repository.append_log(FlowLogRecord(
+            execution_id=execution.execution_id,
+            stage=stage_id,
+            operation="stage_validate_finish",
+            status=StageStatus.VALIDATING.value,
+            message="Validação da etapa concluída.",
+            details={"warnings": len(warnings)},
+        ))
         stage_started_at = self._stage_started_at(execution, stage_id)
         execution = self._replace_stage(
             execution,
@@ -172,14 +190,56 @@ class WorkflowOrchestrator:
             ),
         )
         self.repository.save_execution(execution)
+        self.repository.append_log(FlowLogRecord(
+            execution_id=execution.execution_id,
+            stage=stage_id,
+            operation="stage_running_persisted",
+            status=StageStatus.RUNNING.value,
+            message="Status running persistido para a etapa.",
+        ))
         self._notify_stage_started()
 
+        service_started_at = perf_counter()
+        self.repository.append_log(FlowLogRecord(
+            execution_id=execution.execution_id,
+            stage=stage_id,
+            operation="stage_execute_start",
+            status=StageStatus.RUNNING.value,
+            message="Execução do serviço da etapa iniciada.",
+            details={"service": service.__class__.__name__},
+        ))
         try:
             result = service.finalize(service.execute())
         except Exception as error:
             result = StageResult(
                 errors=(FlowError(message=str(error), code="FLOW_STAGE_FAILED"),)
             )
+            self.repository.append_log(FlowLogRecord(
+                execution_id=execution.execution_id,
+                stage=stage_id,
+                operation="stage_execute_error",
+                status=StageStatus.FAILED.value,
+                duration=perf_counter() - service_started_at,
+                error_code="FLOW_STAGE_FAILED",
+                message=str(error),
+                details={"service": service.__class__.__name__},
+            ))
+        else:
+            self.repository.append_log(FlowLogRecord(
+                execution_id=execution.execution_id,
+                stage=stage_id,
+                operation="stage_execute_finish",
+                status=StageStatus.RUNNING.value,
+                duration=perf_counter() - service_started_at,
+                processed=result.processed,
+                message="Execução do serviço da etapa concluída.",
+                details={
+                    "service": service.__class__.__name__,
+                    "warnings": len(result.warnings),
+                    "errors": len(result.errors),
+                    "metrics": result.metrics,
+                },
+            ))
 
         if result.has_errors:
             status = StageStatus.FAILED
@@ -215,6 +275,8 @@ class WorkflowOrchestrator:
                 finished_at=self.clock(),
             ),
         )
+        if finish_after_stage:
+            execution = self._reset_following_stages(execution, stage_id)
         execution = self._with_status(
             execution,
             workflow_status,
@@ -225,6 +287,19 @@ class WorkflowOrchestrator:
             ),
         )
         self.repository.save_execution(execution)
+        self.repository.append_log(FlowLogRecord(
+            execution_id=execution.execution_id,
+            stage=stage_id,
+            operation="stage_result_persisted",
+            status=status.value,
+            processed=result.processed,
+            error_code=(
+                result.errors[0].code
+                if result.errors and result.errors[0].code
+                else None
+            ),
+            message="Resultado final da etapa persistido.",
+        ))
         self.repository.append_log(FlowLogRecord(
             execution_id=execution.execution_id,
             stage=stage_id,
@@ -260,6 +335,8 @@ class WorkflowOrchestrator:
                 message="Workflow falhou.",
                 details={"stage": stage_id.value},
             )
+        elif finish_after_stage:
+            return self.finish(execution)
         return execution
 
     def _validate_global_dependencies(self) -> None:
@@ -355,6 +432,32 @@ class WorkflowOrchestrator:
             errors=execution.errors,
         )
 
+    def _reset_following_stages(
+        self,
+        execution: WorkflowExecution,
+        stage_id: StageId,
+    ) -> WorkflowExecution:
+        seen_current = False
+        stages = []
+        for stage in execution.stages:
+            if stage.stage_id == stage_id:
+                seen_current = True
+                stages.append(stage)
+                continue
+            if seen_current:
+                stages.append(StageExecution(stage.stage_id))
+                continue
+            stages.append(stage)
+        return WorkflowExecution(
+            execution_id=execution.execution_id,
+            status=execution.status,
+            started_at=execution.started_at,
+            finished_at=execution.finished_at,
+            stages=tuple(stages),
+            warnings=execution.warnings,
+            errors=execution.errors,
+        )
+
     def _with_status(
         self,
         execution: WorkflowExecution,
@@ -362,11 +465,22 @@ class WorkflowOrchestrator:
         *,
         finished_at: str | None = None,
     ) -> WorkflowExecution:
+        terminal_statuses = {
+            WorkflowStatus.CANCELLED,
+            WorkflowStatus.COMPLETED,
+            WorkflowStatus.COMPLETED_WITH_WARNINGS,
+            WorkflowStatus.FAILED,
+        }
+        final_finished_at = (
+            finished_at or execution.finished_at
+            if status in terminal_statuses
+            else None
+        )
         return WorkflowExecution(
             execution_id=execution.execution_id,
             status=status,
             started_at=execution.started_at,
-            finished_at=finished_at or execution.finished_at,
+            finished_at=final_finished_at,
             stages=execution.stages,
             warnings=execution.warnings,
             errors=execution.errors,

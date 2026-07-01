@@ -1,0 +1,8 @@
+.state,
+.pending-kind,
+.workflow-status,
+.flow-chip,
+.flow-stage-status {
+  white-space: nowrap;
+}
+

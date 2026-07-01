@@ -1,121 +1,15 @@
-/* ==========================================================================
-   BASE & VARIABLES
-   ========================================================================== */
-
-:root {
-  color-scheme: light;
-  
-  /* Palette Rose Edition */
-  --bg: #fbfafb;
-  --panel: #fff;
-  --soft: #f7eaee;
-  --soft-2: #fdf5f7;
-  --rose: #a94d6b;
-  --rose-dark: #853951;
-  --rose-border: #e7cbd3;
-  
-  /* Text & Feedback */
-  --text: #43383b;
-  --muted: #827277;
-  --border: #ece5e7;
-  --success: #34765b;
-  --warning: #a66a23;
-  --danger: #b54b50;
-  
-  /* Shadows */
-  --shadow: 0 18px 55px rgba(91, 50, 65, .07);
-}
-
-/* Global Reset */
-* {
-  box-sizing: border-box;
-}
-
-html {
-  scroll-behavior: smooth;
-}
-
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, sans-serif;
-  font-size: 16px;
-  line-height: 1.55;
-  -webkit-font-smoothing: antialiased;
+  font: 16px/1.55 "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, sans-serif;
 }
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+h1, h2, h3, p { margin-top: 0; }
+h1 { margin-bottom: 3px; font-size: clamp(27px, 4vw, 38px); line-height: 1.15; }
+h2 { margin-bottom: 8px; line-height: 1.25; }
+code { font-size: .9em; }
 
-/* Typography */
-h1, h2, h3, p {
-  margin-top: 0;
-}
-
-h1 {
-  margin-bottom: 3px;
-  font-size: clamp(27px, 4vw, 38px);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-}
-
-h2 {
-  margin-bottom: 8px;
-  line-height: 1.25;
-}
-
-p {
-  margin-bottom: 1rem;
-}
-
-small {
-  font-size: 0.85em;
-}
-
-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.9em;
-  background: var(--soft);
-  padding: 0.2em 0.4em;
-  border-radius: 4px;
-}
-
-/* Forms & Interactive Elements */
-button, input, select, textarea {
-  font-family: inherit;
-  font-size: inherit;
-}
-
-button {
-  cursor: pointer;
-  border: none;
-  background: none;
-  padding: 0;
-}
-
-a {
-  color: var(--rose);
-  text-decoration: none;
-  transition: color 0.2s ease;
-}
-
-a:hover {
-  color: var(--rose-dark);
-}
-
-/* Scrollbar Styling (Opcional, para combinar com o tema) */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--bg);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--rose-border);
-  border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--rose);
-}

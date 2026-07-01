@@ -107,7 +107,10 @@ class OfficialFlowBackend:
 
     def _run_stage(self, stage: StageId, started: threading.Event) -> None:
         try:
-            self._orchestrator(on_stage_started=started.set).run_stage(stage)
+            self._orchestrator(on_stage_started=started.set).run_stage(
+                stage,
+                finish_after_stage=True,
+            )
         except Exception:
             logger.exception("Falha ao executar etapa de Workflow em background.")
             started.set()

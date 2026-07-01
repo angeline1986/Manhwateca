@@ -168,6 +168,45 @@ class WorkflowOrchestratorTests(unittest.TestCase):
         self.assertEqual("completed_with_warnings", repository.summary_metrics["status"])
         self.assertEqual(1, repository.summary_warnings_count)
 
+    def test_single_stage_with_warning_finishes_workflow(self):
+        repository = FakeRepository()
+        repository.save_execution(WorkflowExecution(
+            execution_id="wf_1",
+            status=WorkflowStatus.RUNNING,
+            finished_at="2026-06-27T09:00:00-03:00",
+            stages=tuple(FakeRepository.initial_stages()),
+        ))
+        orchestrator = WorkflowOrchestrator(
+            repository,
+            fake_integrations(),
+            stage_services={
+                StageId.RESOLVE_IDS: FakeStageService(
+                    processed=1,
+                    warning=FlowWarning("Resolução de IDs concluída com pendências."),
+                )
+            },
+            clock=lambda: "2026-06-27T10:05:00-03:00",
+        )
+
+        execution = orchestrator.run_stage(
+            StageId.RESOLVE_IDS,
+            finish_after_stage=True,
+        )
+
+        self.assertEqual(WorkflowStatus.COMPLETED_WITH_WARNINGS, execution.status)
+        self.assertEqual("2026-06-27T10:05:00-03:00", execution.finished_at)
+        self.assertEqual("completed_with_warnings", repository.summary_metrics["status"])
+        resolve_ids = [
+            stage for stage in execution.stages
+            if stage.stage_id == StageId.RESOLVE_IDS
+        ][0]
+        update_metadata = [
+            stage for stage in execution.stages
+            if stage.stage_id == StageId.UPDATE_METADATA
+        ][0]
+        self.assertEqual(StageStatus.COMPLETED_WITH_WARNINGS, resolve_ids.status)
+        self.assertEqual(StageStatus.WAITING, update_metadata.status)
+
     def test_active_workflow_blocks_new_start(self):
         repository = FakeRepository()
         repository.save_execution(WorkflowExecution(

@@ -11,6 +11,7 @@ from manhwateca.webapp.catalog import catalog_payload
 from manhwateca.webapp.editorial import dashboard_payload
 from manhwateca.webapp.diagnostics import build_diagnostics
 from manhwateca.webapp.mangaupdates import review_payload
+from manhwateca.webapp.mangaupdates_works import works_payload
 from manhwateca.webapp.mangaupdates_status import mangaupdates_status
 from manhwateca.webapp.notion import notion_status
 from manhwateca.webapp.notion_metadata import metadata_status
@@ -73,6 +74,9 @@ def create_handler(project_root, task_manager, workflow_manager=None):
                 return
             if path == "/api/mangaupdates/review":
                 self._send_json(review_payload(project_root))
+                return
+            if path == "/api/mangaupdates/works":
+                self._send_json(works_payload(urlparse(self.path).query))
                 return
             if path == "/api/mangaupdates/status":
                 self._send_json(mangaupdates_status(project_root))
@@ -147,11 +151,14 @@ def create_handler(project_root, task_manager, workflow_manager=None):
 
         def _send_json(self, payload, status=200):
             body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                return
 
         def _send_static(self, request_path, root):
             relative = "index.html" if request_path == "/" else unquote(
@@ -173,11 +180,14 @@ def create_handler(project_root, task_manager, workflow_manager=None):
                 "application/json",
             }:
                 content_type += "; charset=utf-8"
-            self.send_response(200)
-            self.send_header("Content-Type", content_type)
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                return
 
         def log_message(self, format, *args):
             return
