@@ -78,6 +78,30 @@ class FakeReviewRepository:
         return True
 
 
+class FakeFlowConnection:
+    def __init__(self, rows):
+        self.rows = rows
+        self.closed = False
+
+    def cursor(self):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, _sql):
+        return None
+
+    def fetchall(self):
+        return self.rows
+
+    def close(self):
+        self.closed = True
+
+
 class WebMangaUpdatesTests(unittest.TestCase):
     def test_review_payload_filters_low_score_and_explicit_non_bl(self):
         items = [{
@@ -113,6 +137,48 @@ class WebMangaUpdatesTests(unittest.TestCase):
         self.assertEqual(1, payload["summary"]["confirmed"])
         self.assertEqual("Alpha", payload["items"][0]["nome"])
         self.assertEqual([1], [
+            candidate["id"] for candidate in payload["items"][0]["candidates"]
+        ])
+
+    def test_review_payload_uses_flow_candidates_before_decision_queue(self):
+        rows = [
+            {
+                "id": 10,
+                "work_id": 7,
+                "searched_title": "Alpha",
+                "candidate_external_id": "101",
+                "candidate_title": "Alpha Official",
+                "confidence": Decimal("0.82"),
+                "status": "pending_review",
+                "details": {"candidate": {"url": "https://example.test/101"}},
+                "created_at": "2026-07-01 10:00:00",
+                "local_title": "Alpha",
+            },
+            {
+                "id": 11,
+                "work_id": 7,
+                "searched_title": "Alpha",
+                "candidate_external_id": "102",
+                "candidate_title": "Alpha Other",
+                "confidence": Decimal("0.78"),
+                "status": "pending_review",
+                "details": {},
+                "created_at": "2026-07-01 10:00:00",
+                "local_title": "Alpha",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._project(directory, [])
+            payload = review_payload(
+                root,
+                repository_factory=lambda: FakeReviewRepository(),
+                connection_factory=lambda: FakeFlowConnection(rows),
+            )
+
+        self.assertEqual("flow_id_candidates", payload["source"]["detail"])
+        self.assertEqual(1, payload["summary"]["review"])
+        self.assertEqual("Alpha", payload["items"][0]["localTitle"])
+        self.assertEqual(["101", "102"], [
             candidate["id"] for candidate in payload["items"][0]["candidates"]
         ])
 

@@ -1,12 +1,19 @@
 import { escapeHtml } from "../utils/html.js";
+import { decisionsTab, pendingTab } from "./pendingReviewPanel.js";
 
-export function renderResolveIdsPanel({ activeSubtab, review, run, works }) {
+export function renderResolveIdsPanel({
+  activeSubtab,
+  review,
+  run,
+  selectedDecisions,
+  works,
+}) {
   const summary = review?.summary || {};
   const metrics = run.results?.resolve_ids?.metrics || {};
   return `
     ${activeSubtab === "buscar" ? searchTab(metrics, summary, review, works) : ""}
-    ${activeSubtab === "pendencias" ? pendingTab(review) : ""}
-    ${activeSubtab === "decisoes" ? decisionsTab(review) : ""}
+    ${activeSubtab === "pendencias" ? pendingTab(review, selectedDecisions) : ""}
+    ${activeSubtab === "decisoes" ? decisionsTab(review, selectedDecisions) : ""}
   `;
 }
 
@@ -35,11 +42,34 @@ function searchTab(metrics, summary, review, works) {
         `).join("")}
       </tbody>
     </table>
-    <div class="actions">
-      <button class="primary-action" type="button" data-flow-run-stage>Buscar candidatos</button>
-      <button class="secondary-action" type="button" data-flow-subtab="pendencias">Ver pendências</button>
+    <div class="flow-table-footer">
+      <div class="actions">
+        <button class="primary-action" type="button" data-flow-run-stage>Buscar candidatos</button>
+        <button class="secondary-action" type="button" data-flow-subtab="pendencias">Ver pendências</button>
+      </div>
+      ${searchPagination(works)}
     </div>
   `;
+}
+
+function searchPagination(works) {
+  const pagination = works?.pagination || {};
+  const page = Number(pagination.page || 1);
+  const pages = Number(pagination.pages || 1);
+  if (pages <= 1) return "";
+  return `<div class="flow-pager">
+    <button class="flow-page-link" type="button" ${page <= 1 ? "disabled" : ""} data-flow-works-page="${page - 1}" aria-label="Página anterior">‹</button>
+    ${pageButtons(page, pages)}
+    <button class="flow-page-link" type="button" ${page >= pages ? "disabled" : ""} data-flow-works-page="${page + 1}" aria-label="Próxima página">›</button>
+  </div>`;
+}
+
+function pageButtons(page, pages) {
+  const start = Math.max(1, Math.min(page - 1, pages - 2));
+  const end = Math.min(pages, start + 2);
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index)
+    .map(number => `<button type="button" class="flow-page-link ${number === page ? "active" : ""}" data-flow-works-page="${number}">${number}</button>`)
+    .join("");
 }
 
 function searchRows(metrics, summary, review, works) {
@@ -104,75 +134,6 @@ function actionLabel(action) {
     MANUAL_SEARCH: "Informar ID manual",
     RETRY_FAILED: "Tentar novamente",
   }[action] || action || "Pesquisar na API";
-}
-
-function pendingTab(review) {
-  const items = review?.items || [];
-  if (!items.length) {
-    return '<p class="empty">Nenhuma correspondência pendente para revisar.</p>';
-  }
-  const first = items[0];
-  return `
-    <p class="lead">Valide os candidatos encontrados ou informe IDs manualmente.</p>
-    <div class="flow-choice-panel">
-      <div>
-        ${items.slice(0, 5).map(item => `
-          <article class="flow-choice">
-            <strong>${escapeHtml(item.nome || "")}</strong>
-            <span class="flow-badge amb">${item.candidates?.length || 0} candidato(s)</span>
-            <p>${escapeHtml(item.candidates?.length ? "Requer validação." : "Sem match automático seguro.")}</p>
-          </article>
-        `).join("")}
-      </div>
-      <div class="flow-detail-card">
-        <h3>Detalhe da seleção</h3>
-        <table class="flow-table compact">
-          <thead><tr><th>Candidato</th><th>Score</th><th>ID</th></tr></thead>
-          <tbody>
-            ${(first.candidates || []).slice(0, 3).map(candidate => `
-              <tr>
-                <td>${escapeHtml(candidate.titulo || "")}</td>
-                <td>${Number(candidate.pontuacao || 0).toFixed(2)}</td>
-                <td>${escapeHtml(String(candidate.id || ""))}</td>
-              </tr>
-            `).join("") || '<tr><td colspan="3">Nenhum candidato disponível.</td></tr>'}
-          </tbody>
-        </table>
-        <input class="flow-manual-input" placeholder="ID manual" type="number" min="1">
-      </div>
-    </div>
-    <div class="actions">
-      <button class="primary-action" type="button" data-page="mangaupdates">Abrir revisão completa</button>
-      <button class="secondary-action" type="button" data-flow-subtab="decisoes">Aplicar decisões</button>
-    </div>
-  `;
-}
-
-function decisionsTab(review) {
-  const count = review?.items?.length || 0;
-  return `
-    <p class="lead">Grave no banco os IDs revisados e deixe a etapa pronta para metadados.</p>
-    <table class="flow-table">
-      <thead>
-        <tr><th>Fila</th><th>Decisão</th><th>Impacto</th></tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Correspondências pendentes</td>
-          <td><span class="flow-badge amb">${count} pendente(s)</span></td>
-          <td>Salva IDs confirmados no banco</td>
-        </tr>
-      </tbody>
-    </table>
-    <div class="flow-panel-note">
-      ${count
-        ? `${count} obra(s) ainda precisam de decisão antes da aplicação final.`
-        : "Não há decisões pendentes para aplicar."}
-    </div>
-    <button class="primary-action" type="button" data-page="mangaupdates">
-      Abrir revisão de decisões
-    </button>
-  `;
 }
 
 function metricCard(label, value) {

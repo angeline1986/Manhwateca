@@ -31,6 +31,7 @@ export function renderFlowsOverview(elements, data, options = {}) {
     run,
     visibleRunning,
     activeSubtab: options.activeSubtab || "buscar",
+    selectedDecisions: options.selectedDecisions || {},
     visibleStatuses,
     review: options.review,
     works: options.works,

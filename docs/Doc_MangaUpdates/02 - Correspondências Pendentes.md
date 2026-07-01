@@ -1,143 +1,618 @@
+Sim — essa tela precisa de bem mais detalhe porque é a etapa mais crítica do fluxo. Ela não é só uma lista: é uma **mesa de decisão**.
+
+Abaixo está uma versão mais completa e implementável.
+
 # 02 — Tela: Correspondências Pendentes
 
-## 1. Objetivo Funcional — User Story
+## Conceito da Tela
 
-Como usuária, quero revisar candidatos retornados pelo MangaUpdates para escolher o ID correto ou informar um ID manual, evitando gravações incorretas.
+A tela **Correspondências Pendentes** deve funcionar como uma área de revisão manual das obras que tiveram resultado incerto na busca do MangaUpdates.
 
-- Exibe obras com candidatos ambíguos.
-- Mostra confiança de cada candidato.
-- Permite selecionar candidato, informar ID manual ou ignorar temporariamente.
-- Prepara decisões para aplicação posterior.
+Ela existe para impedir que o sistema grave automaticamente um `mangaupdates_id` errado no PostgreSQL.
 
-## 2. Mapeamento de Dados — Data Schema
+O usuário deve conseguir:
 
-### KPIs
+* ver a obra local que precisa de decisão;
+* comparar os candidatos encontrados;
+* entender por que a decisão ficou pendente;
+* escolher o candidato correto;
+* informar um ID manualmente;
+* ignorar temporariamente;
+* marcar a decisão como pronta para aplicação.
+
+---
+
+# 1. Funcionamento da Tela
+
+## Fluxo principal
+
+```text
+Usuária acessa Correspondências Pendentes
+→ sistema lista obras com decisão pendente
+→ usuária seleciona uma obra
+→ sistema exibe detalhes e candidatos
+→ usuária escolhe uma decisão
+→ sistema salva a decisão temporária
+→ item fica pronto para "Aplicar decisões"
+```
+
+## A tela não deve gravar diretamente o ID final
+
+Nesta etapa, a decisão deve ser salva apenas em uma fila intermediária.
+
+```text
+Correspondências Pendentes
+→ salva decisão temporária
+→ NÃO atualiza ainda a tabela principal de obras
+```
+
+A gravação definitiva acontece somente na etapa seguinte:
+
+```text
+Aplicar decisões
+→ valida duplicidade
+→ grava mangaupdates_id
+→ registra log
+→ remove da fila
+```
+
+---
+
+# 2. Layout Recomendado
+
+## Estrutura geral
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ Correspondências Pendentes                                   │
+│ Revise candidatos encontrados ou informe o ID manualmente.   │
+│                                                              │
+│ KPIs / filtros                                               │
+│                                                              │
+│ ┌──────────────────────┐ ┌─────────────────────────────────┐ │
+│ │ Lista de obras        │ │ Painel de decisão               │ │
+│ │ pendentes             │ │                                 │ │
+│ │                      │ │ Obra local                      │ │
+│ │ - Obra A             │ │ Motivo da pendência             │ │
+│ │ - Obra B             │ │ Candidatos encontrados          │ │
+│ │ - Obra C             │ │ Campo de ID manual              │ │
+│ │                      │ │ Ações                           │ │
+│ └──────────────────────┘ └─────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────┘
+```
+
+## Distribuição recomendada
+
+| Área              | Função                                                 |
+| ----------------- | ------------------------------------------------------ |
+| Header            | Nome da etapa e descrição objetiva                     |
+| KPIs compactos    | Quantidade de ambíguos, baixa confiança, sem resultado |
+| Filtros           | Buscar obra, filtrar por motivo/status                 |
+| Lista lateral     | Obras que precisam de decisão                          |
+| Painel principal  | Detalhes da obra selecionada                           |
+| Rodapé da decisão | Botões de ação                                         |
+
+---
+
+# 3. Layout Detalhado da Página
+
+## 3.1 Header
+
+```text
+Correspondências Pendentes
+Escolha o candidato correto ou informe manualmente o ID do MangaUpdates.
+```
+
+Abaixo do título, usar um resumo horizontal discreto:
+
+```text
+12 pendentes · 7 ambíguas · 3 baixa confiança · 2 sem resultado · 4 prontas para aplicar
+```
+
+## 3.2 Filtros
+
+Filtros recomendados:
+
+```text
+[ Buscar obra pendente... ]
+
+[ Todas ] [ Ambíguas ] [ Baixa confiança ] [ Sem resultado ] [ ID manual ] [ Prontas ]
+```
+
+## 3.3 Lista de obras pendentes
+
+Cada item da lista deve mostrar:
+
+```text
+Nome da obra local
+Motivo da pendência
+Quantidade de candidatos
+Status da decisão
+```
+
+Exemplo:
+
+```text
+Armadilha de Açúcar
+Ambígua · 3 candidatos
+Aguardando decisão
+```
+
+Status visuais:
+
+| Status               | Exibição                   |
+| -------------------- | -------------------------- |
+| `PENDING_REVIEW`     | Aguardando decisão         |
+| `MANUAL_ID_REQUIRED` | Exige ID manual            |
+| `SELECTED`           | Decisão marcada            |
+| `IGNORED`            | Ignorada temporariamente   |
+| `BLOCKED_DUPLICATE`  | ID possivelmente duplicado |
+
+---
+
+# 4. Painel de Decisão
+
+Quando a usuária clica em uma obra, abrir painel com:
+
+## 4.1 Identificação local
+
+```text
+Obra local
+Armadilha de Açúcar
+
+Título normalizado
+armadilha de acucar
+
+Aliases locais
+- Sugar Trap
+- Armadilha Açúcar
+```
+
+## 4.2 Motivo da pendência
+
+Exemplo:
+
+```text
+Motivo
+A busca encontrou 3 candidatos com confiança próxima.
+```
+
+Outros motivos possíveis:
+
+| Motivo           | Explicação                                       |
+| ---------------- | ------------------------------------------------ |
+| `AMBIGUOUS`      | Mais de um candidato plausível                   |
+| `LOW_CONFIDENCE` | Melhor candidato abaixo da confiança mínima      |
+| `NO_RESULT`      | API não retornou candidato útil                  |
+| `ALIAS_DETECTED` | Nome da pasta parece ser alias de obra existente |
+| `DUPLICATE_RISK` | ID sugerido já aparece em outra obra             |
+
+---
+
+# 5. Decisões Possíveis
+
+A tela deve permitir exatamente estas decisões:
+
+## Decisão 1 — Escolher candidato encontrado
+
+Uso:
+
+```text
+Selecionar quando um dos candidatos retornados pela API é claramente a obra correta.
+```
+
+Campos salvos:
 
 ```ts
-export interface CorrespondenciasPendentesKpis {
-  pendingReview: number;
-  ambiguous: number;
-  lowConfidence: number;
-  manualIdRequired: number;
-  selectedButNotApplied: number;
+{
+  decisionType: "SELECT_CANDIDATE",
+  selectedCandidateId: "12345",
+  manualMangaupdatesId: null,
+  ignoredReason: null
 }
 ```
 
-```sql
-SELECT
-  COUNT(*) FILTER (WHERE decision_status = 'PENDING_REVIEW') AS pending_review,
-  COUNT(*) FILTER (WHERE candidates_count > 1) AS ambiguous,
-  COUNT(*) FILTER (WHERE match_confidence < 85) AS low_confidence,
-  COUNT(*) FILTER (WHERE decision_status = 'MANUAL_ID_REQUIRED') AS manual_id_required,
-  COUNT(*) FILTER (WHERE selected_candidate_id IS NOT NULL AND applied_at IS NULL) AS selected_but_not_applied
-FROM mangaupdates_decision_queue;
+## Decisão 2 — Informar ID manual
+
+Uso:
+
+```text
+Quando a API não encontrou resultado ou retornou candidatos errados.
 ```
 
-### Tabela Principal
+Campos salvos:
+
+```ts
+{
+  decisionType: "MANUAL_ID",
+  selectedCandidateId: null,
+  manualMangaupdatesId: "98765",
+  ignoredReason: null
+}
+```
+
+Validações:
+
+* ID deve ser numérico ou seguir o formato aceito pelo MangaUpdates;
+* ID não pode estar vazio;
+* ID não pode estar vinculado a outra obra, exceto se confirmado manualmente;
+* idealmente validar se o ID existe na API antes de permitir aplicar.
+
+## Decisão 3 — Ignorar temporariamente
+
+Uso:
+
+```text
+Quando a usuária não quer decidir agora.
+```
+
+Campos salvos:
+
+```ts
+{
+  decisionType: "IGNORE_TEMPORARILY",
+  ignoredReason: "Não tenho certeza ainda",
+  ignoredUntil: null
+}
+```
+
+Comportamento:
+
+* item sai da prioridade;
+* continua acessível no filtro “Ignoradas”;
+* pode ser reaberto depois.
+
+## Decisão 4 — Marcar como sem correspondência
+
+Uso:
+
+```text
+Quando a obra não existe no MangaUpdates.
+```
+
+Campos salvos:
+
+```ts
+{
+  decisionType: "NO_MATCH",
+  selectedCandidateId: null,
+  manualMangaupdatesId: null,
+  noMatchConfirmed: true
+}
+```
+
+Comportamento:
+
+* evita que a mesma obra volte sempre para pendência;
+* pode ser revisada futuramente.
+
+---
+
+# 6. Candidatos
+
+Cada candidato deve mostrar:
+
+```text
+Título MangaUpdates
+ID externo
+Score de confiança
+Tipo/status da obra
+Ano, se disponível
+URL
+Botão selecionar
+```
+
+Exemplo visual:
+
+```text
+○ Sugar Trap
+  ID: 12345
+  Confiança: 87%
+  Status: Ongoing
+  [Abrir MangaUpdates]
+
+○ Sugar Trap Novel
+  ID: 67890
+  Confiança: 74%
+  Status: Completed
+  [Abrir MangaUpdates]
+```
+
+## Recomendação visual
+
+* candidato recomendado pode ter badge “Mais provável”;
+* confiança abaixo de 70% deve aparecer como risco;
+* candidatos com título muito diferente devem aparecer em ordem menor;
+* candidato já usado por outra obra deve ter alerta.
+
+---
+
+# 7. Botões da Tela
+
+| Botão                      | Quando aparece                 | Tipo     | Efeito                         |
+| -------------------------- | ------------------------------ | -------- | ------------------------------ |
+| Selecionar candidato       | Em cada candidato              | Síncrono | Marca candidato como escolhido |
+| Salvar ID manual           | Quando campo manual preenchido | Síncrono | Salva ID na fila               |
+| Ignorar por enquanto       | Sempre                         | Síncrono | Move para ignorados            |
+| Marcar sem correspondência | Quando não há resultado útil   | Síncrono | Define `NO_MATCH`              |
+| Limpar decisão             | Quando já existe decisão salva | Síncrono | Volta para pendente            |
+| Próxima pendência          | Após salvar decisão            | Síncrono | Avança para próximo item       |
+
+---
+
+# 8. Estados da Decisão
+
+```ts
+export enum PendingDecisionStatus {
+  PENDING_REVIEW = "PENDING_REVIEW",
+  SELECTED_CANDIDATE = "SELECTED_CANDIDATE",
+  MANUAL_ID_SELECTED = "MANUAL_ID_SELECTED",
+  NO_MATCH = "NO_MATCH",
+  IGNORED = "IGNORED",
+  BLOCKED_DUPLICATE = "BLOCKED_DUPLICATE",
+  READY_TO_APPLY = "READY_TO_APPLY"
+}
+```
+
+## Transições
+
+```text
+PENDING_REVIEW
+  → SELECTED_CANDIDATE
+  → READY_TO_APPLY
+
+PENDING_REVIEW
+  → MANUAL_ID_SELECTED
+  → READY_TO_APPLY
+
+PENDING_REVIEW
+  → NO_MATCH
+
+PENDING_REVIEW
+  → IGNORED
+
+READY_TO_APPLY
+  → Aplicar decisões
+```
+
+---
+
+# 9. Mapeamento de Dados
 
 ```ts
 export interface PendingDecisionRow {
   queueId: string;
   mangaId: string;
+
   localTitle: string;
   normalizedTitle: string;
+  alternativeTitles: string[];
+
+  reason: PendingReason;
+  decisionStatus: PendingDecisionStatus;
+
   candidates: MangaUpdatesCandidate[];
+
   selectedCandidateId: string | null;
   manualMangaupdatesId: string | null;
-  decisionStatus: "PENDING_REVIEW" | "MANUAL_ID_REQUIRED" | "IGNORED";
-  confidence: number | null;
-  reason: "AMBIGUOUS" | "LOW_CONFIDENCE" | "NO_RESULT" | "ALIAS_DETECTED";
-  updatedAt: string;
-}
 
-export interface MangaUpdatesCandidate {
-  id: string;
-  title: string;
-  url: string;
-  confidence: number;
-  isRecommended: boolean;
+  duplicateWarning: DuplicateWarning | null;
+  ignoredReason: string | null;
+
+  confidence: number | null;
+  createdAt: string;
+  updatedAt: string;
 }
 ```
 
-## 3. Arquitetura de API — Endpoints
+```ts
+export interface MangaUpdatesCandidate {
+  candidateId: string;
+  mangaupdatesId: string;
+  title: string;
+  url: string;
+  confidence: number;
+  matchReason: string[];
+  year: number | null;
+  status: string | null;
+  type: string | null;
+  isRecommended: boolean;
+  alreadyLinkedToMangaId: string | null;
+}
+```
 
-| Método | Rota | Descrição | Carga |
-|---|---|---|---|
-| GET | `/api/mangaupdates/review` | Lista fila de revisão | Paginado |
-| POST | `/api/mangaupdates/decisions` | Salva decisão temporária | Síncrono |
-| POST | `/api/mangaupdates/decisions/ignore` | Ignora item temporariamente | Síncrono |
+```ts
+export interface DuplicateWarning {
+  mangaupdatesId: string;
+  linkedMangaId: string;
+  linkedMangaTitle: string;
+  severity: "warning" | "blocker";
+}
+```
+
+```ts
+export enum PendingReason {
+  AMBIGUOUS = "AMBIGUOUS",
+  LOW_CONFIDENCE = "LOW_CONFIDENCE",
+  NO_RESULT = "NO_RESULT",
+  ALIAS_DETECTED = "ALIAS_DETECTED",
+  DUPLICATE_RISK = "DUPLICATE_RISK"
+}
+```
+
+---
+
+# 10. Origem dos Dados
+
+```sql
+SELECT
+  q.id AS queue_id,
+  q.manga_id,
+  m.title AS local_title,
+  m.normalized_title,
+  m.alternative_titles,
+  q.reason,
+  q.decision_status,
+  q.selected_candidate_id,
+  q.manual_mangaupdates_id,
+  q.confidence,
+  q.ignored_reason,
+  q.created_at,
+  q.updated_at
+FROM mangaupdates_decision_queue q
+JOIN mangas m ON m.id = q.manga_id
+WHERE q.applied_at IS NULL
+  AND q.decision_status IN (
+    'PENDING_REVIEW',
+    'SELECTED_CANDIDATE',
+    'MANUAL_ID_SELECTED',
+    'IGNORED',
+    'NO_MATCH',
+    'BLOCKED_DUPLICATE',
+    'READY_TO_APPLY'
+  );
+```
+
+---
+
+# 11. Ordenação Padrão
+
+Priorizar o que exige ação humana imediata:
+
+```sql
+ORDER BY
+  CASE
+    WHEN q.decision_status = 'BLOCKED_DUPLICATE' THEN 1
+    WHEN q.reason = 'AMBIGUOUS' THEN 2
+    WHEN q.reason = 'LOW_CONFIDENCE' THEN 3
+    WHEN q.reason = 'NO_RESULT' THEN 4
+    WHEN q.reason = 'ALIAS_DETECTED' THEN 5
+    WHEN q.decision_status = 'READY_TO_APPLY' THEN 6
+    WHEN q.decision_status = 'IGNORED' THEN 9
+    ELSE 10
+  END,
+  q.confidence ASC NULLS FIRST,
+  q.updated_at DESC,
+  m.title ASC;
+```
+
+---
+
+# 12. Endpoints
+
+## Listar fila
+
+```http
+GET /api/mangaupdates/review
+```
 
 ```ts
 export interface ReviewQueryParams {
   page?: number;
   pageSize?: number;
   search?: string;
-  reason?: "AMBIGUOUS" | "LOW_CONFIDENCE" | "NO_RESULT" | "ALIAS_DETECTED";
-  onlyUndecided?: boolean;
+  reason?: PendingReason;
+  status?: PendingDecisionStatus;
+  onlyReadyToApply?: boolean;
+  includeIgnored?: boolean;
 }
 ```
+
+## Salvar decisão
+
+```http
+POST /api/mangaupdates/decisions
+```
+
+```ts
+export interface SaveDecisionRequest {
+  queueId: string;
+  decisionType:
+    | "SELECT_CANDIDATE"
+    | "MANUAL_ID"
+    | "NO_MATCH"
+    | "IGNORE_TEMPORARILY"
+    | "CLEAR_DECISION";
+
+  selectedCandidateId?: string;
+  manualMangaupdatesId?: string;
+  ignoredReason?: string;
+}
+```
+
+## Resposta
 
 ```json
 {
   "success": true,
   "data": {
-    "items": [
-      {
-        "queueId": "dq_001",
-        "mangaId": "manga_001",
-        "localTitle": "Exemplo de título A",
-        "reason": "AMBIGUOUS",
-        "candidates": [
-          { "id": "123", "title": "Example Title A", "confidence": 87, "isRecommended": true }
-        ]
-      }
-    ]
+    "queueId": "dq_001",
+    "decisionStatus": "READY_TO_APPLY",
+    "message": "Decisão salva. Item pronto para aplicação."
   }
 }
 ```
 
-## 4. Regras de Negócio e Lógica de Processamento
+---
 
-### Critério de Entrada
+# 13. Validações
 
-```sql
-WHERE decision_status IN ('PENDING_REVIEW', 'MANUAL_ID_REQUIRED')
-   OR selected_candidate_id IS NOT NULL AND applied_at IS NULL
+## Ao selecionar candidato
+
+Validar:
+
+* candidato pertence ao item da fila;
+* candidato possui `mangaupdatesId`;
+* ID ainda não está aplicado em outra obra;
+* item ainda não foi aplicado por outro processo.
+
+## Ao informar ID manual
+
+Validar:
+
+```text
+- não vazio;
+- formato válido;
+- não duplicado;
+- opcionalmente existente na API;
+- não bloqueado por rate limit.
 ```
 
-### Regras
+## Ao marcar sem correspondência
 
-- Candidato único com confiança alta pode ser recomendado, mas ainda deve ser validado se a tela exigir revisão.
-- ID manual deve validar formato e existência antes da aplicação definitiva.
-- Decisão salva aqui não grava diretamente `mangaupdates_id` na tabela principal.
-- Item ignorado não deve sumir definitivamente; deve poder ser reaberto.
+Exigir confirmação:
 
-```sql
-ORDER BY
-  CASE
-    WHEN reason = 'AMBIGUOUS' THEN 1
-    WHEN reason = 'LOW_CONFIDENCE' THEN 2
-    WHEN reason = 'ALIAS_DETECTED' THEN 3
-    WHEN reason = 'NO_RESULT' THEN 4
-    ELSE 9
-  END,
-  confidence ASC NULLS FIRST,
-  updated_at DESC;
+```text
+Esta obra será marcada como sem correspondência no MangaUpdates.
+Você poderá reabrir essa decisão futuramente.
 ```
 
-## 5. Comportamento de Componentes e Gatilhos
+---
 
-| Componente | Tipo | Efeito |
-|---|---|---|
-| Selecionar candidato | Síncrono | Atualiza decisão temporária |
-| Informar ID manual | Síncrono | Salva ID manual na fila |
-| Marcar decisão | Síncrono | Define item como pronto para aplicar |
-| Ignorar por enquanto | Síncrono | Mantém rastreio, mas remove da prioridade |
+# 14. Edge Cases
 
-## 6. Estados da Interface e Edge Cases
+| Caso                               | Tratamento                                                            |
+| ---------------------------------- | --------------------------------------------------------------------- |
+| ID já usado por outra obra         | Bloquear aplicação e exibir obra conflitante                          |
+| Candidato removido da API          | Manter candidato salvo localmente e sinalizar “não encontrado na API” |
+| API fora do ar                     | Permitir salvar decisão local, mas bloquear validação externa         |
+| Item aplicado por outro processo   | Exibir stale state e recarregar fila                                  |
+| Usuária seleciona candidato errado | Permitir limpar decisão antes de aplicar                              |
+| Obra ignorada volta em nova busca  | Não duplicar fila; atualizar item existente                           |
+| Obra sem candidato                 | Priorizar campo de ID manual                                          |
+| Muitos candidatos                  | Mostrar top 5 e botão “ver todos”                                     |
 
-- Empty: “Não há correspondências pendentes.”
-- Duplicidade de ID selecionado: mostrar alerta antes de aplicar.
-- ID manual inválido: bloquear salvamento.
-- Candidato removido da API: manter registro local e sinalizar.
-- Lista grande: paginação obrigatória.
+---
+
+# 15. Critérios de Aceite
+
+* A tela lista somente itens pendentes ou ainda não aplicados.
+* A usuária consegue selecionar um candidato.
+* A usuária consegue informar ID manual.
+* A decisão salva não grava diretamente na tabela principal.
+* Itens com decisão aparecem como prontos para aplicar.
+* IDs duplicados geram alerta.
+* Itens ignorados podem ser reabertos.
+* A interface não perde a decisão ao trocar de item.
+* A lista suporta paginação.
+* A aplicação definitiva fica restrita à tela “Aplicar decisões”.

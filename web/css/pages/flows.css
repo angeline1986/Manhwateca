@@ -140,6 +140,59 @@
   color: var(--success);
   font-weight: 800;
 }
+#flowsFeedback:empty {
+  display: none;
+}
+.flow-table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: -2px;
+}
+.flow-table-footer .actions {
+  margin: 0;
+}
+.flow-table-footer .actions button {
+  font-size: 14px;
+}
+.flow-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 850;
+}
+.flow-pager button {
+  position: relative;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  min-width: 34px;
+  padding: 4px 7px 12px;
+}
+.flow-pager button.active,
+.flow-pager button:hover {
+  color: var(--rose);
+}
+.flow-pager button.active::after {
+  position: absolute;
+  right: 7px;
+  bottom: 2px;
+  left: 7px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--rose);
+  content: "";
+}
+.flow-pager button:disabled {
+  cursor: not-allowed;
+  opacity: .35;
+}
 .flow-feedback--info {
   color: var(--rose) !important;
   background: var(--soft-2) !important;

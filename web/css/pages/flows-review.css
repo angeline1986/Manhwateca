@@ -1,0 +1,42 @@
+.flow-review-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+}
+.flow-review-card header,
+.flow-manual-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.flow-review-card header span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+.flow-candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+.flow-candidate {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text);
+  padding: 12px;
+  text-align: left;
+}
+.flow-candidate.selected {
+  outline: 3px solid var(--rose-border);
+}
+.flow-candidate span {
+  display: block;
+  font-size: 13px;
+}
+.flow-manual-row input {
+  width: min(220px, 100%);
+}

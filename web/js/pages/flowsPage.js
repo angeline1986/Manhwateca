@@ -5,10 +5,12 @@ import {
   runFlowStage,
   startWorkflow as startFlowWorkflow,
 } from "../api/flowsApi.js";
+import { getMangaUpdatesWorks, getReviewItems } from "../api/mangaupdatesApi.js";
 import {
-  getMangaUpdatesWorks,
-  getReviewItems,
-} from "../api/mangaupdatesApi.js";
+  applySelectedDecisions,
+  selectCandidate,
+  selectManualId,
+} from "../flows/flowDecisionHandlers.js";
 import { ACTIVE_FLOW_STEPS, FLOW_STAGE_GROUPS } from "../flows/flowConstants.js";
 import {
   currentFlowStage,
@@ -25,7 +27,9 @@ export function initFlowsPage(elements, options = {}) {
   let workflowTimer;
   let pendingRequest = false;
   let activeSubtab = "buscar";
+  let worksPage = 1;
   let reviewState = { summary: {}, items: [] };
+  let selectedDecisions = {};
   let worksState = { kpis: {}, items: [], pagination: {} };
   const showPage = options.showPage || (() => {});
 
@@ -41,7 +45,8 @@ export function initFlowsPage(elements, options = {}) {
 
   async function pollWorkflowStatus() {
     const data = await loadFlowsApiState({ includeDetails: false });
-    renderWorkflow(data);
+    if (flowChanged(data)) renderWorkflow(data);
+    else workflowState = data;
     scheduleWorkflowPolling(data);
   }
 
@@ -75,10 +80,7 @@ export function initFlowsPage(elements, options = {}) {
   async function loadReviewState() {
     try {
       const { payload } = await getReviewItems();
-      reviewState = {
-        summary: payload.summary || {},
-        items: payload.items || [],
-      };
+      reviewState = { summary: payload.summary || {}, items: payload.items || [] };
     } catch {
       reviewState = { summary: {}, items: [] };
     }
@@ -88,8 +90,8 @@ export function initFlowsPage(elements, options = {}) {
     try {
       const { payload } = await getMangaUpdatesWorks({
         status: "WITHOUT_ID",
-        page: "1",
-        pageSize: "25",
+        page: String(worksPage),
+        pageSize: "5",
       });
       worksState = payload.data || { kpis: {}, items: [], pagination: {} };
     } catch {
@@ -102,9 +104,14 @@ export function initFlowsPage(elements, options = {}) {
     renderFlowsOverview(elements, data, {
       activeSubtab,
       review: reviewState,
+      selectedDecisions,
       works: worksState,
     });
     renderLegacyWorkflow(data);
+  }
+
+  function flowChanged(data) {
+    return JSON.stringify(data.run || {}) !== JSON.stringify(workflowState?.run || {});
   }
 
   function renderLegacyWorkflow(data) {
@@ -113,13 +120,8 @@ export function initFlowsPage(elements, options = {}) {
         `<label><input type="checkbox" value="${step.id}" checked> ${step.label}</label>`
       ).join("");
     }
-    if (elements.workflowNotice) {
-      elements.workflowNotice.textContent = data.run.notification
-        || "Fluxo carregado.";
-    }
-    if (elements.startWorkflow) {
-      elements.startWorkflow.disabled = data.run.status === "running";
-    }
+    if (elements.workflowNotice) elements.workflowNotice.textContent = data.run.notification || "Fluxo carregado.";
+    if (elements.startWorkflow) elements.startWorkflow.disabled = data.run.status === "running";
   }
 
   async function runWorkflow(resume = false) {
@@ -175,8 +177,7 @@ export function initFlowsPage(elements, options = {}) {
   }
 
   function selectedFlowStage(run) {
-    return FLOW_STAGE_GROUPS.find(group => group.id === activeSubtab)
-      || currentFlowStage(run);
+    return FLOW_STAGE_GROUPS.find(group => group.id === activeSubtab) || currentFlowStage(run);
   }
 
   elements.startWorkflow?.addEventListener("click", () => runWorkflow(false));
@@ -190,6 +191,35 @@ export function initFlowsPage(elements, options = {}) {
       if (subtab) {
         activeSubtab = subtab.dataset.flowSubtab;
         renderWorkflow(workflowState);
+        return;
+      }
+      const worksPageAction = event.target.closest("[data-flow-works-page]");
+      if (worksPageAction) {
+        worksPage = Number(worksPageAction.dataset.flowWorksPage || 1);
+        loadWorkflow();
+        return;
+      }
+      const selectedCandidate = event.target.closest("[data-flow-select-id]");
+      if (selectedCandidate) {
+        selectedDecisions = selectCandidate(selectedDecisions, selectedCandidate);
+        setFeedback("Decisão marcada para aplicação.", "info");
+        renderWorkflow(workflowState);
+        return;
+      }
+      const manualDecision = event.target.closest("[data-flow-manual-work]");
+      if (manualDecision) {
+        const result = selectManualId(selectedDecisions, manualDecision, area);
+        if (result.error) setFeedback(result.error, "error");
+        else {
+          selectedDecisions = result.selectedDecisions;
+          setFeedback("ID manual marcado para aplicação.", "info");
+          renderWorkflow(workflowState);
+        }
+        return;
+      }
+      if (event.target.closest("[data-flow-apply-decisions]")) {
+        applySelectedDecisions(selectedDecisions, { errorMessage, reload: loadWorkflow, setFeedback })
+          .then(updated => { selectedDecisions = updated; });
         return;
       }
       if (event.target.closest("[data-page]")) {

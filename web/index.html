@@ -21,29 +21,55 @@
         </button>
       </div>
 
-      <nav class="main-nav" aria-label="Navegação principal">
-        <button class="nav-link active" data-page="flows">
-          <span class="nav-icon">▶</span><span>Fluxos</span>
-        </button>
-        <button class="nav-link" data-page="overview">
-          <span class="nav-icon">⌂</span><span>Dashboard</span>
-        </button>
-        <button class="nav-link legacy-nav" data-page="library">
-          <span class="nav-icon">▤</span><span>Biblioteca</span>
-        </button>
-        <button class="nav-link legacy-nav" data-page="organization">
-          <span class="nav-icon">◇</span><span>Organização</span>
-        </button>
-        <button class="nav-link legacy-nav" data-page="mangaupdates">
-          <span class="nav-icon">⌕</span><span>MangaUpdates</span>
-        </button>
-        <button class="nav-link legacy-nav" data-page="notion">
-          <span class="nav-icon">↻</span><span>Notion</span>
-        </button>
-        <button class="nav-link legacy-nav" data-page="automation">
-          <span class="nav-icon">▶</span><span>Automação</span>
-        </button>
-      </nav>
+      <div class="menu-head">
+        <span id="menuLabel">Menu principal</span>
+        <button class="back-button flow-page-link" id="backButton" type="button"
+                aria-label="Voltar ao menu principal">‹</button>
+      </div>
+
+      <div class="menu-stage">
+        <nav class="main-nav main-menu" aria-label="Navegação principal">
+          <button class="nav-link active" data-page="flows">
+            <span class="nav-icon">▶</span><span>Fluxos</span>
+          </button>
+          <button class="nav-link" data-page="overview">
+            <span class="nav-icon">⌂</span><span>Dashboard</span>
+          </button>
+          <button class="nav-link legacy-nav" data-page="library">
+            <span class="nav-icon">▤</span><span>Biblioteca</span>
+          </button>
+          <button class="nav-link legacy-nav" data-page="organization">
+            <span class="nav-icon">◇</span><span>Organização</span>
+          </button>
+          <button class="nav-link legacy-nav" data-page="mangaupdates">
+            <span class="nav-icon">⌕</span><span>MangaUpdates</span>
+          </button>
+          <button class="nav-link legacy-nav" data-page="notion">
+            <span class="nav-icon">↻</span><span>Notion</span>
+          </button>
+          <button class="nav-link legacy-nav" data-page="automation">
+            <span class="nav-icon">▶</span><span>Automação</span>
+          </button>
+        </nav>
+
+        <nav class="main-nav flow-menu" aria-label="Fluxo operacional">
+          <button class="nav-link active" type="button" data-sidebar-flow-subtab="buscar">
+            <span>Buscar candidatos</span>
+          </button>
+          <button class="nav-link" type="button" data-sidebar-flow-subtab="pendencias">
+            <span>Revisar pendências</span>
+          </button>
+          <button class="nav-link" type="button" data-sidebar-flow-subtab="decisoes">
+            <span>Aplicar decisões</span>
+          </button>
+          <button class="nav-link" type="button" data-sidebar-flow-subtab="update_metadata">
+            <span>Atualizar metadados</span>
+          </button>
+          <button class="nav-link" type="button" data-sidebar-flow-subtab="sync_notion">
+            <span>Sincronizar Notion</span>
+          </button>
+        </nav>
+      </div>
 
       <div class="sidebar-footer">
         <button class="nav-link legacy-nav" data-page="settings">
@@ -93,9 +119,9 @@
           <section class="panel flows-journey-panel">
             <div class="flows-journey-shell">
               <div class="flows-journey-side">
-                <aside class="flows-journey-nav" id="flowsCurrentActions">
+                <div class="flows-journey-nav" id="flowsCurrentActions" hidden>
                   <button class="active" type="button">Carregando</button>
-                </aside>
+                </div>
                 <div class="flow-meta" id="flowsCurrentMeta"></div>
               </div>
               <main class="flows-journey-content">

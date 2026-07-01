@@ -94,20 +94,20 @@
 }
 .flow-subgrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 12px;
-  margin: 18px 0;
+  margin: 16px 0;
 }
 .flow-metric-card {
   border: 1px solid var(--rose-border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--soft-2);
-  padding: 16px 18px;
+  padding: 12px 14px;
 }
 .flow-metric-card strong {
   display: block;
   color: var(--rose-dark);
-  font-size: 22px;
+  font-size: 20px;
 }
 .flow-metric-card span {
   color: var(--muted);
@@ -140,6 +140,11 @@
 }
 .flow-table td {
   border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+.flow-table th:nth-child(2), .flow-table td:nth-child(2) { text-align: center; }
+.flow-table td:nth-child(2) .flow-badge {
+  justify-content: center;
 }
 .flow-badge {
   display: inline-flex;

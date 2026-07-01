@@ -4,8 +4,10 @@ from pathlib import Path
 from manhwateca.database.connection import (
     DatabaseConfigurationError,
     DatabaseConnectionError,
+    connect,
 )
 from manhwateca.database.manga_repository import MangaRepository
+from manhwateca.webapp.mangaupdates_review import flow_candidates_review_payload
 from manhwateca.mangaupdates_service.review.data import (
     CONFIRMED_STATUSES,
     consolidate_review_items,
@@ -21,7 +23,15 @@ CSV_PATH = Path("reports/integrations/manhwateca_import.csv")
 METADATA_PATH = Path("config/catalog_metadata.json")
 
 
-def review_payload(project_root, repository_factory=MangaRepository):
+def review_payload(
+    project_root,
+    repository_factory=MangaRepository,
+    connection_factory=connect,
+):
+    flow_payload = flow_candidates_review_payload(connection_factory)
+    if flow_payload is not None and flow_payload["items"]:
+        return flow_payload
+
     database_payload = _database_review_payload(repository_factory)
     if database_payload is not None:
         return database_payload
@@ -46,7 +56,6 @@ def review_payload(project_root, repository_factory=MangaRepository):
             "buscaIds.json como fonte principal."
         ),
     }
-
 
 def _database_review_payload(repository_factory):
     try:
