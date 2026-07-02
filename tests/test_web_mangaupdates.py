@@ -9,6 +9,10 @@ from manhwateca.webapp.mangaupdates import (
     apply_review_decisions,
     review_payload,
 )
+from manhwateca.webapp.mangaupdates_decisions import (
+    apply_decisions_payload,
+    validate_decisions_payload,
+)
 from manhwateca.webapp.mangaupdates_status import mangaupdates_status
 
 
@@ -217,6 +221,44 @@ class WebMangaUpdatesTests(unittest.TestCase):
         self.assertEqual(["102", "101", "106", "105", "107"], [
             candidate["id"] for candidate in payload["items"][0]["candidates"]
         ])
+
+    def test_validate_decisions_payload_blocks_missing_ids(self):
+        payload = validate_decisions_payload([
+            {"Nome": "Alpha", "ID": 10},
+            {"Nome": "Beta", "ID": None},
+        ])
+
+        self.assertFalse(payload["valid"])
+        self.assertEqual(1, payload["ready"])
+        self.assertEqual(1, payload["blocked"])
+
+    def test_apply_decisions_payload_returns_job_contract(self):
+        def apply_callback(_root, decisions):
+            return [decision["Nome"] for decision in decisions], [], None
+
+        payload, status = apply_decisions_payload(
+            Path("."),
+            [{"Nome": "Alpha", "ID": 10}],
+            apply_callback,
+        )
+
+        self.assertEqual(200, status)
+        self.assertTrue(payload["jobId"].startswith("mangaupdates-apply-"))
+        self.assertEqual(1, payload["accepted"])
+
+    def test_apply_decisions_payload_accepts_queue_ids_contract(self):
+        def apply_callback(_root, _decisions):
+            raise AssertionError("queueIds contract should not call legacy applier")
+
+        payload, status = apply_decisions_payload(
+            Path("."),
+            ["flow_258"],
+            apply_callback,
+        )
+
+        self.assertEqual(200, status)
+        self.assertEqual(["flow_258"], payload["applied"])
+        self.assertEqual(1, payload["accepted"])
 
     def test_apply_manual_decision_updates_json_and_creates_backup(self):
         items = [{"Nome": "Alpha", "Status": "Revisar", "IDs": []}]

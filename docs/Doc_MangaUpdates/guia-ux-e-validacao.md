@@ -16,7 +16,7 @@ Este guia registra as decisoes que devem orientar as proximas telas do fluxo Man
 
 ## Padrao visual
 
-- Titulo principal da obra: 48px a 56px, peso 700, cor `#2E262A`.
+- Titulos internos de pagina: no maximo 32px, peso 700, cor `#2E262A`.
 - Textos secundarios: 13px a 14px, peso 500, cor `#7A6F74`.
 - Rose `#A44D69` deve destacar selecao ou CTA principal.
 - O primeiro candidato recomendado pode ter selo e icone, mas o contorno rose deve indicar item selecionado.

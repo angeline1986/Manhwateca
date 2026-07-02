@@ -22,5 +22,9 @@ export function translateText(payload) {
 }
 
 export function applyMangaUpdatesDecisions(payload) {
-  return postJson("/api/mangaupdates/decisions", payload);
+  return postJson("/api/mangaupdates/decisions/apply", payload);
+}
+
+export function validateMangaUpdatesDecisions(payload) {
+  return postJson("/api/mangaupdates/decisions/validate", payload);
 }

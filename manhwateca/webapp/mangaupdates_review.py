@@ -48,7 +48,8 @@ def _fetch_rows(connection):
                 c.id, c.work_id, c.searched_title,
                 c.candidate_external_id, c.candidate_title,
                 c.confidence, c.status, c.details, c.created_at,
-                m.title AS local_title
+                m.title AS local_title,
+                m.alternative_title
             FROM manhwateca.flow_id_candidates c
             LEFT JOIN manhwateca.vw_mangas m ON m.id = c.work_id
             WHERE c.status IN ('pending_review', 'not_found')
@@ -91,6 +92,7 @@ def _item(row):
         "mangaId": row.get("work_id"),
         "localTitle": title,
         "normalizedTitle": row.get("searched_title") or "",
+        "alternativeTitles": _aliases(row.get("alternative_title")),
         "selectedCandidateId": None,
         "manualMangaupdatesId": None,
         "decisionStatus": status,
@@ -146,3 +148,16 @@ def _float_or_none(value):
 
 def _string_or_none(value):
     return str(value) if value is not None else None
+
+
+def _aliases(value):
+    if not value:
+        return []
+    cleaned = str(value)
+    for separator in ("\n", ","):
+        cleaned = cleaned.replace(separator, "|")
+    return [
+        item.strip()
+        for item in cleaned.split("|")
+        if item.strip()
+    ]

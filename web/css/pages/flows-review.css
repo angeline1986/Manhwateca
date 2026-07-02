@@ -121,7 +121,7 @@
   background: #fffdf9;
 }
 .flow-candidate.selected {
-  border: 2px solid #a44d69;
+  border-color: #a44d69;
   background: #fff8fa;
   box-shadow: 0 10px 24px rgba(164, 77, 105, .12);
 }
@@ -156,8 +156,7 @@
   font-size: 13px;
   font-weight: 500;
 }
-.candidate-seal,
-.candidate-selected {
+.candidate-seal {
   display: inline-block;
   margin-bottom: 8px;
   color: #a44d69;
@@ -174,9 +173,6 @@
 .candidate-score strong {
   font-size: 24px;
   font-weight: 800;
-}
-.candidate-selected {
-  margin-top: 7px;
 }
 .flow-manual-row {
   display: grid;

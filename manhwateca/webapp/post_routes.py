@@ -8,6 +8,10 @@ from manhwateca.webapp.catalog_pending import (
 )
 from manhwateca.webapp.editorial import update_editorial
 from manhwateca.webapp.mangaupdates import apply_review_decisions
+from manhwateca.webapp.mangaupdates_decisions import (
+    apply_decisions_payload,
+    validate_decisions_payload,
+)
 from manhwateca.webapp.mangaupdates_search import search_payload
 from manhwateca.webapp.reviews import save_review_note
 from manhwateca.webapp.translation import translate_to_portuguese
@@ -20,10 +24,25 @@ def handle_direct_post(path, payload, project_root, workflow_manager=None):
             return {"error": "Informe uma observação."}, 400
         save_review_note(project_root, note)
         return {"saved": True}, 201
-    if path == "/api/mangaupdates/decisions":
+    if path in {
+        "/api/mangaupdates/decisions",
+        "/api/mangaupdates/decisions/validate",
+        "/api/mangaupdates/decisions/apply",
+    }:
         decisions = payload.get("decisions")
-        if not isinstance(decisions, list) or not decisions:
+        queue_ids = payload.get("queueIds")
+        has_decisions = isinstance(decisions, list) and bool(decisions)
+        has_queue_ids = isinstance(queue_ids, list) and bool(queue_ids)
+        if not has_decisions and not has_queue_ids:
             return {"error": "Informe ao menos uma decisão."}, 400
+        if path == "/api/mangaupdates/decisions/validate":
+            return validate_decisions_payload(decisions or queue_ids), 200
+        if path == "/api/mangaupdates/decisions/apply":
+            return apply_decisions_payload(
+                project_root,
+                decisions or queue_ids,
+                apply_review_decisions,
+            )
         applied, rejected, backup = apply_review_decisions(
             project_root, decisions
         )

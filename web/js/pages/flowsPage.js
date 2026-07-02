@@ -6,21 +6,14 @@ import {
   startWorkflow as startFlowWorkflow,
 } from "../api/flowsApi.js";
 import { getMangaUpdatesWorks, getReviewItems } from "../api/mangaupdatesApi.js";
-import {
-  applySelectedDecisions,
-  selectCandidate,
-  selectManualId,
-} from "../flows/flowDecisionHandlers.js";
 import { ACTIVE_FLOW_STEPS, FLOW_STAGE_GROUPS } from "../flows/flowConstants.js";
+import { handleFlowsChange, handleFlowsClick } from "../flows/flowsClickHandler.js";
 import {
   currentFlowStage,
   normalizeFlowsPayload,
   withOptimisticStage,
 } from "../flows/flowModel.js";
 import { renderFlowsOverview } from "../flows/flowRenderer.js";
-
-export { normalizeFlowsPayload } from "../flows/flowModel.js";
-export { FLOW_STAGE_GROUPS } from "../flows/flowConstants.js";
 
 export function initFlowsPage(elements, options = {}) {
   let workflowState;
@@ -29,8 +22,10 @@ export function initFlowsPage(elements, options = {}) {
   let activeSubtab = "buscar";
   let worksPage = 1;
   let activeReviewKey = "";
+  let showResolvedReview = false;
   let reviewState = { summary: {}, items: [] };
   let selectedDecisions = {};
+  let savedReviewKeys = new Set();
   let worksState = { kpis: {}, items: [], pagination: {} };
   const showPage = options.showPage || (() => {});
 
@@ -101,8 +96,10 @@ export function initFlowsPage(elements, options = {}) {
     renderFlowsOverview(elements, data, {
       activeSubtab,
       activeReviewKey,
+      showResolvedReview,
       review: reviewState,
-      selectedDecisions,
+      selectedDecisions: activeSubtab === "decisoes" ? readyDecisions() : selectedDecisions,
+      savedReviewKeys: [...savedReviewKeys],
       works: worksState,
     });
     renderLegacyWorkflow(data);
@@ -176,7 +173,49 @@ export function initFlowsPage(elements, options = {}) {
 
   function selectedFlowStage(run) { return FLOW_STAGE_GROUPS.find(group => group.id === activeSubtab) || currentFlowStage(run); }
 
-  function setActiveSubtab(subtab) { activeSubtab = subtab || "buscar"; renderWorkflow(workflowState); }
+  function setActiveSubtab(subtab) {
+    activeSubtab = subtab || "buscar";
+    if (activeSubtab === "pendencias") showResolvedReview = false; if (activeSubtab === "decisoes") setFeedback("");
+    renderWorkflow(workflowState);
+  }
+
+  function itemKey(item) {
+    return item.queueId || item.nome_decisao || item.localTitle || item.nome || "obra";
+  }
+
+  function readyDecisions() {
+    return Object.fromEntries(Object.entries(selectedDecisions).filter(([key]) => savedReviewKeys.has(key)));
+  }
+
+  function nextPendingKey(currentKey) {
+    const pending = (reviewState.items || [])
+      .map(itemKey)
+      .filter(key => key !== currentKey && !savedReviewKeys.has(key));
+    return pending[0] || "";
+  }
+
+  function saveCurrentReviewDecision() {
+    const key = activeReviewKey || itemKey(reviewState.items?.[0] || {});
+    if (!selectedDecisions[key]) {
+      setFeedback("Escolha um candidato ou informe um ID antes de salvar.", "error");
+      return;
+    }
+    savedReviewKeys.add(key);
+    activeReviewKey = nextPendingKey(key);
+    showResolvedReview = false;
+    setFeedback(activeReviewKey ? "Decisão salva. Próxima pendência selecionada." : "Revisão concluída.", "success");
+    renderWorkflow(workflowState);
+  }
+
+  function reviewAgain() {
+    showResolvedReview = true; activeReviewKey = itemKey(reviewState.items?.[0] || {});
+    renderWorkflow(workflowState);
+  }
+
+  function afterApply(updatedDecisions) {
+    selectedDecisions = updatedDecisions;
+    if (!Object.keys(updatedDecisions).length) savedReviewKeys = new Set(); renderWorkflow(workflowState);
+  }
 
   elements.startWorkflow?.addEventListener("click", () => runWorkflow(false));
   elements.resumeWorkflow?.addEventListener("click", () => runWorkflow(true));
@@ -186,63 +225,26 @@ export function initFlowsPage(elements, options = {}) {
   window.addEventListener("manhwateca:flow-subtab", event => setActiveSubtab(event.detail?.subtab));
 
   const area = elements.flowsCurrentCards;
-  area?.addEventListener("click", event => {
-      const subtab = event.target.closest("[data-flow-subtab]");
-      if (subtab) {
-        setActiveSubtab(subtab.dataset.flowSubtab);
-        return;
-      }
-      const worksPageAction = event.target.closest("[data-flow-works-page]");
-      if (worksPageAction) {
-        worksPage = Number(worksPageAction.dataset.flowWorksPage || 1);
-        loadWorkflow();
-        return;
-      }
-      const selectedCandidate = event.target.closest("[data-flow-select-id]");
-      if (selectedCandidate) {
-        selectedDecisions = selectCandidate(selectedDecisions, selectedCandidate);
-        setFeedback("Decisão marcada para aplicação.", "info");
-        renderWorkflow(workflowState);
-        return;
-      }
-      const reviewWork = event.target.closest("[data-flow-review-work]");
-      if (reviewWork) {
-        activeReviewKey = reviewWork.dataset.flowReviewWork;
-        renderWorkflow(workflowState);
-        return;
-      }
-      const manualDecision = event.target.closest("[data-flow-manual-work]");
-      if (manualDecision) {
-        const result = selectManualId(selectedDecisions, manualDecision, area);
-        if (result.error) setFeedback(result.error, "error");
-        else {
-          selectedDecisions = result.selectedDecisions;
-          setFeedback("ID manual marcado para aplicação.", "info");
-          renderWorkflow(workflowState);
-        }
-        return;
-      }
-      if (event.target.closest("[data-flow-apply-decisions]")) {
-        applySelectedDecisions(selectedDecisions, { errorMessage, reload: loadWorkflow, setFeedback })
-          .then(updated => { selectedDecisions = updated; });
-        return;
-      }
-      if (event.target.closest("[data-page]")) {
-        showPage(event.target.closest("[data-page]").dataset.page);
-        return;
-      }
-      if (event.target.closest("[data-flow-cancel]")) {
-        cancelWorkflow();
-        return;
-      }
-      if (event.target.closest("[data-flow-refresh]")) {
-        loadWorkflow();
-        return;
-      }
-      if (event.target.closest("[data-flow-run-stage], [data-flow-start]")) {
-        runCurrentFlowStage();
-      }
-  });
+  area?.addEventListener("click", event => handleFlowsClick(event, {
+    area,
+    afterApply,
+    cancelWorkflow,
+    errorMessage,
+    getSelectedDecisions: () => selectedDecisions,
+    loadWorkflow,
+    readyDecisions,
+    renderWorkflow: () => renderWorkflow(workflowState),
+    reviewAgain,
+    runCurrentFlowStage,
+    saveCurrentReviewDecision,
+    setActiveReviewKey: value => { activeReviewKey = value; },
+    setActiveSubtab,
+    setFeedback,
+    setSelectedDecisions: value => { selectedDecisions = value; },
+    setWorksPage: value => { worksPage = value; },
+    showPage,
+  }));
+  area?.addEventListener("change", event => handleFlowsChange(event, area));
 
   return { loadWorkflow, stopWorkflowPolling };
 }

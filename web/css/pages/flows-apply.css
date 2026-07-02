@@ -1,0 +1,222 @@
+.flow-detail-card:has(.flow-apply-panel) {
+  max-width: 1040px;
+  min-height: auto;
+  margin-inline: auto;
+  padding: 30px 44px 30px;
+}
+.flow-apply-panel {
+  display: grid;
+  gap: 14px;
+}
+.flow-apply-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  border: 1px solid #d6eadf;
+  border-radius: 18px;
+  background: #f0faf5;
+  overflow: hidden;
+}
+.flow-apply-summary,
+.flow-apply-impact {
+  min-height: 132px;
+  padding: 22px 26px;
+}
+.flow-apply-impact {
+  border-left: 1px solid #d6eadf;
+  background: rgba(255,255,255,.54);
+}
+.flow-apply-summary {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+}
+.flow-apply-summary strong {
+  color: #2e262a;
+  font-size: 28px;
+  font-weight: 850;
+  letter-spacing: -.03em;
+}
+.flow-apply-summary span {
+  color: #327558;
+  font-size: 15px;
+  font-weight: 780;
+}
+.flow-apply-impact h4 {
+  margin: 0 0 12px;
+  color: #2e262a;
+  font-size: 15px;
+  font-weight: 850;
+}
+.flow-apply-impact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+}
+.flow-apply-impact-grid div {
+  display: grid;
+  gap: 4px;
+}
+.flow-apply-impact-grid span {
+  color: #7a6f74;
+  font-size: 12px;
+  font-weight: 750;
+}
+.flow-apply-impact-grid strong {
+  color: #2e262a;
+  font-size: 14px;
+  font-weight: 850;
+}
+.flow-apply-panel.blocked .flow-apply-summary {
+  border-color: #f0d8c1;
+  background: #fff8f0;
+}
+.flow-apply-panel.blocked .flow-apply-summary span {
+  color: #9a4d16;
+}
+.flow-apply-panel.empty .flow-apply-summary {
+  border-color: #eadde2;
+  background: #faf7f8;
+}
+.flow-apply-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 0;
+}
+.flow-apply-list-head strong {
+  color: #2e262a;
+  font-size: 16px;
+  font-weight: 850;
+}
+.flow-apply-list-head span {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #7a6f74;
+  font-size: 12px;
+  font-weight: 650;
+}
+.flow-apply-list-head button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+.flow-apply-list-head button:hover {
+  color: #a44d69;
+}
+.flow-apply-checklist {
+  display: grid;
+  max-height: 250px;
+  border-top: 1px solid #eadde2;
+  border-bottom: 1px solid #eadde2;
+  overflow: auto;
+}
+.flow-apply-item {
+  display: grid;
+  grid-template-columns: 24px 24px minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 12px;
+  min-height: 54px;
+  border-bottom: 1px solid #eadde2;
+  background: #fff;
+  padding: 10px 16px;
+}
+.flow-apply-item:last-child {
+  border-bottom: 0;
+}
+.flow-apply-item input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: #a44d69;
+  cursor: pointer;
+}
+.flow-apply-item-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #e8f3ee;
+  color: #2f7556;
+  font-size: 13px;
+  font-weight: 900;
+}
+.flow-apply-item strong {
+  display: block;
+  overflow: hidden;
+  color: #2e262a;
+  font-size: 15px;
+  font-weight: 780;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flow-apply-item small {
+  display: block;
+  margin-top: 3px;
+  color: #7a6f74;
+  font-size: 13px;
+  font-weight: 550;
+}
+.flow-apply-item em {
+  align-self: start;
+  margin-top: 1px;
+  border-radius: 999px;
+  background: #e8f3ee;
+  color: #2f7556;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 850;
+  padding: 6px 10px;
+}
+.flow-apply-item.blocked .flow-apply-item-icon,
+.flow-apply-item.blocked em {
+  background: #fff3df;
+  color: #9a4d16;
+}
+.flow-apply-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 14px;
+  margin-top: 2px;
+  border-top: 1px solid #eadde2;
+  padding-top: 16px;
+}
+.flow-apply-footer .primary-action {
+  min-width: 220px;
+  min-height: 48px;
+  border-radius: 10px;
+  background: #a44d69;
+  box-shadow: 0 8px 24px rgba(164,77,105,.18);
+  font-size: 14px;
+}
+.flow-apply-footer .secondary-action {
+  border: 0;
+  background: transparent;
+  color: #627089;
+  box-shadow: none;
+  font-size: 14px;
+  font-weight: 650;
+}
+@media (max-width: 768px) {
+  .flow-detail-card:has(.flow-apply-panel) {
+    padding: 22px;
+  }
+  .flow-apply-overview,
+  .flow-apply-impact-grid {
+    grid-template-columns: 1fr;
+  }
+  .flow-apply-list-head,
+  .flow-apply-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .flow-apply-footer .primary-action {
+    width: 100%;
+  }
+}

@@ -1,19 +1,25 @@
 import { escapeHtml } from "../utils/html.js";
-import { decisionsTab, pendingTab } from "./pendingReviewPanel.js";
+import { decisionsTab } from "./applyDecisionsPanel.js";
+import { pendingTab } from "./pendingReviewPanel.js";
 
 export function renderResolveIdsPanel({
   activeSubtab,
   activeReviewKey,
+  showResolvedReview,
   review,
   run,
   selectedDecisions,
+  savedReviewKeys,
   works,
 }) {
   const summary = review?.summary || {};
   const metrics = run.results?.resolve_ids?.metrics || {};
   return `
     ${activeSubtab === "buscar" ? searchTab(metrics, summary, review, works) : ""}
-    ${activeSubtab === "pendencias" ? pendingTab(review, selectedDecisions, activeReviewKey) : ""}
+    ${activeSubtab === "pendencias" ? pendingTab(review, selectedDecisions, activeReviewKey, {
+      savedKeys: savedReviewKeys,
+      showResolved: showResolvedReview,
+    }) : ""}
     ${activeSubtab === "decisoes" ? decisionsTab(review, selectedDecisions) : ""}
   `;
 }

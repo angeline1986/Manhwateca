@@ -1,44 +1,45 @@
 import { escapeHtml } from "../utils/html.js";
 
-export function pendingTab(review, selectedDecisions = {}, activeKey = "") {
+export function pendingTab(review, selectedDecisions = {}, activeKey = "", options = {}) {
   const items = review?.items || [];
   if (!items.length) return '<p class="empty">Não há correspondências pendentes.</p>';
-  const selectedItem = items.find(item => itemKey(item) === activeKey) || items[0];
+  const savedKeys = new Set(options.savedKeys || []);
+  const showResolved = Boolean(options.showResolved);
+  const pendingItems = items.filter(item => !savedKeys.has(itemKey(item)));
+  if (!pendingItems.length && !showResolved) return reviewCompleted(savedKeys.size);
+  const visibleItems = showResolved ? items : pendingItems;
+  const selectedItem = visibleItems.find(item => itemKey(item) === activeKey) || visibleItems[0];
   const activeItemKey = itemKey(selectedItem);
   return `
     <div class="flow-review-workbench">
       <aside class="flow-review-queue" aria-label="Obras pendentes">
-        <p>${reviewSummary(items, selectedDecisions)}</p>
-        ${items.map(item => queueItem(item, selectedDecisions, itemKey(item) === activeItemKey)).join("")}
+        <div class="flow-queue-heading">
+          <strong>Fila de revisão</strong>
+          <span>${pendingItems.length} itens aguardando revisão</span>
+        </div>
+        <label class="flow-queue-search">
+          <span>Filtrar por nome</span>
+          <input type="search" placeholder="Filtrar por nome...">
+        </label>
+        <p>${reviewSummary(items, savedKeys)}</p>
+        ${visibleItems.map(item => queueItem(item, selectedDecisions, itemKey(item) === activeItemKey)).join("")}
       </aside>
       ${decisionPanel(selectedItem, selectedDecisions)}
     </div>
   `;
 }
 
-export function decisionsTab(review, selectedDecisions = {}) {
-  const count = Object.keys(selectedDecisions).length;
-  const pending = review?.items?.length || 0;
+function reviewCompleted(count) {
   return `
-    <p class="lead">Aplique no PostgreSQL apenas as decisões já conferidas.</p>
-    <table class="flow-table">
-      <thead><tr><th>Fila</th><th>Decisão</th><th>Impacto</th></tr></thead>
-      <tbody>
-        <tr>
-          <td>Decisões selecionadas</td>
-          <td><span class="flow-badge ${count ? "amb" : "info"}">${count} pronta(s)</span></td>
-          <td>Grava IDs confirmados e remove da fila de revisão</td>
-        </tr>
-        <tr>
-          <td>Correspondências pendentes</td>
-          <td><span class="flow-badge amb">${pending} pendente(s)</span></td>
-          <td>Continuam disponíveis para revisão</td>
-        </tr>
-      </tbody>
-    </table>
-    <button class="primary-action" type="button" data-flow-apply-decisions ${count ? "" : "disabled"}>
-      Aplicar decisões
-    </button>
+    <section class="flow-review-completed">
+      <span class="eyebrow">Revisão concluída</span>
+      <h3>Todas as pendências foram resolvidas.</h3>
+      <p>As ${count} decisões estão prontas para aplicação.</p>
+      <div>
+        <button class="secondary-action" type="button" data-flow-review-again>Revisar novamente</button>
+        <button class="primary-action" type="button" data-flow-subtab="decisoes">Aplicar decisões</button>
+      </div>
+    </section>
   `;
 }
 
@@ -47,6 +48,8 @@ function decisionPanel(item, selectedDecisions) {
   const key = itemKey(item);
   const selected = selectedDecisions[key];
   const candidates = rankedCandidates(item.candidates || []);
+  const normalizedTitle = item.normalizedTitle || item.searchedTitle || "Não informado";
+  const aliases = aliasesText(item);
   return `
     <section class="flow-decision-panel">
       <header>
@@ -54,29 +57,48 @@ function decisionPanel(item, selectedDecisions) {
         <h3>${escapeHtml(title)}</h3>
         ${selected ? '<span class="flow-badge info">Decisão marcada</span>' : ""}
       </header>
-      <div class="flow-review-alert">${escapeHtml(reasonText(candidates))}</div>
-      <h4>Candidatos do MangaUpdates</h4>
+      <div class="flow-info-grid">
+        <div class="flow-info-card">
+          <span>Título normalizado</span>
+          <p>${escapeHtml(normalizedTitle)}</p>
+        </div>
+        <div class="flow-info-card">
+          <span>Aliases locais</span>
+          <p>${escapeHtml(aliases)}</p>
+        </div>
+      </div>
       <div class="flow-candidate-grid">
-        ${candidates.map((candidate, index) => candidateButton(key, candidate, selected, index)).join("")
+        ${candidates.map((candidate, index) => candidateButton(key, title, candidate, selected, index)).join("")
           || '<p class="empty">Sem candidato seguro. Informe um ID manual.</p>'}
       </div>
       <div class="flow-manual-row">
         <label>
-          <span>ID manual</span>
+          <span>Não é nenhum desses? Informe o ID manual</span>
           <input type="number" min="1" placeholder="Ex.: 98765" data-flow-manual-id="${escapeHtml(key)}">
         </label>
-        <button class="secondary-action" type="button" data-flow-manual-work="${escapeHtml(key)}">Usar ID</button>
+        <button class="secondary-action" type="button"
+          data-flow-manual-work="${escapeHtml(key)}"
+          data-flow-local-title="${escapeHtml(title)}">Validar ID</button>
       </div>
       <footer class="flow-decision-actions">
-        <button class="secondary-action" type="button">Ignorar por enquanto</button>
-        <button class="secondary-action" type="button">Marcar sem correspondência</button>
+        <div>
+          <button class="secondary-action" type="button">Ignorar</button>
+          <button class="secondary-action" type="button">Sem correspondência</button>
+        </div>
         <span>${selected ? `Selecionado: ID ${escapeHtml(String(selected.ID))}` : "Nenhuma decisão selecionada"}</span>
-        <button class="primary-action" type="button" data-flow-subtab="decisoes" ${selected ? "" : "disabled"}>
+        <button class="primary-action" type="button" data-flow-save-review ${selected ? "" : "disabled"}>
           Salvar decisão
         </button>
       </footer>
     </section>
   `;
+}
+
+function aliasesText(item) {
+  const aliases = item.alternativeTitles || item.aliases || item.alias || [];
+  if (Array.isArray(aliases) && aliases.length) return aliases.join(", ");
+  if (typeof aliases === "string" && aliases.trim()) return aliases;
+  return "Não informado";
 }
 
 function queueItem(item, selectedDecisions, active) {
@@ -89,11 +111,12 @@ function queueItem(item, selectedDecisions, active) {
       <strong>${escapeHtml(title)}</strong>
       <span>${escapeHtml(reasonLabel(item.reason || item.decisionStatus, candidates.length))} · ${candidates.length}</span>
       ${marked ? "<em>Marcada</em>" : ""}
+      <small class="flow-queue-tip">${escapeHtml(reasonText(candidates))}</small>
     </button>
   `;
 }
 
-function candidateButton(key, candidate, selected, index) {
+function candidateButton(key, localTitle, candidate, selected, index) {
   const id = String(candidate.id || "");
   const active = selected?.ID === Number(id);
   const recommended = index === 0;
@@ -102,17 +125,16 @@ function candidateButton(key, candidate, selected, index) {
     <button class="flow-candidate ${recommended ? "recommended" : ""} ${active ? "selected" : ""}" type="button"
       data-flow-select-id="${escapeHtml(id)}"
       data-flow-work="${escapeHtml(key)}"
+      data-flow-local-title="${escapeHtml(localTitle)}"
       data-flow-title="${escapeHtml(candidate.title || candidate.titulo || "")}">
       <span class="candidate-icon">${recommended ? "☆" : "ID"}</span>
       <span class="candidate-copy">
-        ${recommended ? '<em class="candidate-seal">Recomendado</em>' : ""}
         <strong>${escapeHtml(candidate.title || candidate.titulo || "Sem título")}</strong>
         <small>ID: ${escapeHtml(id || "--")} · ${escapeHtml(candidate.tipo || candidate.type || "MangaUpdates")}</small>
       </span>
       <span class="candidate-score">
         <strong>${score}</strong>
         <small>match</small>
-        ${active ? '<em class="candidate-selected">Selecionado</em>' : ""}
       </span>
     </button>
   `;
@@ -161,8 +183,8 @@ function reasonText(candidates) {
   return "Revise o candidato encontrado antes de marcar a decisão.";
 }
 
-function reviewSummary(items, selectedDecisions) {
-  const ready = Object.keys(selectedDecisions).length;
+function reviewSummary(items, savedKeys) {
+  const ready = savedKeys.size;
   const noResult = items.filter(item => !rankedCandidates(item.candidates || []).length).length;
   return `${items.length} pendentes · ${noResult} sem resultado · ${ready} prontas para aplicar`;
 }
