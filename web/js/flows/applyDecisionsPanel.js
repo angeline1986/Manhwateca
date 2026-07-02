@@ -8,9 +8,14 @@ export function decisionsTab(_review, selectedDecisions = {}) {
   const canApply = ready > 0 && !blocked.length;
   const selected = canApply ? ready : 0;
   return `
-    <section class="flow-apply-panel ${canApply ? "ready" : "blocked"}">
-      <div class="flow-apply-overview">
-        <div class="flow-apply-summary" aria-label="Resumo da aplicação">
+    <article class="flow-apply-panel ${canApply ? "ready" : "blocked"}">
+      <div class="flow-apply-header">
+        <span class="eyebrow">Confirmação</span>
+        <h2>Aplicar decisões</h2>
+        <p>Escolha quais decisões prontas serão gravadas no PostgreSQL.</p>
+      </div>
+      <section class="flow-apply-summary-row">
+        <div class="flow-apply-hero" aria-label="Resumo da aplicação">
           <strong>${ready} ${plural(ready, "obra pronta", "obras prontas")}</strong>
           <span data-flow-apply-selected>${selected} ${plural(selected, "selecionada", "selecionadas")} para aplicar</span>
           <span>${statusIcon(canApply)} ${blocked.length ? `${blocked.length} ${plural(blocked.length, "conflito encontrado", "conflitos encontrados")}` : "Nenhum conflito"}</span>
@@ -25,7 +30,7 @@ export function decisionsTab(_review, selectedDecisions = {}) {
             <div><span>Origem</span><strong>Revisão manual</strong></div>
           </div>
         </div>
-      </div>
+      </section>
       <div class="flow-apply-list-head">
         <strong>Decisões prontas</strong>
         <span>
@@ -34,30 +39,36 @@ export function decisionsTab(_review, selectedDecisions = {}) {
           <button type="button" data-flow-clear-decisions>Limpar seleção</button>
         </span>
       </div>
-      <div class="flow-apply-checklist" aria-label="Decisões prontas">
+      <section class="flow-apply-checklist" aria-label="Decisões prontas">
         ${decisions.map(decisionItem).join("")}
-      </div>
-      <footer class="flow-apply-footer">
+      </section>
+      <p class="flow-apply-helper" data-flow-apply-helper>Você pode desmarcar obras que não deseja aplicar neste lote.</p>
+      <footer class="flow-apply-actions">
         <button class="secondary-action" type="button" data-flow-subtab="pendencias">Voltar para revisão</button>
         <button class="primary-action" type="button" data-flow-apply-decisions ${canApply ? "" : "disabled"}>
           ${canApply ? `Aplicar ${ready} ${plural(ready, "decisão", "decisões")}` : "Selecione decisões"}
         </button>
       </footer>
-    </section>
+    </article>
   `;
 }
 
 function emptyState() {
   return `
-    <section class="flow-apply-panel empty">
-      <div class="flow-apply-summary">
+    <article class="flow-apply-panel empty">
+      <div class="flow-apply-header">
+        <span class="eyebrow">Confirmação</span>
+        <h2>Aplicar decisões</h2>
+        <p>Escolha quais decisões prontas serão gravadas no PostgreSQL.</p>
+      </div>
+      <div class="flow-apply-hero">
         <strong>Nenhuma decisão pronta</strong>
         <span>Volte para a revisão antes de gravar.</span>
       </div>
-      <footer class="flow-apply-footer">
+      <footer class="flow-apply-actions">
         <button class="primary-action" type="button" data-flow-subtab="pendencias">Voltar para Revisar pendências</button>
       </footer>
-    </section>
+    </article>
   `;
 }
 
