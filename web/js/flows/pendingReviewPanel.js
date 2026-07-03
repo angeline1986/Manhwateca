@@ -87,7 +87,7 @@ function decisionPanel(item, selectedDecisions) {
         </div>
         <span>${selected ? `Selecionado: ID ${escapeHtml(String(selected.ID))}` : "Nenhuma decisão selecionada"}</span>
         <button class="primary-action" type="button" data-flow-save-review ${selected ? "" : "disabled"}>
-          Salvar decisão
+          Preparar lote
         </button>
       </footer>
     </section>

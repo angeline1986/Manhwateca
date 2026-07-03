@@ -85,6 +85,8 @@ function renderCurrentPanel(elements, context) {
     group.id === context.activeSubtab
   ) || activeStage;
   const selectedStatus = context.visibleStatuses[selectedStage.id] || "waiting";
+  const content = elements.flowsCurrentTitle?.closest(".flows-journey-content");
+  content?.classList.toggle("flows-apply-mode", context.activeSubtab === "decisoes");
   if (elements.flowsCurrentTitle) {
     elements.flowsCurrentTitle.textContent = journeyTitle(context.activeSubtab, selectedStage);
   }

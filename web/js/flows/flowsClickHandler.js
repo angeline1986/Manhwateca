@@ -6,10 +6,12 @@ import {
 
 export function handleFlowsClick(event, context) {
   if (event.target.closest("[data-flow-select-all-decisions]")) {
+    event.preventDefault();
     setDecisionChecks(context.area, true);
     return updateApplySummary(context.area);
   }
   if (event.target.closest("[data-flow-clear-decisions]")) {
+    event.preventDefault();
     setDecisionChecks(context.area, false);
     return updateApplySummary(context.area);
   }
@@ -109,7 +111,9 @@ function updateApplySummary(area) {
   if (helper) helper.textContent = helperLabel(selected);
   if (!button) return;
   button.disabled = selected === 0;
-  button.textContent = selected ? `Aplicar ${selected} ${selected === 1 ? "decisão" : "decisões"}` : "Selecione decisões";
+  button.innerHTML = selected
+    ? `${boxIcon()} Aplicar ${selected} ${selected === 1 ? "decisão" : "decisões"}`
+    : "Selecione decisões";
 }
 
 function selectedLabel(selected) {
@@ -121,4 +125,14 @@ function helperLabel(selected) {
   if (!selected) return "Selecione ao menos uma decisão para aplicar.";
   if (selected === 1) return "1 decisão será aplicada. As demais continuarão prontas para aplicar depois.";
   return "Você pode desmarcar obras que não deseja aplicar neste lote.";
+}
+
+function boxIcon() {
+  return `
+    <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+      <path d="M3.3 7L12 12l8.7-5" />
+      <path d="M12 22V12" />
+    </svg>
+  `;
 }
