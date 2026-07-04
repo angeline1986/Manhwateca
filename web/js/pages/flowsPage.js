@@ -168,7 +168,13 @@ export function initFlowsPage(elements, options = {}) {
   }
 
   function errorMessage(payload) {
-    return payload?.errors?.[0]?.message || payload?.error || "Não foi possível executar.";
+    return (
+      payload?.errors?.[0]?.message
+      || payload?.error
+      || payload?.rejected?.[0]
+      || payload?.validation?.blocks?.[0]?.reason
+      || "Não foi possível executar."
+    );
   }
 
   function selectedFlowStage(run) { return FLOW_STAGE_GROUPS.find(group => group.id === activeSubtab) || currentFlowStage(run); }

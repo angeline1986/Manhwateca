@@ -201,14 +201,14 @@
   border-top: 1px solid #eadde2;
   padding-top: 14px;
 }
-.flow-apply-actions .btn {
+.flow-apply-actions .btn, .flow-decision-actions .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
 }
-.flow-apply-actions .btn-icon {
+.flow-apply-actions .btn-icon, .flow-decision-actions .btn-icon {
   width: 18px; height: 18px; color: currentColor;
 }
-.flow-apply-actions svg.btn-icon-filled { fill: currentColor; }
-.flow-apply-actions svg.btn-icon:not(.btn-icon-filled) {
+svg.btn-icon-filled { fill: currentColor; }
+svg.btn-icon:not(.btn-icon-filled) {
   fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
 }
 .flow-apply-actions .primary-action {

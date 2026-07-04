@@ -82,6 +82,13 @@ def apply_decisions(decisions, items, ids_path=None, decision_repository=None):
             candidate_title=candidate_title,
             decision=decision,
         )
+        _mark_flow_candidate_applied(
+            repository,
+            name=name,
+            series_id=series_id,
+            candidate_title=candidate_title,
+            decision=decision,
+        )
 
     backup = (
         _persist_changes(items, ids_path)
@@ -227,3 +234,33 @@ def _confirm_mangaupdates_id(
         )
     except Exception:
         return False
+
+
+def _mark_flow_candidate_applied(
+    repository,
+    *,
+    name,
+    series_id,
+    candidate_title,
+    decision,
+):
+    if repository is None or not hasattr(repository, "mark_flow_id_candidates_applied"):
+        return False
+    try:
+        return repository.mark_flow_id_candidates_applied(
+            work_id=_work_id_from_queue_id(decision.get("queueId")),
+            title=name,
+            series_id=series_id,
+            candidate_title=candidate_title,
+        )
+    except Exception:
+        return False
+
+
+def _work_id_from_queue_id(queue_id):
+    if not isinstance(queue_id, str) or not queue_id.startswith("flow_"):
+        return None
+    try:
+        return int(queue_id.removeprefix("flow_"))
+    except ValueError:
+        return None

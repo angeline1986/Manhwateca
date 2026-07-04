@@ -489,6 +489,46 @@ class MangaRepository:
         )
         return True
 
+    def mark_flow_id_candidates_applied(
+        self,
+        *,
+        work_id: int | None = None,
+        title: str | None = None,
+        series_id: int | None = None,
+        candidate_title: str | None = None,
+    ) -> bool:
+        if work_id is None and not title:
+            return False
+
+        clauses = ["status IN ('pending_review', 'not_found')"]
+        params = []
+        if work_id is not None and title:
+            clauses.append("(work_id = %s OR searched_title = %s)")
+            params.extend([work_id, title])
+        elif work_id is not None:
+            clauses.append("work_id = %s")
+            params.append(work_id)
+        else:
+            clauses.append("searched_title = %s")
+            params.append(title)
+
+        details = {
+            "applied": True,
+            "applied_series_id": series_id,
+            "applied_candidate_title": candidate_title,
+        }
+        self._execute(
+            f"""
+            UPDATE flow_id_candidates
+            SET status = 'auto_matched',
+                details = details || %s::jsonb
+            WHERE {' AND '.join(clauses)}
+            """,
+            (json.dumps(details, ensure_ascii=False), *params),
+        )
+        self._connection().commit()
+        return True
+
     def list_decisions(
         self,
         *,

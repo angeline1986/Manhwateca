@@ -41,6 +41,7 @@ class FakeReviewRepository:
     def __init__(self):
         self.confirmed = []
         self.resolved = []
+        self.flow_applied = []
 
     def list_decisions(self, *, decision_type=None, status=None):
         return [{
@@ -79,6 +80,10 @@ class FakeReviewRepository:
 
     def resolve_decision(self, **kwargs):
         self.resolved.append(kwargs)
+        return True
+
+    def mark_flow_id_candidates_applied(self, **kwargs):
+        self.flow_applied.append(kwargs)
         return True
 
 
@@ -246,9 +251,10 @@ class WebMangaUpdatesTests(unittest.TestCase):
         self.assertTrue(payload["jobId"].startswith("mangaupdates-apply-"))
         self.assertEqual(1, payload["accepted"])
 
-    def test_apply_decisions_payload_accepts_queue_ids_contract(self):
-        def apply_callback(_root, _decisions):
-            raise AssertionError("queueIds contract should not call legacy applier")
+    def test_apply_decisions_payload_does_not_fake_queue_ids_contract(self):
+        def apply_callback(_root, decisions):
+            self.assertEqual(["flow_258"], decisions)
+            return [], ["Decisão inválida: era esperado um objeto."], None
 
         payload, status = apply_decisions_payload(
             Path("."),
@@ -256,9 +262,9 @@ class WebMangaUpdatesTests(unittest.TestCase):
             apply_callback,
         )
 
-        self.assertEqual(200, status)
-        self.assertEqual(["flow_258"], payload["applied"])
-        self.assertEqual(1, payload["accepted"])
+        self.assertEqual(422, status)
+        self.assertEqual([], payload["applied"])
+        self.assertEqual(1, payload["blocked"])
 
     def test_apply_manual_decision_updates_json_and_creates_backup(self):
         items = [{"Nome": "Alpha", "Status": "Revisar", "IDs": []}]
@@ -287,6 +293,7 @@ class WebMangaUpdatesTests(unittest.TestCase):
     def test_apply_decision_uses_decision_queue_and_mirrors_json(self):
         repository = FakeReviewRepository()
         decision = {
+            "queueId": "flow_42",
             "Nome": "Alpha",
             "ID": 1,
             "Nome encontrado": "Valid",
@@ -298,17 +305,52 @@ class WebMangaUpdatesTests(unittest.TestCase):
                 [decision],
                 repository_factory=lambda: repository,
             )
-            saved = json.loads(
-                (root / "reports/integrations/buscaIds.json").read_text()
-            )
 
         self.assertEqual(["Alpha"], applied)
         self.assertEqual([], rejected)
-        self.assertIsNotNone(backup)
+        self.assertIsNone(backup)
         self.assertEqual(("Alpha", 1, "Valid"), repository.confirmed[0])
         self.assertEqual("mangaupdates_match", repository.resolved[0]["decision_type"])
-        self.assertEqual(1, saved[0]["ID"])
-        self.assertEqual("Confirmado manualmente", saved[0]["Status"])
+        self.assertEqual({
+            "work_id": 42,
+            "title": "Alpha",
+            "series_id": 1,
+            "candidate_title": "Valid",
+        }, repository.flow_applied[0])
+
+    def test_apply_decision_accepts_flow_candidate_review_source(self):
+        repository = FakeReviewRepository()
+        rows = [{
+            "id": 10,
+            "work_id": 42,
+            "searched_title": "Boredom",
+            "candidate_external_id": "22961829567",
+            "candidate_title": "Boredom",
+            "confidence": Decimal("0.95"),
+            "status": "pending_review",
+            "details": {},
+            "created_at": "2026-07-01 10:00:00",
+            "local_title": "Boredom",
+        }]
+        decision = {
+            "queueId": "flow_42",
+            "Nome": "Boredom",
+            "ID": 22961829567,
+            "Nome encontrado": "Boredom",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            applied, rejected, backup = apply_review_decisions(
+                self._project(directory, []),
+                [decision],
+                repository_factory=lambda: repository,
+                connection_factory=lambda: FakeFlowConnection(rows),
+            )
+
+        self.assertEqual(["Boredom"], applied)
+        self.assertEqual([], rejected)
+        self.assertIsNone(backup)
+        self.assertEqual(("Boredom", 22961829567, "Boredom"), repository.confirmed[0])
+        self.assertEqual(42, repository.flow_applied[0]["work_id"])
 
     def test_status_counts_predicted_api_calls_without_network(self):
         items = [

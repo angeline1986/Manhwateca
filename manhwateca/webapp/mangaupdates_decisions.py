@@ -37,10 +37,7 @@ def apply_decisions_payload(project_root, decisions, apply_callback):
             "validation": validation,
             "rejected": validation["blocks"],
         }, 422
-    if _queue_id_contract(decisions):
-        applied, rejected, backup = list(decisions), [], None
-    else:
-        applied, rejected, backup = apply_callback(project_root, decisions)
+    applied, rejected, backup = apply_callback(project_root, decisions)
     return {
         "jobId": f"mangaupdates-apply-{uuid4().hex[:10]}",
         "accepted": len(applied),

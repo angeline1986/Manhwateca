@@ -125,11 +125,13 @@ def apply_review_decisions(
     project_root,
     decisions,
     repository_factory=MangaRepository,
+    connection_factory=connect,
 ):
     root = Path(project_root)
     path = root / IDS_PATH
     repository = _optional_repository(repository_factory)
-    database_items = _pending_decision_items(repository)
+    flow_items = _flow_review_items(connection_factory)
+    database_items = flow_items or _pending_decision_items(repository)
     if repository is not None:
         return apply_decisions(
             decisions,
@@ -144,6 +146,22 @@ def apply_review_decisions(
         path,
         decision_repository=repository,
     )
+
+
+def _flow_review_items(connection_factory):
+    payload = flow_candidates_review_payload(connection_factory)
+    if payload is None or not payload.get("items"):
+        return []
+    return [
+        {
+            "Nome": item.get("localTitle") or item.get("nome"),
+            "Nome decisão": item.get("nome_decisao") or item.get("localTitle") or item.get("nome"),
+            "Status": "Revisar",
+            "IDs": item.get("candidates") or [],
+            "Nomes relacionados": item.get("alternativeTitles") or [],
+        }
+        for item in payload.get("items", [])
+    ]
 
 
 def _optional_repository(repository_factory=MangaRepository):

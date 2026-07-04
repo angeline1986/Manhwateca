@@ -86,7 +86,8 @@ function decisionPanel(item, selectedDecisions) {
           <button class="secondary-action" type="button">Sem correspondência</button>
         </div>
         <span>${selected ? `Selecionado: ID ${escapeHtml(String(selected.ID))}` : "Nenhuma decisão selecionada"}</span>
-        <button class="primary-action" type="button" data-flow-save-review ${selected ? "" : "disabled"}>
+        <button class="primary-action btn" type="button" data-flow-save-review ${selected ? "" : "disabled"}>
+          ${boxIcon()}
           Preparar lote
         </button>
       </footer>
@@ -187,4 +188,14 @@ function reviewSummary(items, savedKeys) {
   const ready = savedKeys.size;
   const noResult = items.filter(item => !rankedCandidates(item.candidates || []).length).length;
   return `${items.length} pendentes · ${noResult} sem resultado · ${ready} prontas para aplicar`;
+}
+
+function boxIcon() {
+  return `
+    <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+      <path d="M3.3 7L12 12l8.7-5" />
+      <path d="M12 22V12" />
+    </svg>
+  `;
 }

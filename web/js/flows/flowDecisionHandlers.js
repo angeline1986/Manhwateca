@@ -12,12 +12,16 @@ export async function applySelectedDecisions(selectedDecisions, callbacks, queue
     callbacks.setFeedback("Selecione ao menos uma decisão.", "error");
     return selectedDecisions;
   }
-  const validation = await validateMangaUpdatesDecisions({ queueIds });
+  if (!decisions.length) {
+    callbacks.setFeedback("Não foi possível localizar as decisões selecionadas.", "error");
+    return selectedDecisions;
+  }
+  const validation = await validateMangaUpdatesDecisions({ decisions });
   if (!validation.response.ok || !validation.payload.valid) {
     callbacks.setFeedback(callbacks.errorMessage(validation.payload), "error");
     return selectedDecisions;
   }
-  const { response, payload } = await applyMangaUpdatesDecisions({ queueIds, dryRun: false });
+  const { response, payload } = await applyMangaUpdatesDecisions({ decisions, dryRun: false });
   callbacks.setFeedback(
     response.ok ? `${payload.accepted} decisão(ões) aplicada(s).` : callbacks.errorMessage(payload),
     response.ok ? "success" : "error",
