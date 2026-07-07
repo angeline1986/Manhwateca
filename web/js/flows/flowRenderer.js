@@ -5,6 +5,7 @@ import {
 } from "./flowConstants.js";
 import { currentFlowStage, visibleFlowStatuses } from "./flowModel.js";
 import { renderResolveIdsPanel } from "./resolveIdsPanel.js";
+import { renderUpdateMetadataPanel } from "./updateMetadataPanel.js";
 import { escapeHtml } from "../utils/html.js";
 
 export function renderFlowsOverview(elements, data, options = {}) {
@@ -37,6 +38,7 @@ export function renderFlowsOverview(elements, data, options = {}) {
     savedReviewKeys: options.savedReviewKeys || [],
     visibleStatuses,
     review: options.review,
+    metadata: options.metadata,
     works: options.works,
   });
   return { activeStage, activeStatus, visibleRunning };
@@ -87,6 +89,7 @@ function renderCurrentPanel(elements, context) {
   const selectedStatus = context.visibleStatuses[selectedStage.id] || "waiting";
   const content = elements.flowsCurrentTitle?.closest(".flows-journey-content");
   content?.classList.toggle("flows-apply-mode", context.activeSubtab === "decisoes");
+  content?.classList.toggle("flows-metadata-mode", selectedStage.id === "update_metadata");
   if (elements.flowsCurrentTitle) {
     elements.flowsCurrentTitle.textContent = journeyTitle(context.activeSubtab, selectedStage);
   }
@@ -96,9 +99,15 @@ function renderCurrentPanel(elements, context) {
   renderMeta(elements, run, selectedStatus);
   renderTopAction(elements, selectedStage, selectedStatus, visibleRunning);
   if (!elements.flowsCurrentCards) return;
-  elements.flowsCurrentCards.innerHTML = selectedStage.id === "resolve_ids"
-    ? renderResolveIdsPanel(context)
-    : defaultCards(selectedStage, data);
+  if (selectedStage.id === "resolve_ids") {
+    elements.flowsCurrentCards.innerHTML = renderResolveIdsPanel(context);
+    return;
+  }
+  if (selectedStage.id === "update_metadata") {
+    elements.flowsCurrentCards.innerHTML = renderUpdateMetadataPanel(context.metadata);
+    return;
+  }
+  elements.flowsCurrentCards.innerHTML = defaultCards(selectedStage, data);
 }
 
 function journeyTitle(activeSubtab, selectedStage) {

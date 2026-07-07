@@ -43,6 +43,25 @@ class MangaUpdatesWorksPayloadTests(unittest.TestCase):
         self.assertEqual("Beta Love", items[0]["localTitle"])
         self.assertEqual("REVIEW_CANDIDATES", items[0]["nextAction"])
 
+    def test_filters_confirmed_works_for_metadata_sync(self):
+        payload = works_payload(
+            "status=CONFIRMED&page=1&pageSize=10",
+            connection_factory=lambda: FakeConnection([
+                row(1, "Alpha"),
+                row(2, "Boredom", work_code="22961829567"),
+                row(3, "Romance in Romance", work_code="33188442210"),
+            ]),
+        )
+
+        items = payload["data"]["items"]
+        self.assertEqual(2, payload["data"]["pagination"]["total"])
+        self.assertEqual(["Boredom", "Romance in Romance"], [
+            item["localTitle"] for item in items
+        ])
+        self.assertEqual(["22961829567", "33188442210"], [
+            item["mangaupdatesId"] for item in items
+        ])
+
 
 def row(
     manga_id,

@@ -84,6 +84,11 @@ export function handleFlowsClick(event, context) {
 
 export function handleFlowsChange(event, area) {
   if (event.target.matches("[data-flow-apply-choice]")) updateApplySummary(area);
+  if (event.target.matches("[data-metadata-select-all]")) {
+    setMetadataChecks(area, event.target.checked);
+    updateMetadataSummary(area);
+  }
+  if (event.target.matches("[data-metadata-choice]")) updateMetadataSummary(area);
 }
 
 function checkedDecisionIds(area) {
@@ -114,6 +119,38 @@ function updateApplySummary(area) {
   button.textContent = selected
     ? `Aplicar ${selected} ${selected === 1 ? "decisão" : "decisões"}`
     : "Selecione decisões";
+}
+
+function setMetadataChecks(area, checked) {
+  area.querySelectorAll("[data-metadata-choice]")
+    .forEach(input => { input.checked = checked; });
+}
+
+function updateMetadataSummary(area) {
+  const choices = [...area.querySelectorAll("[data-metadata-choice]")];
+  const selected = choices.filter(input => input.checked).length;
+  const fields = choices
+    .filter(input => input.checked)
+    .reduce((total, input) => total + Number(input.dataset.metadataFields || 0), 0);
+  const selectAll = area.querySelector("[data-metadata-select-all]");
+  const selectedText = area.querySelector("[data-metadata-selected]");
+  const fieldsText = area.querySelector("[data-metadata-fields-count]");
+  const skippedText = area.querySelector("[data-metadata-not-selected]");
+  const button = area.querySelector("[data-metadata-run]");
+  if (selectAll) {
+    selectAll.checked = Boolean(choices.length && selected === choices.length);
+    selectAll.indeterminate = selected > 0 && selected < choices.length;
+  }
+  if (selectedText) {
+    selectedText.textContent = `${selected} ${selected === 1 ? "selecionada para sincronizar" : "selecionadas para sincronizar"}`;
+  }
+  if (fieldsText) fieldsText.textContent = String(fields);
+  if (skippedText) skippedText.textContent = String(choices.length - selected);
+  if (!button) return;
+  button.disabled = selected === 0;
+  button.textContent = selected
+    ? `Sincronizar ${selected} ${selected === 1 ? "obra" : "obras"}`
+    : "Selecione obras";
 }
 
 function selectedLabel(selected) {

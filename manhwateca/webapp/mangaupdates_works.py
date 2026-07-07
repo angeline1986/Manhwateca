@@ -11,6 +11,7 @@ from manhwateca.notion_sync.matching import normalize_title
 
 VALID_STATUS = {
     "WITHOUT_ID",
+    "CONFIRMED",
     "READY_TO_SEARCH",
     "CANDIDATES_FOUND",
     "PENDING_REVIEW",
@@ -183,6 +184,8 @@ def _filter_items(items, status, search, only_failed):
     if status in VALID_STATUS:
         if status == "WITHOUT_ID":
             filtered = [item for item in filtered if not item["mangaupdatesId"]]
+        elif status == "CONFIRMED":
+            filtered = [item for item in filtered if item["decisionStatus"] == "CONFIRMED"]
         else:
             filtered = [item for item in filtered if item["decisionStatus"] == status]
     if only_failed:

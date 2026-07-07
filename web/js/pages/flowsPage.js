@@ -5,8 +5,12 @@ import {
   runFlowStage,
   startWorkflow as startFlowWorkflow,
 } from "../api/flowsApi.js";
-import { getMangaUpdatesWorks, getReviewItems } from "../api/mangaupdatesApi.js";
 import { ACTIVE_FLOW_STEPS, FLOW_STAGE_GROUPS } from "../flows/flowConstants.js";
+import {
+  loadMetadataState as fetchMetadataState,
+  loadReviewState as fetchReviewState,
+  loadWorksState as fetchWorksState,
+} from "../flows/flowPageData.js";
 import { handleFlowsChange, handleFlowsClick } from "../flows/flowsClickHandler.js";
 import {
   currentFlowStage,
@@ -27,13 +31,15 @@ export function initFlowsPage(elements, options = {}) {
   let selectedDecisions = {};
   let savedReviewKeys = new Set();
   let worksState = { kpis: {}, items: [], pagination: {} };
+  let metadataState = { kpis: {}, items: [], pagination: {} };
   const showPage = options.showPage || (() => {});
 
   async function loadWorkflow() {
     const [data] = await Promise.all([
       loadFlowsApiState({ includeDetails: true }),
-      loadReviewState(),
-      loadWorksState(),
+      refreshReviewState(),
+      refreshWorksState(),
+      refreshMetadataState(),
     ]);
     renderWorkflow(data);
     scheduleWorkflowPolling(data);
@@ -69,27 +75,9 @@ export function initFlowsPage(elements, options = {}) {
     return data;
   }
 
-  async function loadReviewState() {
-    try {
-      const { payload } = await getReviewItems();
-      reviewState = { summary: payload.summary || {}, items: payload.items || [] };
-    } catch {
-      reviewState = { summary: {}, items: [] };
-    }
-  }
-
-  async function loadWorksState() {
-    try {
-      const { payload } = await getMangaUpdatesWorks({
-        status: "WITHOUT_ID",
-        page: String(worksPage),
-        pageSize: "5",
-      });
-      worksState = payload.data || { kpis: {}, items: [], pagination: {} };
-    } catch {
-      worksState = { kpis: {}, items: [], pagination: {} };
-    }
-  }
+  async function refreshReviewState() { reviewState = await fetchReviewState(); }
+  async function refreshWorksState() { worksState = await fetchWorksState(worksPage); }
+  async function refreshMetadataState() { metadataState = await fetchMetadataState(); }
 
   function renderWorkflow(data) {
     workflowState = data;
@@ -100,6 +88,7 @@ export function initFlowsPage(elements, options = {}) {
       review: reviewState,
       selectedDecisions: activeSubtab === "decisoes" ? readyDecisions() : selectedDecisions,
       savedReviewKeys: [...savedReviewKeys],
+      metadata: metadataState,
       works: worksState,
     });
     renderLegacyWorkflow(data);
