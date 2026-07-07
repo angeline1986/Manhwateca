@@ -83,7 +83,7 @@ export function renderUpdateMetadataPanel(metadata = {}) {
 
 function readyWorks(metadata) {
   return (metadata.items || [])
-    .filter(item => item.mangaupdatesId)
+    .filter(item => item.mangaupdatesId && changedFields(item).length > 0)
     .slice(0, 25);
 }
 
@@ -105,7 +105,7 @@ function metadataItem(work, index) {
         <span class="metadata-item-arrow" aria-hidden="true">▸</span>
       </div>
       <div class="metadata-item-details" id="${itemId}">
-        ${changes.length ? changes.map(changeBlock).join("") : noChangesState()}
+        ${changes.map(changeBlock).join("")}
       </div>
     </article>
   `;
@@ -145,8 +145,7 @@ function normalizeChange(change) {
 }
 
 function hasVisibleChange(change) {
-  return stringifyValue(change.current) !== stringifyValue(change.next)
-    || (!change.current && !change.next);
+  return stringifyValue(change.current) !== stringifyValue(change.next);
 }
 
 function changeBlock(change) {
@@ -167,14 +166,6 @@ function stringifyValue(value) {
   return String(value);
 }
 
-function noChangesState() {
-  return `
-    <div class="metadata-no-changes">
-      As alterações previstas ainda não foram calculadas para esta obra.
-    </div>
-  `;
-}
-
 function impactMetric(label, value, attr) {
   const data = attr ? ` data-${attr}` : "";
   return `<div><span>${escapeHtml(label)}</span><b${data}>${escapeHtml(value)}</b></div>`;
@@ -183,7 +174,8 @@ function impactMetric(label, value, attr) {
 function emptyState() {
   return `
     <div class="metadata-empty">
-      Nenhuma obra com ID confirmado disponível para sincronização.
+      <strong>Nenhuma alteração de metadados encontrada.</strong>
+      <span>Execute a comparação/sincronização prévia antes de atualizar.</span>
     </div>
   `;
 }
