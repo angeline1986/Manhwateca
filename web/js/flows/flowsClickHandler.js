@@ -77,6 +77,11 @@ export function handleFlowsClick(event, context) {
   }
   if (event.target.closest("[data-flow-cancel]")) return context.cancelWorkflow();
   if (event.target.closest("[data-flow-refresh]")) return context.loadWorkflow();
+  const metadataCard = event.target.closest("[data-metadata-expandable]");
+  if (metadataCard) {
+    toggleMetadataDetails(event, metadataCard, context.area);
+    return;
+  }
   if (event.target.closest("[data-flow-run-stage], [data-flow-start]")) {
     context.runCurrentFlowStage();
   }
@@ -151,6 +156,22 @@ function updateMetadataSummary(area) {
   button.textContent = selected
     ? `Sincronizar ${selected} ${selected === 1 ? "obra" : "obras"}`
     : "Selecione obras";
+}
+
+function toggleMetadataDetails(event, card, area) {
+  if (event.target.closest("input, button, a")) return;
+  const expanded = card.getAttribute("aria-expanded") === "true";
+  area.querySelectorAll("[data-metadata-expandable][aria-expanded='true']")
+    .forEach(item => {
+      if (item !== card) setMetadataExpanded(item, false);
+    });
+  setMetadataExpanded(card, !expanded);
+}
+
+function setMetadataExpanded(card, expanded) {
+  card.setAttribute("aria-expanded", expanded ? "true" : "false");
+  const arrow = card.querySelector(".metadata-item-arrow");
+  if (arrow) arrow.textContent = expanded ? "▾" : "▸";
 }
 
 function selectedLabel(selected) {

@@ -171,16 +171,6 @@ function renderTopAction(elements, activeStage, activeStatus, visibleRunning) {
 
 function defaultCards(activeStage, data) {
   const copy = {
-    update_metadata: {
-      title: "Consultar detalhes dos IDs",
-      lead: "Sincronize gêneros, autores, status e dados oficiais dos IDs confirmados.",
-      cards: [
-        ["IDs confirmados", "Disponíveis após revisão"],
-        ["Pendentes", "Aguardam decisão"],
-        ["Metadados", "Prontos para consulta"],
-      ],
-      action: "Consultar detalhes",
-    },
     sync_notion: {
       title: "Sincronizar Notion",
       lead: "Atualize as páginas no Notion depois que os metadados estiverem consistentes.",

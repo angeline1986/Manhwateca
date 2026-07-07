@@ -14,7 +14,7 @@ const FIELDS = [
 export function renderUpdateMetadataPanel(metadata = {}) {
   const works = readyWorks(metadata);
   const selected = works.length;
-  const fields = FIELDS.length;
+  const fields = works.reduce((total, work) => total + changedFields(work).length, 0);
   return `
     <section class="metadata-card">
       <header class="metadata-header">
@@ -36,7 +36,7 @@ export function renderUpdateMetadataPanel(metadata = {}) {
           <h3>Impacto da sincronização</h3>
           <div class="metadata-impact-grid">
             ${impactMetric("Fonte", "MangaUpdates")}
-            ${impactMetric("Campos previstos", String(selected * fields), "metadata-fields-count")}
+            ${impactMetric("Campos previstos", String(fields), "metadata-fields-count")}
             ${impactMetric("Não selecionadas", "0", "metadata-not-selected")}
             ${impactMetric("Tempo estimado", estimateTime(selected))}
           </div>
@@ -45,8 +45,8 @@ export function renderUpdateMetadataPanel(metadata = {}) {
 
       <section class="metadata-fields">
         <div class="metadata-fields-head">
-          <h3>Campos que serão atualizados</h3>
-          <small>Somente metadados. IDs e decisões permanecem intactos.</small>
+          <h3>Campos avaliados na sincronização</h3>
+          <small>Ao expandir uma obra, aparecem apenas campos com alteração real.</small>
         </div>
         <div class="metadata-fields-grid">
           ${FIELDS.map(field => `<span class="metadata-field-chip">${escapeHtml(field)}</span>`).join("")}
@@ -62,8 +62,8 @@ export function renderUpdateMetadataPanel(metadata = {}) {
           <span>${selectedLabel(works.length, "obra pronta", "obras prontas")}</span>
         </div>
 
-        <div class="metadata-list">
-          ${works.length ? works.map(work => metadataItem(work, fields)).join("") : emptyState()}
+        <div class="metadata-list" data-metadata-list>
+          ${works.length ? works.map((work, index) => metadataItem(work, index)).join("") : emptyState()}
         </div>
       </section>
 
@@ -87,18 +87,91 @@ function readyWorks(metadata) {
     .slice(0, 25);
 }
 
-function metadataItem(work, fields) {
+function metadataItem(work, index) {
   const title = work.localTitle || "Obra sem título";
   const id = work.mangaupdatesId || "sem ID";
+  const changes = changedFields(work);
+  const count = changes.length;
+  const itemId = `metadata-item-${index}`;
   return `
-    <label class="metadata-item">
-      <input class="metadata-item-checkbox" type="checkbox" checked data-metadata-choice data-metadata-fields="${fields}">
-      <div class="metadata-item-content">
-        <strong class="metadata-item-title">${escapeHtml(title)}</strong>
-        <span class="metadata-item-meta">ID ${escapeHtml(String(id))} · atualizar ${fields} campos</span>
+    <article class="metadata-item" data-metadata-expandable aria-expanded="false">
+      <div class="metadata-item-header" role="button" tabindex="0" aria-controls="${itemId}">
+        <input class="metadata-item-checkbox" type="checkbox" checked data-metadata-choice data-metadata-fields="${count}" aria-label="Selecionar ${escapeHtml(title)} para sincronização">
+        <div class="metadata-item-content">
+          <strong class="metadata-item-title">${escapeHtml(title)}</strong>
+          <span class="metadata-item-meta">ID ${escapeHtml(String(id))} · ${selectedLabel(count, "campo alterado", "campos alterados")}</span>
+        </div>
+        <span class="metadata-badge">Pronta</span>
+        <span class="metadata-item-arrow" aria-hidden="true">▸</span>
       </div>
-      <span class="metadata-badge">Pronta</span>
-    </label>
+      <div class="metadata-item-details" id="${itemId}">
+        ${changes.length ? changes.map(changeBlock).join("") : noChangesState()}
+      </div>
+    </article>
+  `;
+}
+
+function changedFields(work) {
+  const rawChanges = (
+    work.metadataChanges
+    || work.changes
+    || work.previewChanges
+    || work.diff
+    || []
+  );
+  if (Array.isArray(rawChanges) && rawChanges.length) {
+    return rawChanges
+      .map(normalizeChange)
+      .filter(change => change.field && hasVisibleChange(change));
+  }
+  const changed = work.changedFields || work.fieldsChanged || [];
+  if (Array.isArray(changed) && changed.length) {
+    return changed
+      .map(field => ({ field, current: "", next: "" }))
+      .filter(change => change.field);
+  }
+  return [];
+}
+
+function normalizeChange(change) {
+  if (typeof change === "string") {
+    return { field: change, current: "", next: "" };
+  }
+  return {
+    field: change.field || change.name || change.label || "",
+    current: change.current ?? change.before ?? change.from ?? "",
+    next: change.next ?? change.after ?? change.to ?? "",
+  };
+}
+
+function hasVisibleChange(change) {
+  return stringifyValue(change.current) !== stringifyValue(change.next)
+    || (!change.current && !change.next);
+}
+
+function changeBlock(change) {
+  const current = stringifyValue(change.current);
+  const next = stringifyValue(change.next);
+  return `
+    <section class="metadata-change">
+      <strong>${escapeHtml(change.field)}</strong>
+      ${current ? `<p class="metadata-change-value">${escapeHtml(current)}</p><span class="metadata-change-arrow">↓</span>` : ""}
+      ${next ? `<p class="metadata-change-value metadata-change-next">${escapeHtml(next)}</p>` : '<p class="metadata-change-value metadata-change-next">Será atualizado com o valor oficial.</p>'}
+    </section>
+  `;
+}
+
+function stringifyValue(value) {
+  if (Array.isArray(value)) return value.filter(Boolean).join("\n");
+  if (value === null || value === undefined) return "";
+  return String(value);
+}
+
+function noChangesState() {
+  return `
+    <div class="metadata-no-changes">
+      As alterações previstas ainda não foram calculadas para esta obra.
+    </div>
   `;
 }
 
