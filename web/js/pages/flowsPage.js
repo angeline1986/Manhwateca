@@ -145,15 +145,22 @@ export function initFlowsPage(elements, options = {}) {
     const payload = stage.id === "update_metadata"
       ? { selected_ids: selectedMetadataWorkIds() }
       : {};
+    const metadataSelectionCount = payload.selected_ids?.length || 0;
     pendingRequest = true;
-    setFeedback(`Solicitando execução de ${stage.title}. Aguarde...`, "info");
+    setFeedback(stage.id === "update_metadata"
+      ? metadataRunningMessage(metadataSelectionCount)
+      : `Solicitando execução de ${stage.title}. Aguarde...`, "info");
     renderWorkflow(withOptimisticStage(workflowState, stage.id));
     try {
       const { response, payload: responsePayload } = await runFlowStage(stage.id, payload);
       if (response.ok) {
-        setFeedback(`${stage.title} em execução. Aguarde...`, "info");
+        setFeedback(stage.id === "update_metadata"
+          ? metadataRunningMessage(metadataSelectionCount)
+          : `${stage.title} em execução. Aguarde...`, "info");
         await refreshAfterStage(stage.id);
-        setFeedback(`${stage.title} finalizada.`, "success");
+        setFeedback(stage.id === "update_metadata"
+          ? metadataSuccessMessage(metadataSelectionCount)
+          : `${stage.title} finalizada.`, "success");
       } else {
         setFeedback(errorMessage(responsePayload), "error");
         await loadWorkflow();
@@ -164,6 +171,22 @@ export function initFlowsPage(elements, options = {}) {
     } finally {
       pendingRequest = false;
     }
+  }
+
+  function metadataRunningMessage(count) {
+    return count > 0
+      ? `🔄 Sincronizando ${selectedLabel(count, "obra", "obras")}...`
+      : "🔄 Sincronizando metadados...";
+  }
+
+  function metadataSuccessMessage(count) {
+    return count > 0
+      ? `✅ ${selectedLabel(count, "obra sincronizada", "obras sincronizadas")} com sucesso.`
+      : "✅ Metadados atualizados com sucesso.";
+  }
+
+  function selectedLabel(count, singular, plural) {
+    return `${count} ${count === 1 ? singular : plural}`;
   }
 
   function selectedMetadataWorkIds() {
