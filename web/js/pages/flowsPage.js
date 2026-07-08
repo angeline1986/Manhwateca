@@ -226,7 +226,8 @@ export function initFlowsPage(elements, options = {}) {
 
   function setActiveSubtab(subtab) {
     activeSubtab = subtab || "buscar";
-    if (activeSubtab === "pendencias") showResolvedReview = false; if (activeSubtab === "decisoes") setFeedback("");
+    setFeedback("");
+    if (activeSubtab === "pendencias") showResolvedReview = false;
     renderWorkflow(workflowState);
   }
 
