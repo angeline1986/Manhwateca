@@ -124,11 +124,12 @@ def _fetch_rows(connection):
 def _pending_metadata(row):
     """Calcula quais campos obrigatórios estão ausentes para obras com ID confirmado."""
     pending = []
-    # Só faz sentido falar em metadados se a obra já tem um ID (work_code)
     if row.get("work_code"):
-        if not row.get("mangaupdates_url"):
+        url = str(row.get("mangaupdates_url") or "").strip()
+        cover = str(row.get("cover_url") or "").strip()
+        if not url:
             pending.append("mangaupdatesUrl")
-        if not row.get("cover_url"):
+        if not cover:
             pending.append("cover")
     return pending
 

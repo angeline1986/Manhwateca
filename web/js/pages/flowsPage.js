@@ -118,6 +118,20 @@ export function initFlowsPage(elements, options = {}) {
     await loadWorkflow();
   }
 
+  async function refreshAfterStage(stageId) {
+    const maxAttempts = stageId === "update_metadata" ? 5 : 2;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      await loadWorkflow();
+      const run = workflowState?.run || { status: "idle", results: {} };
+      const stageResult = run.results?.[stageId];
+      const completed = stageResult?.status === "completed"
+        || stageResult?.status === "completed_with_warnings"
+        || run.status !== "running";
+      if (completed) break;
+      await new Promise(resolve => setTimeout(resolve, 800));
+    }
+  }
+
   async function runCurrentFlowStage() {
     const run = workflowState?.run || { status: "idle", results: {} };
     const stage = selectedFlowStage(run);
@@ -135,7 +149,11 @@ export function initFlowsPage(elements, options = {}) {
     try {
       const { response, payload: responsePayload } = await runFlowStage(stage.id, payload);
       setFeedback(response.ok ? `${stage.title} finalizada.` : errorMessage(responsePayload), response.ok ? "success" : "error");
-      await loadWorkflow();
+      if (response.ok) {
+        await refreshAfterStage(stage.id);
+      } else {
+        await loadWorkflow();
+      }
     } catch (error) {
       setFeedback(`Falha ao solicitar ${stage.title}: ${error.message || "erro desconhecido"}.`, "error");
       await loadWorkflow();
