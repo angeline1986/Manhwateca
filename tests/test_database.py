@@ -176,6 +176,7 @@ class FakeConnection:
         self.inserted = []
         self.updated = []
         self.sync_events = []
+        self.commits = []
         self.decision_queue_schema = [
             ("id", "bigint"),
             ("decision_type", "character varying"),
@@ -193,6 +194,9 @@ class FakeConnection:
 
     def cursor(self):
         return FakeCursor(self)
+
+    def commit(self):
+        self.commits.append(True)
 
 
 class DatabaseConnectionTests(unittest.TestCase):
@@ -490,6 +494,7 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertEqual("123", params[0])
         self.assertEqual("Official Alpha", params[1])
         self.assertEqual(7, params[2])
+        self.assertEqual(1, len(connection.commits))
 
     def test_updates_notion_sync_fields_by_page_id(self):
         connection = FakeConnection()

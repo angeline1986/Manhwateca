@@ -69,11 +69,11 @@ class OfficialFlowBackend:
             raise RuntimeError("Workflow não pôde ser iniciado.")
         return execution
 
-    def run_stage(self, stage: StageId):
+    def run_stage(self, stage: StageId, payload=None):
         started = threading.Event()
         thread = threading.Thread(
             target=self._run_stage,
-            args=(stage, started),
+            args=(stage, started, payload),
             daemon=True,
         )
         thread.start()
@@ -105,11 +105,12 @@ class OfficialFlowBackend:
             logger.exception("Falha ao executar Workflow em background.")
             started.set()
 
-    def _run_stage(self, stage: StageId, started: threading.Event) -> None:
+    def _run_stage(self, stage: StageId, started: threading.Event, payload=None) -> None:
         try:
             self._orchestrator(on_stage_started=started.set).run_stage(
                 stage,
                 finish_after_stage=True,
+                payload=payload,
             )
         except Exception:
             logger.exception("Falha ao executar etapa de Workflow em background.")
@@ -175,7 +176,7 @@ class DeferredMangaUpdatesIntegration:
     def search_series(self) -> SeriesSearchResult:
         return SeriesSearchResult()
 
-    def get_metadata(self) -> MetadataUpdateResult:
+    def get_metadata(self, selected_ids=None) -> MetadataUpdateResult:
         return MetadataUpdateResult()
 
 

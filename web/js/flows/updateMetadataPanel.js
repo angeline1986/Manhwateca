@@ -14,13 +14,18 @@ const FIELDS = [
 export function renderUpdateMetadataPanel(metadata = {}) {
   const works = readyWorks(metadata);
   const selected = works.length;
-  const fields = works.reduce((total, work) => total + changedFields(work).length, 0);
+  
+  // Calcula o total de campos pendentes somando o tamanho do array pendingMetadata de cada obra
+  const totalPendingFields = works.reduce((total, work) => {
+    return total + (work.pendingMetadata ? work.pendingMetadata.length : 0);
+  }, 0);
+
   return `
     <section class="metadata-card">
       <header class="metadata-header">
         <span class="eyebrow">Confirmação</span>
         <h2>Atualizar metadados</h2>
-        <p>Confirme quais obras terão dados oficiais atualizados. Esta etapa não altera decisões nem troca IDs.</p>
+        <p>Confirme quais obras terão dados oficiais atualizados. Esta etapa utiliza o ID confirmado para buscar informações completas.</p>
       </header>
 
       <section class="metadata-confirm-row">
@@ -29,14 +34,14 @@ export function renderUpdateMetadataPanel(metadata = {}) {
           <p>
             <span data-metadata-selected>${selectedLabel(selected, "selecionada para sincronizar", "selecionadas para sincronizar")}</span><br>
             ✓ IDs confirmados<br>
-            ✓ Nenhum conflito
+            ✓ Metadados pendentes identificados
           </p>
         </div>
         <div class="metadata-impact">
           <h3>Impacto da sincronização</h3>
           <div class="metadata-impact-grid">
             ${impactMetric("Fonte", "MangaUpdates")}
-            ${impactMetric("Campos previstos", String(fields), "metadata-fields-count")}
+            ${impactMetric("Campos pendentes", String(totalPendingFields), "metadata-fields-count")}
             ${impactMetric("Não selecionadas", "0", "metadata-not-selected")}
             ${impactMetric("Tempo estimado", estimateTime(selected))}
           </div>
@@ -46,7 +51,7 @@ export function renderUpdateMetadataPanel(metadata = {}) {
       <section class="metadata-fields">
         <div class="metadata-fields-head">
           <h3>Campos avaliados na sincronização</h3>
-          <small>Ao expandir uma obra, aparecem apenas campos com alteração real.</small>
+          <small>Ao expandir uma obra, aparecem os campos que serão preenchidos ou atualizados.</small>
         </div>
         <div class="metadata-fields-grid">
           ${FIELDS.map(field => `<span class="metadata-field-chip">${escapeHtml(field)}</span>`).join("")}
@@ -68,7 +73,7 @@ export function renderUpdateMetadataPanel(metadata = {}) {
       </section>
 
       <div class="metadata-notice">
-        A sincronização consulta dados oficiais e registra log. Nenhuma obra sem ID confirmado será alterada.
+        A sincronização consulta os dados oficiais via API e atualiza os registros locais.
       </div>
 
       <footer class="metadata-actions">
@@ -82,88 +87,54 @@ export function renderUpdateMetadataPanel(metadata = {}) {
 }
 
 function readyWorks(metadata) {
+  // A regra agora é: tem que ter ID do MangaUpdates e ter pelo menos um metadado pendente
   return (metadata.items || [])
-    .filter(item => item.mangaupdatesId && changedFields(item).length > 0)
+    .filter(item => item.mangaupdatesId && item.pendingMetadata && item.pendingMetadata.length > 0)
     .slice(0, 25);
 }
 
 function metadataItem(work, index) {
   const title = work.localTitle || "Obra sem título";
   const id = work.mangaupdatesId || "sem ID";
-  const changes = changedFields(work);
-  const count = changes.length;
+  const pending = work.pendingMetadata || [];
+  const count = pending.length;
   const itemId = `metadata-item-${index}`;
+
   return `
     <article class="metadata-item" data-metadata-expandable aria-expanded="false">
       <div class="metadata-item-header" role="button" tabindex="0" aria-controls="${itemId}">
-        <input class="metadata-item-checkbox" type="checkbox" checked data-metadata-choice data-metadata-fields="${count}" aria-label="Selecionar ${escapeHtml(title)} para sincronização">
+        <input class="metadata-item-checkbox" type="checkbox" checked data-metadata-choice data-metadata-work-id="${escapeHtml(String(work.mangaId || work.id || ""))}" data-metadata-fields="${count}" aria-label="Selecionar ${escapeHtml(title)}">
         <div class="metadata-item-content">
           <strong class="metadata-item-title">${escapeHtml(title)}</strong>
-          <span class="metadata-item-meta">ID ${escapeHtml(String(id))} · ${selectedLabel(count, "campo alterado", "campos alterados")}</span>
+          <span class="metadata-item-meta">ID ${escapeHtml(String(id))} · ${selectedLabel(count, "campo pendente", "campos pendentes")}</span>
         </div>
         <span class="metadata-badge">Pronta</span>
         <span class="metadata-item-arrow" aria-hidden="true">▸</span>
       </div>
       <div class="metadata-item-details" id="${itemId}">
-        ${changes.map(changeBlock).join("")}
+        ${pending.map(field => pendingBlock(field)).join("")}
       </div>
     </article>
   `;
 }
 
-function changedFields(work) {
-  const rawChanges = (
-    work.metadataChanges
-    || work.changes
-    || work.previewChanges
-    || work.diff
-    || []
-  );
-  if (Array.isArray(rawChanges) && rawChanges.length) {
-    return rawChanges
-      .map(normalizeChange)
-      .filter(change => change.field && hasVisibleChange(change));
-  }
-  const changed = work.changedFields || work.fieldsChanged || [];
-  if (Array.isArray(changed) && changed.length) {
-    return changed
-      .map(field => ({ field, current: "", next: "" }))
-      .filter(change => change.field);
-  }
-  return [];
-}
-
-function normalizeChange(change) {
-  if (typeof change === "string") {
-    return { field: change, current: "", next: "" };
-  }
-  return {
-    field: change.field || change.name || change.label || "",
-    current: change.current ?? change.before ?? change.from ?? "",
-    next: change.next ?? change.after ?? change.to ?? "",
+/**
+ * Renderiza o bloco de informação de um campo pendente.
+ */
+function pendingBlock(fieldKey) {
+  const mapping = {
+    'cover': { label: 'Capa', detail: 'A imagem será buscada no MangaUpdates e salva localmente.' },
+    'mangaupdatesUrl': { label: 'URL MangaUpdates', detail: 'O link oficial será gerado com base no ID confirmado.' }
   };
-}
 
-function hasVisibleChange(change) {
-  return stringifyValue(change.current) !== stringifyValue(change.next);
-}
+  const info = mapping[fieldKey] || { label: fieldKey, detail: 'Este campo será atualizado com os dados oficiais.' };
 
-function changeBlock(change) {
-  const current = stringifyValue(change.current);
-  const next = stringifyValue(change.next);
   return `
     <section class="metadata-change">
-      <strong>${escapeHtml(change.field)}</strong>
-      ${current ? `<p class="metadata-change-value">${escapeHtml(current)}</p><span class="metadata-change-arrow">↓</span>` : ""}
-      ${next ? `<p class="metadata-change-value metadata-change-next">${escapeHtml(next)}</p>` : '<p class="metadata-change-value metadata-change-next">Será atualizado com o valor oficial.</p>'}
+      <strong>${escapeHtml(info.label)}</strong>
+      <p class="metadata-change-value metadata-change-next">${escapeHtml(info.detail)}</p>
     </section>
   `;
-}
-
-function stringifyValue(value) {
-  if (Array.isArray(value)) return value.filter(Boolean).join("\n");
-  if (value === null || value === undefined) return "";
-  return String(value);
 }
 
 function impactMetric(label, value, attr) {
@@ -174,8 +145,8 @@ function impactMetric(label, value, attr) {
 function emptyState() {
   return `
     <div class="metadata-empty">
-      <strong>Nenhuma alteração de metadados encontrada.</strong>
-      <span>Execute a comparação/sincronização prévia antes de atualizar.</span>
+      <strong>Nenhuma obra com metadados pendentes encontrada.</strong>
+      <span>Obras sem ID confirmado ou que já possuem capa e URL não aparecem aqui.</span>
     </div>
   `;
 }
@@ -186,5 +157,6 @@ function selectedLabel(count, singular, plural) {
 
 function estimateTime(count) {
   if (!count) return "~0s";
-  return `~${Math.max(10, count * 18)}s`;
+  // Estimativa baseada em 1.5s por obra para buscar metadados
+  return `~${Math.max(5, count * 2)}s`;
 }

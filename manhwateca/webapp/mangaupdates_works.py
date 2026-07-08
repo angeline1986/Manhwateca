@@ -12,6 +12,7 @@ from manhwateca.notion_sync.matching import normalize_title
 VALID_STATUS = {
     "WITHOUT_ID",
     "CONFIRMED",
+    "METADATA_PENDING",  # Adicionado para suportar a nova tela
     "READY_TO_SEARCH",
     "CANDIDATES_FOUND",
     "PENDING_REVIEW",
@@ -101,6 +102,7 @@ def _fetch_rows(connection):
                 m.alternative_title,
                 m.work_code,
                 m.mangaupdates_url,
+                m.cover_url,                -- ADICIONADO: m.cover_url
                 m.created_at,
                 m.updated_at,
                 lc.status AS latest_candidate_status,
@@ -119,9 +121,23 @@ def _fetch_rows(connection):
         return list(cursor.fetchall())
 
 
+def _pending_metadata(row):
+    """Calcula quais campos obrigatórios estão ausentes para obras com ID confirmado."""
+    pending = []
+    # Só faz sentido falar em metadados se a obra já tem um ID (work_code)
+    if row.get("work_code"):
+        if not row.get("mangaupdates_url"):
+            pending.append("mangaupdatesUrl")
+        if not row.get("cover_url"):
+            pending.append("cover")
+    return pending
+
+
 def _row_to_item(row):
     decision_status = _decision_status(row)
     candidates_count = int(row.get("candidates_count") or 0)
+    pending_metadata = _pending_metadata(row)
+    
     return {
         "id": f"manga_{row['id']}",
         "mangaId": row["id"],
@@ -131,6 +147,9 @@ def _row_to_item(row):
         "folderPath": None,
         "mangaupdatesId": row.get("work_code"),
         "mangaupdatesUrl": row.get("mangaupdates_url"),
+        "coverUrl": row.get("cover_url"),             # ADICIONADO
+        "pendingMetadata": pending_metadata,          # ADICIONADO
+        "metadataStatus": "PENDING" if pending_metadata else "UP_TO_DATE", # ADICIONADO
         "decisionStatus": decision_status,
         "detailsStatus": "PENDING" if row.get("work_code") else "NOT_REQUIRED",
         "matchConfidence": None,
@@ -186,10 +205,18 @@ def _filter_items(items, status, search, only_failed):
             filtered = [item for item in filtered if not item["mangaupdatesId"]]
         elif status == "CONFIRMED":
             filtered = [item for item in filtered if item["decisionStatus"] == "CONFIRMED"]
+        elif status == "METADATA_PENDING":
+            # Nova regra: Obras confirmadas que possuem pelo menos um campo pendente
+            filtered = [
+                item for item in filtered 
+                if item["mangaupdatesId"] and len(item.get("pendingMetadata", [])) > 0
+            ]
         else:
             filtered = [item for item in filtered if item["decisionStatus"] == status]
+    
     if only_failed:
         filtered = [item for item in filtered if item["decisionStatus"] == "ERROR"]
+    
     if search:
         normalized = normalize_title(search)
         filtered = [
@@ -226,3 +253,4 @@ def _truthy(value):
 
 def _string_or_none(value):
     return str(value) if value is not None else None
+

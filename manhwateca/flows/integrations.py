@@ -176,7 +176,7 @@ class MangaUpdatesIntegration(Protocol):
     def search_series(self) -> SeriesSearchResult:
         ...
 
-    def get_metadata(self) -> MetadataUpdateResult:
+    def get_metadata(self, selected_ids=None) -> MetadataUpdateResult:
         ...
 
 

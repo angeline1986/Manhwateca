@@ -92,7 +92,7 @@ class FlowController:
                 "Solicitação de execução de etapa.",
                 details={"stage": stage_slug},
             )
-            return self._run(lambda: self._run_stage(stage_slug), status=202)
+            return self._run(lambda: self._run_stage(stage_slug, payload), status=202)
         return None
 
     def _current_execution(self):
@@ -132,13 +132,13 @@ class FlowController:
         )
         return [_integration_to_dict(identifier, check) for identifier, check in checks]
 
-    def _run_stage(self, stage_slug: str):
+    def _run_stage(self, stage_slug: str, payload: dict | None = None):
         try:
             stage = StageId(stage_slug)
         except ValueError as error:
             raise ValueError("Etapa de Fluxos inválida.") from error
         if hasattr(self.backend, "run_stage"):
-            return self.backend.run_stage(stage)
+            return self.backend.run_stage(stage, payload=payload)
         return self.backend.start(stage=stage)
 
     def _cancel(self):

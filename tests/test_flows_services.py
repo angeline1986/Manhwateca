@@ -73,6 +73,14 @@ class FlowStageServicesTests(unittest.TestCase):
         self.assertEqual(1, result.skipped)
         self.assertEqual(["get_metadata"], integrations.mangaupdates.calls)
 
+    def test_update_metadata_forwards_selected_ids_to_integration(self):
+        integrations = fake_integrations()
+
+        result = UpdateMetadataService(integrations).execute(selected_ids=[7, 9])
+
+        self.assertEqual(6, result.processed)
+        self.assertEqual([7, 9], integrations.mangaupdates.last_selected_ids)
+
     def test_sync_notion_uses_notion_sync(self):
         integrations = fake_integrations()
         result = SyncNotionService(integrations).execute()
@@ -127,13 +135,15 @@ class FakeMangaUpdatesIntegration(FakeDatabaseIntegration):
     def __init__(self, valid=True):
         super().__init__(valid)
         self.calls = []
+        self.last_selected_ids = None
 
     def search_series(self):
         self.calls.append("search_series")
         return SeriesSearchResult(searched=10, matched=7, pending=1, not_found=2)
 
-    def get_metadata(self):
+    def get_metadata(self, selected_ids=None):
         self.calls.append("get_metadata")
+        self.last_selected_ids = selected_ids
         return MetadataUpdateResult(updated=6, skipped=1)
 
 

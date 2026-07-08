@@ -61,6 +61,19 @@ class FlowControllerTests(unittest.TestCase):
         self.assertEqual(("run_stage", StageId.RESOLVE_IDS), backend.calls[-1])
         self.assertEqual("running", payload["data"]["execution"]["status"])
 
+    def test_run_stage_forwards_selected_ids_to_backend(self):
+        backend = FakeBackend()
+        controller = FlowController(backend)
+
+        payload, status = controller.handle_post(
+            "/api/flows/stages/update_metadata/run",
+            {"selected_ids": [7, 9]},
+        )
+
+        self.assertEqual(202, status)
+        self.assertEqual([7, 9], backend.last_payload["selected_ids"])
+        self.assertEqual("running", payload["data"]["execution"]["status"])
+
     def test_invalid_stage_returns_bad_request(self):
         controller = FlowController(FakeBackend())
 
@@ -183,6 +196,7 @@ class FlowControllerTests(unittest.TestCase):
 class FakeBackend:
     def __init__(self, latest_normalization="plan"):
         self.calls = []
+        self.last_payload = None
         self._latest_normalization = latest_normalization
 
     def get_status(self):
@@ -192,8 +206,9 @@ class FakeBackend:
         self.calls.append("start")
         return _execution(WorkflowStatus.RUNNING)
 
-    def run_stage(self, stage):
+    def run_stage(self, stage, payload=None):
         self.calls.append(("run_stage", stage))
+        self.last_payload = payload
         return _execution(WorkflowStatus.RUNNING)
 
     def cancel(self):

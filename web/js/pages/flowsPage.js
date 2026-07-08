@@ -126,12 +126,15 @@ export function initFlowsPage(elements, options = {}) {
       showPage("mangaupdates");
       return;
     }
+    const payload = stage.id === "update_metadata"
+      ? { selected_ids: selectedMetadataWorkIds() }
+      : {};
     pendingRequest = true;
     setFeedback(`Solicitando execução de ${stage.title}. Aguarde...`, "info");
     renderWorkflow(withOptimisticStage(workflowState, stage.id));
     try {
-      const { response, payload } = await runFlowStage(stage.id);
-      setFeedback(response.ok ? `${stage.title} finalizada.` : errorMessage(payload), response.ok ? "success" : "error");
+      const { response, payload: responsePayload } = await runFlowStage(stage.id, payload);
+      setFeedback(response.ok ? `${stage.title} finalizada.` : errorMessage(responsePayload), response.ok ? "success" : "error");
       await loadWorkflow();
     } catch (error) {
       setFeedback(`Falha ao solicitar ${stage.title}: ${error.message || "erro desconhecido"}.`, "error");
@@ -139,6 +142,14 @@ export function initFlowsPage(elements, options = {}) {
     } finally {
       pendingRequest = false;
     }
+  }
+
+  function selectedMetadataWorkIds() {
+    const area = elements.flowsCurrentCards;
+    if (!area) return [];
+    return [...area.querySelectorAll("[data-metadata-choice]:checked")]
+      .map(input => Number(input.dataset.metadataWorkId))
+      .filter(value => Number.isFinite(value) && value > 0);
   }
 
   async function cancelWorkflow() {

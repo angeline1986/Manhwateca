@@ -133,6 +133,7 @@ class WorkflowOrchestrator:
         execution: WorkflowExecution | None = None,
         *,
         finish_after_stage: bool = False,
+        payload: dict | None = None,
     ) -> WorkflowExecution:
         execution = execution or self.get_status()
         if execution is None:
@@ -209,7 +210,10 @@ class WorkflowOrchestrator:
             details={"service": service.__class__.__name__},
         ))
         try:
-            result = service.finalize(service.execute())
+            stage_kwargs = {}
+            if stage_id == StageId.UPDATE_METADATA and payload:
+                stage_kwargs["selected_ids"] = payload.get("selected_ids")
+            result = service.finalize(service.execute(**stage_kwargs))
         except Exception as error:
             result = StageResult(
                 errors=(FlowError(message=str(error), code="FLOW_STAGE_FAILED"),)

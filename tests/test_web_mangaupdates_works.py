@@ -29,6 +29,31 @@ class MangaUpdatesWorksPayloadTests(unittest.TestCase):
             [item["decisionStatus"] for item in data["items"]],
         )
 
+    def test_filters_metadata_pending_status(self):
+        """Garante que apenas obras com campos faltando aparecem em METADATA_PENDING"""
+        payload = works_payload(
+            "status=METADATA_PENDING",
+            connection_factory=lambda: FakeConnection([
+                # Obra 1: Confirmada mas falta URL (Deve aparecer)
+                row(1, "Pendente de URL", work_code="101", mangaupdates_url=None),
+                # Obra 2: Confirmada mas falta Capa (Deve aparecer)
+                row(2, "Pendente de Capa", work_code="102", cover_url=None),
+                # Obra 3: Confirmada e completa (NÃO deve aparecer)
+                row(3, "Completa", work_code="103", mangaupdates_url="http://...", cover_url="img.jpg"),
+                # Obra 4: Sem ID (NÃO deve aparecer)
+                row(4, "Sem ID", work_code=None),
+            ]),
+        )
+
+        items = payload["data"]["items"]
+        total = payload["data"]["pagination"]["total"]
+        
+        self.assertEqual(2, total)
+        titles = [item["localTitle"] for item in items]
+        self.assertIn("Pendente de URL", titles)
+        self.assertIn("Pendente de Capa", titles)
+        self.assertNotIn("Completa", titles)
+
     def test_filters_specific_status_and_search(self):
         payload = works_payload(
             "status=PENDING_REVIEW&search=bet",
@@ -43,42 +68,27 @@ class MangaUpdatesWorksPayloadTests(unittest.TestCase):
         self.assertEqual("Beta Love", items[0]["localTitle"])
         self.assertEqual("REVIEW_CANDIDATES", items[0]["nextAction"])
 
-    def test_filters_confirmed_works_for_metadata_sync(self):
-        payload = works_payload(
-            "status=CONFIRMED&page=1&pageSize=10",
-            connection_factory=lambda: FakeConnection([
-                row(1, "Alpha"),
-                row(2, "Boredom", work_code="22961829567"),
-                row(3, "Romance in Romance", work_code="33188442210"),
-            ]),
-        )
-
-        items = payload["data"]["items"]
-        self.assertEqual(2, payload["data"]["pagination"]["total"])
-        self.assertEqual(["Boredom", "Romance in Romance"], [
-            item["localTitle"] for item in items
-        ])
-        self.assertEqual(["22961829567", "33188442210"], [
-            item["mangaupdatesId"] for item in items
-        ])
-
 
 def row(
     manga_id,
     title,
     *,
     work_code=None,
+    mangaupdates_url=None,
+    cover_url=None,
     pending_count=0,
     not_found_count=0,
     error_count=0,
     candidates_count=0,
 ):
+    """Helper atualizado para refletir o novo schema da vw_mangas"""
     return {
         "id": manga_id,
         "title": title,
         "alternative_title": "",
         "work_code": work_code,
-        "mangaupdates_url": None,
+        "mangaupdates_url": mangaupdates_url,
+        "cover_url": cover_url,
         "created_at": "2026-07-01T10:00:00",
         "updated_at": "2026-07-01T10:00:00",
         "latest_candidate_status": None,

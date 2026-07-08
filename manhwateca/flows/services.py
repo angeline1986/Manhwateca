@@ -9,7 +9,7 @@ class StageService(Protocol):
     def validate(self) -> tuple[FlowWarning, ...]:
         ...
 
-    def execute(self) -> StageResult:
+    def execute(self, **kwargs) -> StageResult:
         ...
 
     def finalize(self, result: StageResult) -> StageResult:
@@ -27,7 +27,7 @@ class BaseStageService:
             raise RuntimeError("; ".join(error.message for error in validation.errors))
         return validation.warnings
 
-    def execute(self) -> StageResult:
+    def execute(self, **kwargs) -> StageResult:
         return StageResult()
 
     def finalize(self, result: StageResult) -> StageResult:
@@ -41,7 +41,7 @@ class OrganizeLibraryService(BaseStageService):
     def __init__(self, integrations: FlowIntegrations):
         super().__init__(integrations, StageId.ORGANIZE_LIBRARY)
 
-    def execute(self) -> StageResult:
+    def execute(self, **kwargs) -> StageResult:
         result = self.integrations.library.scan_library()
         warnings = result.inconsistencies
         if result.works_found == 0 and not warnings:
@@ -75,7 +75,7 @@ class CatalogWorksService(BaseStageService):
     def __init__(self, integrations: FlowIntegrations):
         super().__init__(integrations, StageId.CATALOG_WORKS)
 
-    def execute(self) -> StageResult:
+    def execute(self, **kwargs) -> StageResult:
         result = self.integrations.library.catalog_works()
         warnings = ()
         if result.created + result.updated == 0 and result.pending == 0:
@@ -115,7 +115,7 @@ class ResolveIdsService(BaseStageService):
     def __init__(self, integrations: FlowIntegrations):
         super().__init__(integrations, StageId.RESOLVE_IDS)
 
-    def execute(self) -> StageResult:
+    def execute(self, **kwargs) -> StageResult:
         result = self.integrations.mangaupdates.search_series()
         warnings = ()
         if result.searched == 0:
@@ -160,8 +160,9 @@ class UpdateMetadataService(BaseStageService):
     def __init__(self, integrations: FlowIntegrations):
         super().__init__(integrations, StageId.UPDATE_METADATA)
 
-    def execute(self) -> StageResult:
-        result = self.integrations.mangaupdates.get_metadata()
+    def execute(self, **kwargs) -> StageResult:
+        selected_ids = kwargs.get("selected_ids")
+        result = self.integrations.mangaupdates.get_metadata(selected_ids=selected_ids)
         warnings = ()
         if result.skipped or result.failed:
             warnings = (
@@ -193,7 +194,7 @@ class SyncNotionService(BaseStageService):
     def __init__(self, integrations: FlowIntegrations):
         super().__init__(integrations, StageId.SYNC_NOTION)
 
-    def execute(self) -> StageResult:
+    def execute(self, **kwargs) -> StageResult:
         result = self.integrations.notion.sync_page()
         warnings = ()
         if result.skipped or result.failed:

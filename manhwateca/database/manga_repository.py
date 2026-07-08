@@ -167,6 +167,7 @@ class MangaRepository:
         if themes is not None:
             self.replace_manga_themes(manga.id, themes)
 
+        self._connection().commit()
         return True
 
     def append_alternative_title(self, manga_id: int, alias: str) -> dict | None:
@@ -217,45 +218,58 @@ class MangaRepository:
             "current": current,
         }
 
+
+
     def update_mangaupdates_fields(
         self,
         name: str,
         series_id,
         summary: dict,
     ) -> bool:
+        # Tenta localizar a obra
         manga = self.find_by_work_code(series_id)
         if manga is None:
             manga = self.find_by_normalized_title(name)
+        
         if manga is None:
             return False
 
+        # Mapeamento seguro: tenta buscar o dado em qualquer chave que a API possa ter retornado
+        mu_url = summary.get("url") or summary.get("mangaupdates_url") or summary.get("mangaupdatesUrl")
+        mu_cover = summary.get("cover_url") or summary.get("cover") or summary.get("coverUrl")
+        mu_chapter = summary.get("latest_chapter") or summary.get("latest_mangaupdates_chapter")
+        mu_format = summary.get("format") or summary.get("type")
+
+        # SQL Direto: atualiza os campos com o que veio da API
         self._execute(
             """
             UPDATE mangas
             SET
-                work_code = COALESCE(work_code, %s),
+                work_code = %s,
                 latest_mangaupdates_chapter = %s,
-                mangaupdates_url = COALESCE(%s, mangaupdates_url),
-                cover_url = COALESCE(%s, cover_url),
-                format = COALESCE(NULLIF(format, ''), %s)
+                mangaupdates_url = %s,
+                cover_url = %s,
+                format = %s
             WHERE id = %s
             """,
             (
-                _string_or_none(summary.get("series_id") or series_id),
-                _empty_to_none(summary.get("latest_chapter")),
-                _empty_to_none(summary.get("url")),
-                _empty_to_none(summary.get("cover_url")),
-                _empty_to_none(summary.get("format")),
+                _string_or_none(series_id),
+                _empty_to_none(mu_chapter),
+                _empty_to_none(mu_url),
+                _empty_to_none(mu_cover),
+                _empty_to_none(mu_format),
                 manga.id,
             ),
         )
 
+        # Atualiza temáticas
         themes = _mangaupdates_themes(summary)
         if themes:
             self.replace_manga_themes(manga.id, themes)
 
         self._connection().commit()
         return True
+
 
     def confirm_mangaupdates_id(
         self,
@@ -286,6 +300,7 @@ class MangaRepository:
                 manga.id,
             ),
         )
+        self._connection().commit()
         return True
 
     def update_notion_sync_fields(
@@ -317,6 +332,7 @@ class MangaRepository:
                 manga.id,
             ),
         )
+        self._connection().commit()
         return True
 
     def record_sync_event(
@@ -487,6 +503,7 @@ class MangaRepository:
             """,
             (*values.values(), decision_id),
         )
+        self._connection().commit()
         return True
 
     def mark_flow_id_candidates_applied(
@@ -747,6 +764,7 @@ class MangaRepository:
                 manga_id,
             ),
         )
+        self._connection().commit()
 
 
 def _work_code(manga: dict):

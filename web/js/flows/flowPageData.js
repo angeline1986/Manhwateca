@@ -19,9 +19,14 @@ export async function loadWorksState(page) {
   });
 }
 
+/**
+ * Carrega as obras para a tela de "Atualizar Metadados".
+ * Agora utiliza o status METADATA_PENDING para trazer apenas obras 
+ * que já possuem ID confirmado, mas ainda faltam dados oficiais (capa/URL).
+ */
 export async function loadMetadataState() {
   return loadWorks({
-    status: "CONFIRMED",
+    status: "METADATA_PENDING", // Alterado de "CONFIRMED" para "METADATA_PENDING"
     page: "1",
     pageSize: "25",
   });

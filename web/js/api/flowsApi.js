@@ -29,8 +29,8 @@ export function startWorkflow(payload) {
   return postJson("/api/flows/start", payload);
 }
 
-export function runFlowStage(stageId) {
-  return postJson(`/api/flows/stages/${stageId}/run`);
+export function runFlowStage(stageId, payload = {}) {
+  return postJson(`/api/flows/stages/${stageId}/run`, payload);
 }
 
 export function cancelWorkflowRun() {

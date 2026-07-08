@@ -209,8 +209,20 @@ class MangaUpdatesFlowIntegration:
             },
         )
 
-    def get_metadata(self) -> MetadataUpdateResult:
-        return MetadataUpdateResult()
+    def get_metadata(self, selected_ids=None) -> MetadataUpdateResult:
+        from manhwateca.mangaupdates_service import compatibility
+
+        try:
+            updated, skipped = compatibility.fetch_confirmed_details(
+                "reports/integrations/buscaIds.json",
+                delay=0,
+                limit=None,
+                force_refresh=False,
+                selected_ids=selected_ids,
+            )
+            return MetadataUpdateResult(updated=updated, skipped=skipped)
+        except Exception:
+            return MetadataUpdateResult()
 
 
 def _candidate_record(

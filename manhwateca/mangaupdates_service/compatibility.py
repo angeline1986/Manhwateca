@@ -198,6 +198,7 @@ def fetch_confirmed_details(
     state_path=STATE_FILE,
     ttl_days=30,
     force_refresh=False,
+    selected_ids=None,
 ):
     repository = _optional_decision_repository()
     if repository is not None:
@@ -210,6 +211,7 @@ def fetch_confirmed_details(
                 delay=delay,
                 limit=limit,
                 force_refresh=force_refresh,
+                selected_ids=selected_ids,
             )
         except (DatabaseConfigurationError, DatabaseConnectionError):
             pass
@@ -236,31 +238,66 @@ def _fetch_database_confirmed_details(
     delay=3.0,
     limit=None,
     force_refresh=False,
+    selected_ids=None,
 ):
+    selected_ids = _normalize_selected_ids(selected_ids)
     confirmed = [
         manga for manga in repository.list_mangas()
         if getattr(manga, "work_code", None)
+        and (
+            selected_ids is None
+            or int(getattr(manga, "id", 0) or 0) in selected_ids
+        )
     ]
-    pending = [
-        manga for manga in confirmed
-        if force_refresh
-        or not getattr(manga, "mangaupdates_url", None)
-        or not getattr(manga, "cover_url", None)
-    ]
+    
+    pending = []
+    for manga in confirmed:
+        # Verifica se falta URL ou Capa (trata None e String Vazia)
+        m_url = getattr(manga, "mangaupdates_url", None)
+        m_cover = getattr(manga, "cover_url", None)
+        
+        needs_update = (
+            force_refresh or 
+            not m_url or str(m_url).strip() == "" or
+            not m_cover or str(m_cover).strip() == ""
+        )
+        
+        if needs_update:
+            pending.append(manga)
+
     selected = pending[:limit] if limit is not None else pending
 
+    success_count = 0
     for manga in selected:
         series_id = manga.work_code
-        print(f"[DETALHAR] {manga.title} ({series_id})")
-        summary = summarize_function(detail_function(series_id))
-        repository.update_mangaupdates_fields(
-            manga.title,
-            series_id,
-            summary,
-        )
+        try:
+            print(f"[SINCronizando] {manga.title} (ID: {series_id})...")
+            # Busca na API
+            raw_data = detail_function(series_id)
+            if not raw_data:
+                print(f"[ERRO] API não retornou dados para {series_id}")
+                continue
+                
+            summary = summarize_function(raw_data)
+            
+            # Grava no Banco
+            updated = repository.update_mangaupdates_fields(
+                manga.title,
+                series_id,
+                summary,
+            )
+            if updated:
+                success_count += 1
+                print(f"[OK] {manga.title} atualizado.")
+            else:
+                print(f"[AVISO] Repositório não encontrou registro para {manga.title}")
+                
+        except Exception as e:
+            print(f"[ERRO] Falha ao processar {manga.title}: {e}")
+            
         wait_function(delay)
 
-    return len(selected), len(pending) - len(selected)
+    return success_count, len(pending) - success_count
 
 
 def refresh_cache(mappings_path=MAPPINGS_FILE, cache_path=CACHE_FILE):
@@ -277,6 +314,18 @@ def _optional_decision_repository():
         return MangaRepository()
     except (DatabaseConfigurationError, DatabaseConnectionError):
         return None
+
+
+def _normalize_selected_ids(selected_ids):
+    if not selected_ids:
+        return None
+    normalized = set()
+    for value in selected_ids:
+        try:
+            normalized.add(int(value))
+        except (TypeError, ValueError):
+            continue
+    return normalized or None
 
 
 def main():
