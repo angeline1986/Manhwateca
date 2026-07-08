@@ -54,6 +54,21 @@ class MangaUpdatesWorksPayloadTests(unittest.TestCase):
         self.assertIn("Pendente de Capa", titles)
         self.assertNotIn("Completa", titles)
 
+    def test_whitespace_metadata_values_are_treated_as_missing(self):
+        payload = works_payload(
+            "status=METADATA_PENDING",
+            connection_factory=lambda: FakeConnection([
+                row(1, "Pendente de URL", work_code="101", mangaupdates_url="   ", cover_url="img.jpg"),
+                row(2, "Pendente de Capa", work_code="102", mangaupdates_url="http://...", cover_url="   "),
+            ]),
+        )
+
+        items = payload["data"]["items"]
+        titles = [item["localTitle"] for item in items]
+        self.assertEqual(2, len(items))
+        self.assertIn("Pendente de URL", titles)
+        self.assertIn("Pendente de Capa", titles)
+
     def test_filters_specific_status_and_search(self):
         payload = works_payload(
             "status=PENDING_REVIEW&search=bet",
