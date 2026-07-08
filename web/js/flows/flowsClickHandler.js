@@ -77,6 +77,12 @@ export function handleFlowsClick(event, context) {
   }
   if (event.target.closest("[data-flow-cancel]")) return context.cancelWorkflow();
   if (event.target.closest("[data-flow-refresh]")) return context.loadWorkflow();
+  const metadataPageButton = event.target.closest("[data-metadata-page-action], [data-metadata-page-number]");
+  if (metadataPageButton) {
+    event.preventDefault();
+    updateMetadataPage(context.area, metadataPageButton);
+    return;
+  }
   const metadataCard = event.target.closest("[data-metadata-expandable]");
   if (metadataCard) {
     toggleMetadataDetails(event, metadataCard, context.area);
@@ -94,6 +100,15 @@ export function handleFlowsChange(event, area) {
     updateMetadataSummary(area);
   }
   if (event.target.matches("[data-metadata-choice]")) updateMetadataSummary(area);
+  if (event.target.matches("[data-metadata-page-size-select]")) {
+    const card = area.querySelector("[data-metadata-page]");
+    if (card) {
+      card.dataset.metadataPage = "1";
+      card.dataset.metadataPageSize = event.target.value || "5";
+    }
+    applyMetadataPagination(area);
+    updateMetadataSummary(area);
+  }
 }
 
 function checkedDecisionIds(area) {
@@ -127,12 +142,13 @@ function updateApplySummary(area) {
 }
 
 function setMetadataChecks(area, checked) {
-  area.querySelectorAll("[data-metadata-choice]")
+  visibleMetadataChoices(area)
     .forEach(input => { input.checked = checked; });
 }
 
 function updateMetadataSummary(area) {
   const choices = [...area.querySelectorAll("[data-metadata-choice]")];
+  const visibleChoices = visibleMetadataChoices(area);
   const selected = choices.filter(input => input.checked).length;
   const fields = choices
     .filter(input => input.checked)
@@ -141,21 +157,83 @@ function updateMetadataSummary(area) {
   const selectedText = area.querySelector("[data-metadata-selected]");
   const fieldsText = area.querySelector("[data-metadata-fields-count]");
   const skippedText = area.querySelector("[data-metadata-not-selected]");
+  const estimatedTime = area.querySelector("[data-metadata-estimated-time]");
   const button = area.querySelector("[data-metadata-run]");
   if (selectAll) {
-    selectAll.checked = Boolean(choices.length && selected === choices.length);
-    selectAll.indeterminate = selected > 0 && selected < choices.length;
+    const visibleSelected = visibleChoices.filter(input => input.checked).length;
+    selectAll.checked = Boolean(visibleChoices.length && visibleSelected === visibleChoices.length);
+    selectAll.indeterminate = visibleSelected > 0 && visibleSelected < visibleChoices.length;
   }
   if (selectedText) {
-    selectedText.textContent = `${selected} ${selected === 1 ? "selecionada para sincronizar" : "selecionadas para sincronizar"}`;
+    selectedText.textContent = `${selected} ${selected === 1 ? "selecionada" : "selecionadas"}`;
   }
   if (fieldsText) fieldsText.textContent = String(fields);
   if (skippedText) skippedText.textContent = String(choices.length - selected);
+  if (estimatedTime) estimatedTime.textContent = estimateMetadataTime(selected);
   if (!button) return;
   button.disabled = selected === 0;
   button.textContent = selected
     ? `Sincronizar ${selected} ${selected === 1 ? "obra" : "obras"}`
     : "Selecione obras";
+}
+
+function updateMetadataPage(area, button) {
+  const card = area.querySelector("[data-metadata-page]");
+  if (!card) return;
+  const current = Number(card.dataset.metadataPage || 1);
+  const pageSize = Number(card.dataset.metadataPageSize || 5);
+  const total = area.querySelectorAll("[data-metadata-choice]").length;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const action = button.dataset.metadataPageAction;
+  const requested = Number(button.dataset.metadataPageNumber);
+  let next = current;
+  if (action === "prev") next -= 1;
+  else if (action === "next") next += 1;
+  else if (Number.isFinite(requested)) next = requested;
+  card.dataset.metadataPage = String(Math.min(Math.max(next, 1), pages));
+  applyMetadataPagination(area);
+  updateMetadataSummary(area);
+}
+
+function applyMetadataPagination(area) {
+  const card = area.querySelector("[data-metadata-page]");
+  if (!card) return;
+  const page = Number(card.dataset.metadataPage || 1);
+  const pageSize = Number(card.dataset.metadataPageSize || 5);
+  const items = [...area.querySelectorAll("[data-metadata-index]")];
+  const pages = Math.max(1, Math.ceil(items.length / pageSize));
+  const safePage = Math.min(Math.max(page, 1), pages);
+  card.dataset.metadataPage = String(safePage);
+  const start = (safePage - 1) * pageSize;
+  const end = start + pageSize;
+  items.forEach((item, index) => {
+    item.hidden = index < start || index >= end;
+  });
+  renderMetadataPager(area, safePage, pages);
+}
+
+function renderMetadataPager(area, page, pages) {
+  const pager = area.querySelector("[data-metadata-pager]");
+  if (!pager) return;
+  const nextPage = Math.min(page + 1, pages);
+  pager.innerHTML = `
+    <button class="flow-page-link" type="button" data-metadata-page-action="prev" ${page <= 1 ? "disabled" : ""} aria-label="Página anterior">‹</button>
+    <button class="flow-page-link active" type="button" data-metadata-page-number="${page}">${page}</button>
+    <button class="flow-page-link" type="button" data-metadata-page-number="${nextPage}" ${page >= pages ? "hidden" : ""}>${nextPage}</button>
+    <button class="flow-page-link" type="button" data-metadata-page-action="next" ${page >= pages ? "disabled" : ""} aria-label="Próxima página">›</button>
+  `;
+}
+
+function visibleMetadataChoices(area) {
+  return [...area.querySelectorAll("[data-metadata-choice]")]
+    .filter(input => !input.closest("[data-metadata-index]")?.hidden);
+}
+
+function estimateMetadataTime(selected) {
+  if (!selected) return "~0s";
+  const seconds = selected * 2;
+  if (seconds < 60) return `~${seconds}s`;
+  return `~${Math.ceil(seconds / 60)}min`;
 }
 
 function toggleMetadataDetails(event, card, area) {

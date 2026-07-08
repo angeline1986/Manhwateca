@@ -119,17 +119,19 @@ export function initFlowsPage(elements, options = {}) {
   }
 
   async function refreshAfterStage(stageId) {
-    const maxAttempts = stageId === "update_metadata" ? 5 : 2;
+    const maxAttempts = stageId === "update_metadata" ? 60 : 2;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      await loadWorkflow();
-      const run = workflowState?.run || { status: "idle", results: {} };
+      if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 800));
+      const data = await loadFlowsApiState({ includeDetails: false });
+      renderWorkflow(data);
+      const run = data?.run || { status: "idle", results: {} };
       const stageResult = run.results?.[stageId];
-      const completed = stageResult?.status === "completed"
-        || stageResult?.status === "completed_with_warnings"
-        || run.status !== "running";
+      const completed = stageResult
+        ? stageResult.status === "completed" || stageResult.status === "completed_with_warnings"
+        : run.status !== "running";
       if (completed) break;
-      await new Promise(resolve => setTimeout(resolve, 800));
     }
+    await loadWorkflow();
   }
 
   async function runCurrentFlowStage() {
@@ -148,10 +150,12 @@ export function initFlowsPage(elements, options = {}) {
     renderWorkflow(withOptimisticStage(workflowState, stage.id));
     try {
       const { response, payload: responsePayload } = await runFlowStage(stage.id, payload);
-      setFeedback(response.ok ? `${stage.title} finalizada.` : errorMessage(responsePayload), response.ok ? "success" : "error");
       if (response.ok) {
+        setFeedback(`${stage.title} em execução. Aguarde...`, "info");
         await refreshAfterStage(stage.id);
+        setFeedback(`${stage.title} finalizada.`, "success");
       } else {
+        setFeedback(errorMessage(responsePayload), "error");
         await loadWorkflow();
       }
     } catch (error) {

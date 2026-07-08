@@ -13,58 +13,37 @@ const FIELDS = [
 
 export function renderUpdateMetadataPanel(metadata = {}) {
   const works = readyWorks(metadata);
-  const selected = works.length;
-  
-  // Calcula o total de campos pendentes somando o tamanho do array pendingMetadata de cada obra
-  const totalPendingFields = works.reduce((total, work) => {
-    return total + (work.pendingMetadata ? work.pendingMetadata.length : 0);
-  }, 0);
+  const selected = 0;
+  const pageSize = 5;
+  const page = 1;
+  const pages = Math.max(1, Math.ceil(works.length / pageSize));
+  const totalPendingFields = 0;
 
   return `
-    <section class="metadata-card">
-      <header class="metadata-header">
-        <span class="eyebrow">Confirmação</span>
-        <h2>Atualizar metadados</h2>
-        <p>Confirme quais obras terão dados oficiais atualizados. Esta etapa utiliza o ID confirmado para buscar informações completas.</p>
-      </header>
-
-      <section class="metadata-confirm-row">
-        <div class="metadata-hero">
-          <strong>${selectedLabel(works.length, "obra pronta", "obras prontas")}</strong>
-          <p>
-            <span data-metadata-selected>${selectedLabel(selected, "selecionada para sincronizar", "selecionadas para sincronizar")}</span><br>
-            ✓ IDs confirmados<br>
-            ✓ Metadados pendentes identificados
-          </p>
-        </div>
-        <div class="metadata-impact">
-          <h3>Impacto da sincronização</h3>
-          <div class="metadata-impact-grid">
-            ${impactMetric("Fonte", "MangaUpdates")}
-            ${impactMetric("Campos pendentes", String(totalPendingFields), "metadata-fields-count")}
-            ${impactMetric("Não selecionadas", "0", "metadata-not-selected")}
-            ${impactMetric("Tempo estimado", estimateTime(selected))}
+    <section class="metadata-main-card" data-metadata-page="${page}" data-metadata-page-size="${pageSize}">
+        <header class="metadata-header">
+          <span class="eyebrow">Confirmação</span>
+          <h2>Atualizar metadados</h2>
+          <p>Selecione as obras que terão dados oficiais atualizados via MangaUpdates.</p>
+          <div class="metadata-summary-chips">
+            <span><b data-metadata-total>${works.length}</b> ${works.length === 1 ? "obra pronta" : "obras prontas"}</span>
+            <span data-metadata-selected>${selectedLabel(selected, "selecionada", "selecionadas")}</span>
+            <span>IDs confirmados</span>
           </div>
-        </div>
-      </section>
-
-      <section class="metadata-fields">
-        <div class="metadata-fields-head">
-          <h3>Campos avaliados na sincronização</h3>
-          <small>Ao expandir uma obra, aparecem os campos que serão preenchidos ou atualizados.</small>
-        </div>
-        <div class="metadata-fields-grid">
-          ${FIELDS.map(field => `<span class="metadata-field-chip">${escapeHtml(field)}</span>`).join("")}
-        </div>
-      </section>
+        </header>
 
       <section class="metadata-selection">
         <div class="metadata-selection-head">
           <label class="metadata-select-all">
-            <input type="checkbox" data-metadata-select-all ${works.length ? "checked" : ""}>
+            <input type="checkbox" data-metadata-select-all>
             Selecionar todas
           </label>
-          <span>${selectedLabel(works.length, "obra pronta", "obras prontas")}</span>
+          <label class="metadata-page-size">
+            <span>Itens por página</span>
+            <select data-metadata-page-size-select>
+              ${[5, 10, 25].map(size => `<option value="${size}" ${size === pageSize ? "selected" : ""}>${size}</option>`).join("")}
+            </select>
+          </label>
         </div>
 
         <div class="metadata-list" data-metadata-list>
@@ -72,16 +51,41 @@ export function renderUpdateMetadataPanel(metadata = {}) {
         </div>
       </section>
 
-      <div class="metadata-notice">
-        A sincronização consulta os dados oficiais via API e atualiza os registros locais.
-      </div>
-
-      <footer class="metadata-actions">
-        <button class="metadata-button-secondary" type="button" data-flow-subtab="decisoes">← Aplicar decisões</button>
-        <button class="metadata-button-primary" type="button" data-flow-run-stage data-metadata-run ${works.length ? "" : "disabled"}>
-          ${works.length ? `Sincronizar ${selectedLabel(selected, "obra", "obras")}` : "Selecione obras"}
-        </button>
-      </footer>
+        <footer class="metadata-bottom-row">
+          <div class="metadata-actions">
+            <button class="metadata-button-secondary" type="button" data-flow-subtab="decisoes">← Aplicar decisões</button>
+            <button class="metadata-button-primary" type="button" data-flow-run-stage data-metadata-run disabled>
+              Selecione obras
+            </button>
+          </div>
+          ${metadataPager(page, pages)}
+        </footer>
+    </section>
+    <section class="metadata-info-card">
+        <details class="metadata-info">
+          <summary>
+            <span>Informações da sincronização</span>
+            <span class="metadata-info-arrow metadata-info-arrow-closed" aria-hidden="true">▸</span>
+            <span class="metadata-info-arrow metadata-info-arrow-open" aria-hidden="true">▾</span>
+          </summary>
+          <div class="metadata-info-content">
+            <div class="metadata-info-panel">
+              <h3>Impacto da sincronização</h3>
+              <div class="metadata-impact-grid">
+                ${impactMetric("Fonte", "MangaUpdates")}
+                ${impactMetric("Campos pendentes", String(totalPendingFields), "metadata-fields-count")}
+                ${impactMetric("Não selecionadas", String(works.length), "metadata-not-selected")}
+                ${impactMetric("Tempo estimado", estimateTime(selected), "metadata-estimated-time")}
+              </div>
+            </div>
+            <div class="metadata-info-panel">
+              <h3>Campos avaliados</h3>
+              <div class="metadata-fields-grid">
+                ${FIELDS.map(field => `<span class="metadata-field-chip">${escapeHtml(field)}</span>`).join("")}
+              </div>
+            </div>
+          </div>
+        </details>
     </section>
   `;
 }
@@ -101,9 +105,9 @@ function metadataItem(work, index) {
   const itemId = `metadata-item-${index}`;
 
   return `
-    <article class="metadata-item" data-metadata-expandable aria-expanded="false">
+    <article class="metadata-item" data-metadata-expandable data-metadata-index="${index}" aria-expanded="false" ${index >= 5 ? "hidden" : ""}>
       <div class="metadata-item-header" role="button" tabindex="0" aria-controls="${itemId}">
-        <input class="metadata-item-checkbox" type="checkbox" checked data-metadata-choice data-metadata-work-id="${escapeHtml(String(work.mangaId || work.id || ""))}" data-metadata-fields="${count}" aria-label="Selecionar ${escapeHtml(title)}">
+        <input class="metadata-item-checkbox" type="checkbox" data-metadata-choice data-metadata-work-id="${escapeHtml(String(work.mangaId || work.id || ""))}" data-metadata-fields="${count}" aria-label="Selecionar ${escapeHtml(title)}">
         <div class="metadata-item-content">
           <strong class="metadata-item-title">${escapeHtml(title)}</strong>
           <span class="metadata-item-meta">ID ${escapeHtml(String(id))} · ${selectedLabel(count, "campo pendente", "campos pendentes")}</span>
@@ -115,6 +119,18 @@ function metadataItem(work, index) {
         ${pending.map(field => pendingBlock(field)).join("")}
       </div>
     </article>
+  `;
+}
+
+function metadataPager(page, pages) {
+  const nextPage = Math.min(page + 1, pages);
+  return `
+    <nav class="metadata-pager" data-metadata-pager aria-label="Paginação de obras">
+      <button class="flow-page-link" type="button" data-metadata-page-action="prev" ${page <= 1 ? "disabled" : ""} aria-label="Página anterior">‹</button>
+      <button class="flow-page-link active" type="button" data-metadata-page-number="${page}">${page}</button>
+      <button class="flow-page-link" type="button" data-metadata-page-number="${nextPage}" ${page >= pages ? "hidden" : ""}>${nextPage}</button>
+      <button class="flow-page-link" type="button" data-metadata-page-action="next" ${page >= pages ? "disabled" : ""} aria-label="Próxima página">›</button>
+    </nav>
   `;
 }
 
