@@ -86,7 +86,13 @@ def _sync_payload(data, error=None):
     }
     if error:
         sync_summary["error"] = error
-    return _serialize_sync_result(build_sync_result(sync_summary))
+    evidence = "unavailable" if error else "legacy_report"
+    source_label = "Indisponível" if error else "Relatório legado"
+    return _serialize_sync_result(
+        build_sync_result(sync_summary),
+        evidence=evidence,
+        source_label=source_label,
+    )
 
 
 def _item_or_positive_count(data, summary, item_key, fallback_key):
@@ -96,10 +102,13 @@ def _item_or_positive_count(data, summary, item_key, fallback_key):
     return count if count else None
 
 
-def _serialize_sync_result(result):
+def _serialize_sync_result(result, evidence, source_label):
     return {
         "status": result.status.value,
         "next_action": result.next_action.value,
+        "evidence": evidence,
+        "validated_against_notion": False,
+        "source_label": source_label,
         "created_count": result.created_count,
         "updated_count": result.updated_count,
         "missing_count": result.missing_count,

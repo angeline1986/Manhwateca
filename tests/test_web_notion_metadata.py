@@ -58,6 +58,9 @@ class WebNotionMetadataTests(unittest.TestCase):
             payload["updates"][0]["properties"],
         )
         self.assertIn("sync", payload)
+        self.assertEqual("legacy_report", payload["sync"]["evidence"])
+        self.assertFalse(payload["sync"]["validated_against_notion"])
+        self.assertEqual("Relatório legado", payload["sync"]["source_label"])
         self.assertEqual("blocked", payload["sync"]["status"])
         self.assertEqual("review_duplicates", payload["sync"]["next_action"])
         self.assertEqual(1, payload["sync"]["updated_count"])
@@ -84,6 +87,9 @@ class WebNotionMetadataTests(unittest.TestCase):
         })
 
         self.assertTrue(payload["available"])
+        self.assertEqual("legacy_report", payload["sync"]["evidence"])
+        self.assertFalse(payload["sync"]["validated_against_notion"])
+        self.assertEqual("Relatório legado", payload["sync"]["source_label"])
         self.assertEqual("synced", payload["sync"]["status"])
         self.assertEqual("none", payload["sync"]["next_action"])
         self.assertEqual(1, payload["sync"]["unchanged_count"])
@@ -116,6 +122,9 @@ class WebNotionMetadataTests(unittest.TestCase):
         self.assertIn("inválido", payload["error"])
         self.assertEqual("error", payload["sync"]["status"])
         self.assertEqual("retry", payload["sync"]["next_action"])
+        self.assertEqual("unavailable", payload["sync"]["evidence"])
+        self.assertFalse(payload["sync"]["validated_against_notion"])
+        self.assertEqual("Indisponível", payload["sync"]["source_label"])
         self.assertEqual("api_error", payload["sync"]["blockers"][0]["code"])
         self.assertIn("inválido", payload["sync"]["blockers"][0]["message"])
 
