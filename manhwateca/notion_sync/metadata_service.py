@@ -3,6 +3,25 @@ from manhwateca.notion_sync.matching import csv_equivalent_names
 from manhwateca.notion_sync.pages import load_existing_pages
 from manhwateca.notion_sync.property_diff import changed_properties
 from manhwateca.notion_sync.repositories import load_metadata
+from manhwateca.notion_sync.sync_plan import build_sync_result
+
+
+def simulate_metadata_sync(
+    notion,
+    database_id,
+    rows,
+    metadata=None,
+    property_builder=build_properties,
+):
+    summary = update_from_csv(
+        notion,
+        database_id,
+        rows,
+        apply=False,
+        metadata=metadata,
+        property_builder=property_builder,
+    )
+    return build_sync_result(summary)
 
 
 def update_from_csv(
