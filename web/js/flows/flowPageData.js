@@ -1,4 +1,5 @@
 import { getMangaUpdatesWorks, getReviewItems } from "../api/mangaupdatesApi.js";
+import { getMetadataStatus } from "../api/notionApi.js";
 
 const EMPTY_WORKS = { kpis: {}, items: [], pagination: {} };
 
@@ -30,6 +31,15 @@ export async function loadMetadataState() {
     page: "1",
     pageSize: "25",
   });
+}
+
+export async function loadNotionMetadataState() {
+  try {
+    const { payload } = await getMetadataStatus();
+    return payload || {};
+  } catch {
+    return {};
+  }
 }
 
 async function loadWorks(params) {

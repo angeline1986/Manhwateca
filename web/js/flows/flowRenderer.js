@@ -5,6 +5,7 @@ import {
 } from "./flowConstants.js";
 import { currentFlowStage, visibleFlowStatuses } from "./flowModel.js";
 import { renderResolveIdsPanel } from "./resolveIdsPanel.js";
+import { renderSyncNotionPanel } from "./syncNotionPanel.js";
 import { renderUpdateMetadataPanel } from "./updateMetadataPanel.js";
 import { escapeHtml } from "../utils/html.js";
 
@@ -39,6 +40,7 @@ export function renderFlowsOverview(elements, data, options = {}) {
     visibleStatuses,
     review: options.review,
     metadata: options.metadata,
+    notionMetadata: options.notionMetadata,
     works: options.works,
   });
   return { activeStage, activeStatus, visibleRunning };
@@ -109,6 +111,10 @@ function renderCurrentPanel(elements, context) {
     elements.flowsCurrentCards.innerHTML = renderUpdateMetadataPanel(context.metadata);
     return;
   }
+  if (selectedStage.id === "sync_notion") {
+    elements.flowsCurrentCards.innerHTML = renderSyncNotionPanel(context.notionMetadata);
+    return;
+  }
   elements.flowsCurrentCards.innerHTML = defaultCards(selectedStage, data);
 }
 
@@ -172,19 +178,7 @@ function renderTopAction(elements, activeStage, activeStatus, visibleRunning) {
 }
 
 function defaultCards(activeStage, data) {
-  const copy = {
-    sync_notion: {
-      title: "Sincronizar Notion",
-      lead: "Atualize as páginas no Notion depois que os metadados estiverem consistentes.",
-      cards: [
-        ["Páginas", "A preparar"],
-        ["Alterações", "A revisar"],
-        ["Sincronização", "Aguardando"],
-      ],
-      action: "Sincronizar Notion",
-    },
-  }[activeStage.id];
-  const dataCopy = copy || {
+  const dataCopy = {
     title: activeStage.title,
     lead: activeStage.description,
     cards: [["Status", "Aguardando"], ["Integração", "Disponível"], ["Histórico", "Sem execução"]],

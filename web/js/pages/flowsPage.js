@@ -8,6 +8,7 @@ import {
 import { ACTIVE_FLOW_STEPS, FLOW_STAGE_GROUPS } from "../flows/flowConstants.js";
 import {
   loadMetadataState as fetchMetadataState,
+  loadNotionMetadataState as fetchNotionMetadataState,
   loadReviewState as fetchReviewState,
   loadWorksState as fetchWorksState,
 } from "../flows/flowPageData.js";
@@ -32,6 +33,7 @@ export function initFlowsPage(elements, options = {}) {
   let savedReviewKeys = new Set();
   let worksState = { kpis: {}, items: [], pagination: {} };
   let metadataState = { kpis: {}, items: [], pagination: {} };
+  let notionMetadataState = {};
   const showPage = options.showPage || (() => {});
 
   async function loadWorkflow() {
@@ -40,6 +42,7 @@ export function initFlowsPage(elements, options = {}) {
       refreshReviewState(),
       refreshWorksState(),
       refreshMetadataState(),
+      refreshNotionMetadataState(),
     ]);
     renderWorkflow(data);
     scheduleWorkflowPolling(data);
@@ -78,6 +81,7 @@ export function initFlowsPage(elements, options = {}) {
   async function refreshReviewState() { reviewState = await fetchReviewState(); }
   async function refreshWorksState() { worksState = await fetchWorksState(worksPage); }
   async function refreshMetadataState() { metadataState = await fetchMetadataState(); }
+  async function refreshNotionMetadataState() { notionMetadataState = await fetchNotionMetadataState(); }
 
   function renderWorkflow(data) {
     workflowState = data;
@@ -89,6 +93,7 @@ export function initFlowsPage(elements, options = {}) {
       selectedDecisions: activeSubtab === "decisoes" ? readyDecisions() : selectedDecisions,
       savedReviewKeys: [...savedReviewKeys],
       metadata: metadataState,
+      notionMetadata: notionMetadataState,
       works: worksState,
     });
     renderLegacyWorkflow(data);

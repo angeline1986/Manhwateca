@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from manhwateca.notion_sync.sync_plan import build_sync_result
+
 
 STATUS_PATH = Path("reports/integrations/notion_csv_status.json")
 CSV_PATH = Path("reports/integrations/manhwateca_import.csv")
@@ -33,6 +35,7 @@ def metadata_status(project_root):
         "unchanged": data.get("sem_alteracao", []),
         "missing": data.get("ausentes", []),
         "duplicates": data.get("duplicadas", []),
+        "sync": _sync_payload(data),
         "sync_state": _sync_state(root),
         "error": None,
     }
@@ -55,8 +58,64 @@ def _empty(root, error=None):
         "unchanged": [],
         "missing": [],
         "duplicates": [],
+        "sync": _sync_payload({"resumo": {}}, error) if error else None,
         "sync_state": _sync_state(root),
         "error": error,
+    }
+
+
+def _sync_payload(data, error=None):
+    summary = data.get("resumo", {})
+    sync_summary = {
+        "updates": data.get(
+            "atualizacoes",
+            summary.get("atualizacoes", summary.get("updates", 0)),
+        ),
+        "updated": summary.get("atualizacoes", summary.get("updates", 0)),
+        "unchanged": data.get(
+            "sem_alteracao",
+            summary.get("sem_alteracao", summary.get("unchanged", 0)),
+        ),
+        "missing": _item_or_positive_count(data, summary, "ausentes", "missing"),
+        "duplicates": _item_or_positive_count(
+            data,
+            summary,
+            "duplicadas",
+            "duplicates",
+        ),
+    }
+    if error:
+        sync_summary["error"] = error
+    return _serialize_sync_result(build_sync_result(sync_summary))
+
+
+def _item_or_positive_count(data, summary, item_key, fallback_key):
+    if item_key in data:
+        return data[item_key]
+    count = summary.get(item_key, summary.get(fallback_key, 0))
+    return count if count else None
+
+
+def _serialize_sync_result(result):
+    return {
+        "status": result.status.value,
+        "next_action": result.next_action.value,
+        "created_count": result.created_count,
+        "updated_count": result.updated_count,
+        "missing_count": result.missing_count,
+        "duplicate_count": result.duplicate_count,
+        "unchanged_count": result.unchanged_count,
+        "blockers": [
+            {
+                "code": blocker.code,
+                "work_id": blocker.work_id,
+                "work_title": blocker.work_title,
+                "message": blocker.message,
+                "severity": blocker.severity.value,
+                "next_action": blocker.next_action.value,
+            }
+            for blocker in result.blockers
+        ],
     }
 
 

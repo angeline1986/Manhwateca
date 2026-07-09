@@ -202,10 +202,107 @@
   font-size: 13px;
   font-weight: 750;
 }
+.sync-notion-panel {
+  display: grid;
+  gap: 16px;
+}
+.sync-notion-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.sync-notion-header h3 {
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 22px;
+}
+.sync-notion-header p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+.sync-notion-status-dot {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  margin-top: 7px;
+  background: var(--rose);
+}
+.sync-notion-panel--ok .sync-notion-status-dot {
+  background: var(--success);
+}
+.sync-notion-panel--warning .sync-notion-status-dot {
+  background: var(--warning);
+}
+.sync-notion-panel--bad .sync-notion-status-dot {
+  background: var(--danger);
+}
+.sync-notion-metrics {
+  margin: 4px 0;
+}
+.sync-notion-next-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--rose-border);
+  border-radius: 12px;
+  background: var(--soft-2);
+  padding: 14px 16px;
+}
+.sync-notion-next-action strong {
+  color: var(--rose-dark);
+}
+.sync-notion-next-action span {
+  color: var(--text);
+  font-weight: 800;
+  text-align: right;
+}
+.sync-notion-blockers h4 {
+  margin: 0 0 10px;
+  color: var(--text);
+  font-size: 15px;
+}
+.sync-notion-blocker-list {
+  display: grid;
+  gap: 10px;
+}
+.sync-notion-blocker {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px;
+}
+.sync-notion-blocker strong,
+.sync-notion-blocker span {
+  display: block;
+}
+.sync-notion-blocker span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.sync-notion-clear {
+  margin: 0;
+}
+.sync-notion-footer {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
 @media (max-width: 900px) {
   .flow-meta,
   .flow-subgrid,
   .flow-choice-panel {
     grid-template-columns: 1fr;
+  }
+  .sync-notion-next-action {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .sync-notion-next-action span {
+    text-align: left;
   }
 }
