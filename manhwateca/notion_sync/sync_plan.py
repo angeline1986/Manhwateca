@@ -30,6 +30,7 @@ class NotionBlocker:
     code: str
     work_id: int | None = None
     work_title: str | None = None
+    message: str | None = None
     severity: BlockerSeverity = BlockerSeverity.BLOCKING
     next_action: NextAction = NextAction.REVIEW_BLOCKERS
 
@@ -50,9 +51,11 @@ def build_sync_result(summary: dict[str, Any] | None) -> NotionSyncResult:
     summary = summary or {}
     missing_items = _items(summary.get("missing"))
     duplicate_items = _items(summary.get("duplicates"))
+    error_items = _error_items(summary)
     blockers = (
         *_blockers("missing_page", missing_items, NextAction.REVIEW_MISSING),
         *_blockers("duplicate_page", duplicate_items, NextAction.REVIEW_DUPLICATES),
+        *_blockers("api_error", error_items, NextAction.RETRY),
     )
     created_count = _count(summary.get("created"))
     updated_count = _count(summary.get("updates"), fallback=summary.get("updated"))
@@ -60,7 +63,7 @@ def build_sync_result(summary: dict[str, Any] | None) -> NotionSyncResult:
     missing_count = _count(summary.get("missing"))
     duplicate_count = _count(summary.get("duplicates"))
 
-    if _has_error(summary):
+    if error_items:
         status = SyncStatus.ERROR
         next_action = NextAction.RETRY
     elif blockers:
@@ -83,11 +86,6 @@ def build_sync_result(summary: dict[str, Any] | None) -> NotionSyncResult:
         unchanged_count=unchanged_count,
         blockers=blockers,
     )
-
-
-def _has_error(summary: dict[str, Any]) -> bool:
-    errors = summary.get("errors")
-    return bool(summary.get("error") or errors)
 
 
 def _items(value: Any) -> tuple[Any, ...]:
@@ -140,10 +138,15 @@ def _blockers(
             code=code,
             work_id=_work_id(entry),
             work_title=_work_title(entry),
+            message=_message(entry),
             next_action=next_action,
         )
         for entry in entries
     )
+
+
+def _error_items(summary: dict[str, Any]) -> tuple[Any, ...]:
+    return (*_items(summary.get("error")), *_items(summary.get("errors")))
 
 
 def _work_id(entry: Any) -> int | None:
@@ -164,6 +167,14 @@ def _work_title(entry: Any) -> str | None:
         "name",
         "Nome",
     )
+    if value is None and isinstance(entry, str):
+        value = entry
+    text = str(value or "").strip()
+    return text or None
+
+
+def _message(entry: Any) -> str | None:
+    value = _field(entry, "message", "error", "detail", "reason")
     if value is None and isinstance(entry, str):
         value = entry
     text = str(value or "").strip()

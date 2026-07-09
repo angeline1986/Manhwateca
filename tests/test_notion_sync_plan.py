@@ -62,10 +62,41 @@ class NotionSyncPlanTests(unittest.TestCase):
         self.assertEqual("Duplicada", result.blockers[0].work_title)
 
     def test_build_sync_result_error_requests_retry(self):
-        result = build_sync_result({"error": "Falha na API"})
+        result = build_sync_result({"error": "Rate limit"})
 
         self.assertEqual(SyncStatus.ERROR, result.status)
         self.assertEqual(NextAction.RETRY, result.next_action)
+        self.assertEqual("api_error", result.blockers[0].code)
+        self.assertEqual(NextAction.RETRY, result.blockers[0].next_action)
+        self.assertEqual("Rate limit", result.blockers[0].message)
+
+    def test_build_sync_result_creates_api_error_blockers_from_errors(self):
+        result = build_sync_result({
+            "errors": [
+                {"work_id": 123, "work_title": "Alpha", "message": "Timeout"},
+                {"name": "Beta", "error": "Rate limit"},
+            ],
+        })
+
+        self.assertEqual(SyncStatus.ERROR, result.status)
+        self.assertEqual(NextAction.RETRY, result.next_action)
+        self.assertEqual(2, len(result.blockers))
+        self.assertEqual("api_error", result.blockers[0].code)
+        self.assertEqual(123, result.blockers[0].work_id)
+        self.assertEqual("Alpha", result.blockers[0].work_title)
+        self.assertEqual("Timeout", result.blockers[0].message)
+        self.assertEqual("Beta", result.blockers[1].work_title)
+        self.assertEqual("Rate limit", result.blockers[1].message)
+
+    def test_build_sync_result_ignores_empty_error_values(self):
+        result = build_sync_result({
+            "error": None,
+            "errors": None,
+        })
+
+        self.assertEqual(SyncStatus.SYNCED, result.status)
+        self.assertEqual(NextAction.NONE, result.next_action)
+        self.assertEqual((), result.blockers)
 
     def test_build_sync_result_tolerates_missing_keys(self):
         result = build_sync_result({"updated": 3})
