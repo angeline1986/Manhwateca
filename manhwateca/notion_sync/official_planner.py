@@ -12,6 +12,17 @@ from manhwateca.notion_sync.property_diff import changed_properties
 from manhwateca.notion_sync.sync_plan import build_sync_result
 
 
+OFFICIAL_METADATA_PROPERTIES = {
+    "Alias",
+    "Cap MangaUpdates",
+    "MangaUpdates",
+    "ID da obra",
+    "Temática",
+    "Formato",
+    "Universo",
+}
+
+
 def plan_official_metadata_sync(notion, database_id, repository=None):
     return OfficialNotionSyncPlanner(
         notion,
@@ -50,7 +61,7 @@ class OfficialNotionSyncPlanner:
         if page is None:
             return
         row = _record_to_sync_row(record)
-        expected = build_metadata_properties(row)
+        expected = _expected_metadata_properties(record, page)
         properties = changed_properties(page, expected)
         item = _summary_item(record, page)
         if not properties:
@@ -149,9 +160,64 @@ def _record_to_sync_row(record):
         "Temática": "|".join(record.themes or []),
         "Formato": _text(record.format),
         "Universo": "",
-        "Picância": _text(record.spice_level),
-        "Interesse": _text(record.personal_rank),
     }
+
+
+def _expected_metadata_properties(record, page):
+    expected = build_metadata_properties(_record_to_sync_row(record))
+    expected = {
+        name: value
+        for name, value in expected.items()
+        if name in OFFICIAL_METADATA_PROPERTIES
+    }
+    _merge_alias_property(expected, record, page)
+    return expected
+
+
+def _merge_alias_property(expected, record, page):
+    aliases = _merged_aliases(
+        _current_aliases(page),
+        split_values(record.alternative_title),
+    )
+    if aliases:
+        expected["Alias"] = {
+            "rich_text": [{"text": {"content": ", ".join(aliases)}}]
+        }
+    else:
+        expected.pop("Alias", None)
+
+
+def _current_aliases(page):
+    value = page.get("properties", {}).get("Alias", {})
+    if value.get("type") != "rich_text":
+        return []
+    text = "".join(
+        item.get("plain_text")
+        or item.get("text", {}).get("content", "")
+        for item in value.get("rich_text", [])
+    )
+    return _split_aliases(text)
+
+
+def _split_aliases(value):
+    return [
+        item.strip()
+        for chunk in str(value or "").split("|")
+        for item in chunk.split(",")
+        if item.strip()
+    ]
+
+
+def _merged_aliases(existing, local):
+    aliases = []
+    seen = set()
+    for alias in [*existing, *local]:
+        normalized = normalize_title(alias)
+        if not normalized or normalized in seen:
+            continue
+        aliases.append(alias.strip())
+        seen.add(normalized)
+    return aliases
 
 
 def _summary_item(record, page):

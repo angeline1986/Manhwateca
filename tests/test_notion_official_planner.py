@@ -4,6 +4,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from manhwateca.notion_sync.official_planner import (
+    _expected_metadata_properties,
     plan_official_metadata_sync,
 )
 from manhwateca.notion_sync.sync_plan import NextAction, SyncStatus
@@ -21,6 +22,10 @@ class FakeRecord:
     format: str | None = "Manhwa"
     spice_level: str | None = None
     personal_rank: str | None = None
+    score: Decimal | None = None
+    reading_status: str | None = None
+    last_read_chapter: Decimal | None = None
+    cover_url: str | None = None
     notion_page_id: str | None = None
 
 
@@ -199,6 +204,66 @@ class NotionOfficialPlannerTests(unittest.TestCase):
         self.assertEqual([], repository.updated)
         assert_no_writes(self, notion)
 
+    def test_editorial_fields_do_not_enter_official_metadata_plan(self):
+        record = FakeRecord(
+            spice_level="🔥 Alta",
+            personal_rank="Topzera",
+            score=Decimal("8"),
+            reading_status="Lendo",
+            last_read_chapter=Decimal("12"),
+        )
+
+        properties = _expected_metadata_properties(
+            record,
+            notion_page(
+                "Alpha",
+                "page-1",
+                interesse="Fila de Espera",
+                picancia="💕 Baixa",
+                nota="Ok",
+                status="Quero ler",
+                ultimo_lido=3,
+            ),
+        )
+
+        self.assertNotIn("Interesse", properties)
+        self.assertNotIn("Picância", properties)
+        self.assertNotIn("Nota", properties)
+        self.assertNotIn("Status", properties)
+        self.assertNotIn("Último lido", properties)
+
+    def test_cover_does_not_enter_official_metadata_plan(self):
+        properties = _expected_metadata_properties(
+            FakeRecord(cover_url="https://cdn.example.test/alpha.jpg"),
+            notion_page("Alpha", "page-1"),
+        )
+
+        self.assertNotIn("Capa", properties)
+        self.assertNotIn("Cover", properties)
+        self.assertNotIn("cover_url", properties)
+
+    def test_alias_preserves_existing_notion_aliases(self):
+        properties = _expected_metadata_properties(
+            FakeRecord(alternative_title="Alfa | Alpha Alias"),
+            notion_page("Alpha", "page-1", alias="Alfa, Manual Alias"),
+        )
+
+        self.assertEqual(
+            "Alfa, Manual Alias, Alpha Alias",
+            properties["Alias"]["rich_text"][0]["text"]["content"],
+        )
+
+    def test_alias_adds_local_alias_without_duplicate(self):
+        properties = _expected_metadata_properties(
+            FakeRecord(alternative_title="Alfa | Alpha Alias | alfa"),
+            notion_page("Alpha", "page-1", alias="Alfa"),
+        )
+
+        self.assertEqual(
+            "Alfa, Alpha Alias",
+            properties["Alias"]["rich_text"][0]["text"]["content"],
+        )
+
 
 def fake_notion(database_pages=None, pages_by_id=None, database_error=None):
     return SimpleNamespace(
@@ -217,6 +282,11 @@ def notion_page(
     alias=None,
     themes=None,
     formato=None,
+    interesse=None,
+    picancia=None,
+    nota=None,
+    status=None,
+    ultimo_lido=None,
 ):
     properties = {
         "Nome": {
@@ -247,6 +317,31 @@ def notion_page(
         properties["Formato"] = {
             "type": "select",
             "select": {"name": formato},
+        }
+    if interesse is not None:
+        properties["Interesse"] = {
+            "type": "select",
+            "select": {"name": interesse},
+        }
+    if picancia is not None:
+        properties["Picância"] = {
+            "type": "select",
+            "select": {"name": picancia},
+        }
+    if nota is not None:
+        properties["Nota"] = {
+            "type": "select",
+            "select": {"name": nota},
+        }
+    if status is not None:
+        properties["Status"] = {
+            "type": "select",
+            "select": {"name": status},
+        }
+    if ultimo_lido is not None:
+        properties["Último lido"] = {
+            "type": "number",
+            "number": ultimo_lido,
         }
     return {"id": page_id, "properties": properties}
 
