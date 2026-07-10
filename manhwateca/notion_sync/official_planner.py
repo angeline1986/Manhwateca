@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
@@ -9,7 +10,7 @@ from manhwateca.notion_sync.csv_properties import (
 from manhwateca.notion_sync.matching import normalize_title
 from manhwateca.notion_sync.pages import extract_title
 from manhwateca.notion_sync.property_diff import changed_properties
-from manhwateca.notion_sync.sync_plan import build_sync_result
+from manhwateca.notion_sync.sync_plan import NotionSyncResult, build_sync_result
 
 
 OFFICIAL_METADATA_PROPERTIES = {
@@ -21,6 +22,22 @@ OFFICIAL_METADATA_PROPERTIES = {
     "Formato",
     "Universo",
 }
+
+
+@dataclass(frozen=True)
+class NotionPageUpdatePlan:
+    work_id: int
+    work_title: str
+    page_id: str
+    expected_last_edited_time: str | None
+    properties: dict
+
+
+@dataclass(frozen=True)
+class OfficialNotionSyncPlan:
+    result: NotionSyncResult
+    updates: tuple[NotionPageUpdatePlan, ...] = ()
+    unchanged: tuple[NotionPageUpdatePlan, ...] = ()
 
 
 def plan_official_metadata_sync(notion, database_id, repository=None):
@@ -48,15 +65,21 @@ class OfficialNotionSyncPlanner:
             "duplicates": [],
             "errors": [],
         }
+        updates = []
+        unchanged = []
         try:
             records = self.repository.list_mangas()
             for record in records:
-                self._plan_record(record, summary)
+                self._plan_record(record, summary, updates, unchanged)
         except Exception as error:
             summary["errors"].append({"message": str(error)})
-        return build_sync_result(summary)
+        return OfficialNotionSyncPlan(
+            result=build_sync_result(summary),
+            updates=tuple(updates),
+            unchanged=tuple(unchanged),
+        )
 
-    def _plan_record(self, record, summary):
+    def _plan_record(self, record, summary, updates, unchanged):
         page = self._find_page(record, summary)
         if page is None:
             return
@@ -66,9 +89,11 @@ class OfficialNotionSyncPlanner:
         item = _summary_item(record, page)
         if not properties:
             summary["unchanged"].append(item)
+            unchanged.append(_page_update_plan(record, page, {}))
             return
         item["properties"] = sorted(properties)
         summary["updates"].append(item)
+        updates.append(_page_update_plan(record, page, properties))
 
     def _find_page(self, record, summary):
         if record.notion_page_id:
@@ -226,6 +251,16 @@ def _summary_item(record, page):
         "work_title": record.title,
         "page_id": page.get("id"),
     }
+
+
+def _page_update_plan(record, page, properties):
+    return NotionPageUpdatePlan(
+        work_id=record.id,
+        work_title=record.title,
+        page_id=page.get("id"),
+        expected_last_edited_time=page.get("last_edited_time"),
+        properties=properties,
+    )
 
 
 def _text(value: Any) -> str:

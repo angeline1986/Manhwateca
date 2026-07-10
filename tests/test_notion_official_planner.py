@@ -94,8 +94,9 @@ class NotionOfficialPlannerTests(unittest.TestCase):
 
         self.assertEqual(["page-1"], notion.pages.retrieved)
         self.assertFalse(notion.databases.queries)
-        self.assertEqual(SyncStatus.PAUSED, result.status)
-        self.assertEqual(1, result.updated_count)
+        self.assertEqual(SyncStatus.PAUSED, result.result.status)
+        self.assertEqual(1, result.result.updated_count)
+        self.assertEqual(1, len(result.updates))
         assert_no_writes(self, notion)
 
     def test_finds_page_by_title_or_alias(self):
@@ -109,9 +110,9 @@ class NotionOfficialPlannerTests(unittest.TestCase):
             repository=FakeRepository([record]),
         )
 
-        self.assertEqual(SyncStatus.PAUSED, result.status)
-        self.assertEqual(1, result.updated_count)
-        self.assertEqual(0, result.missing_count)
+        self.assertEqual(SyncStatus.PAUSED, result.result.status)
+        self.assertEqual(1, result.result.updated_count)
+        self.assertEqual(0, result.result.missing_count)
         assert_no_writes(self, notion)
 
     def test_reports_missing_page(self):
@@ -121,10 +122,10 @@ class NotionOfficialPlannerTests(unittest.TestCase):
             repository=FakeRepository([FakeRecord()]),
         )
 
-        self.assertEqual(SyncStatus.BLOCKED, result.status)
-        self.assertEqual(NextAction.REVIEW_MISSING, result.next_action)
-        self.assertEqual("missing_page", result.blockers[0].code)
-        self.assertEqual(1, result.blockers[0].work_id)
+        self.assertEqual(SyncStatus.BLOCKED, result.result.status)
+        self.assertEqual(NextAction.REVIEW_MISSING, result.result.next_action)
+        self.assertEqual("missing_page", result.result.blockers[0].code)
+        self.assertEqual(1, result.result.blockers[0].work_id)
 
     def test_reports_duplicate_page(self):
         pages = [
@@ -138,9 +139,9 @@ class NotionOfficialPlannerTests(unittest.TestCase):
             repository=FakeRepository([FakeRecord()]),
         )
 
-        self.assertEqual(SyncStatus.BLOCKED, result.status)
-        self.assertEqual(NextAction.REVIEW_DUPLICATES, result.next_action)
-        self.assertEqual("duplicate_page", result.blockers[0].code)
+        self.assertEqual(SyncStatus.BLOCKED, result.result.status)
+        self.assertEqual(NextAction.REVIEW_DUPLICATES, result.result.next_action)
+        self.assertEqual("duplicate_page", result.result.blockers[0].code)
 
     def test_detects_updates_without_writing(self):
         record = FakeRecord(themes=["Drama", "Romance"])
@@ -153,9 +154,9 @@ class NotionOfficialPlannerTests(unittest.TestCase):
             repository=FakeRepository([record]),
         )
 
-        self.assertEqual(SyncStatus.PAUSED, result.status)
-        self.assertEqual(1, result.updated_count)
-        self.assertEqual(NextAction.APPLY, result.next_action)
+        self.assertEqual(SyncStatus.PAUSED, result.result.status)
+        self.assertEqual(1, result.result.updated_count)
+        self.assertEqual(NextAction.APPLY, result.result.next_action)
         assert_no_writes(self, notion)
 
     def test_detects_unchanged(self):
@@ -178,9 +179,10 @@ class NotionOfficialPlannerTests(unittest.TestCase):
             repository=FakeRepository([record]),
         )
 
-        self.assertEqual(SyncStatus.SYNCED, result.status)
-        self.assertEqual(0, result.updated_count)
-        self.assertEqual(1, result.unchanged_count)
+        self.assertEqual(SyncStatus.SYNCED, result.result.status)
+        self.assertEqual(0, result.result.updated_count)
+        self.assertEqual(1, result.result.unchanged_count)
+        self.assertEqual(1, len(result.unchanged))
         assert_no_writes(self, notion)
 
     def test_reports_api_error(self):
@@ -190,10 +192,10 @@ class NotionOfficialPlannerTests(unittest.TestCase):
             repository=FakeRepository([FakeRecord()]),
         )
 
-        self.assertEqual(SyncStatus.ERROR, result.status)
-        self.assertEqual(NextAction.RETRY, result.next_action)
-        self.assertEqual("api_error", result.blockers[0].code)
-        self.assertEqual("Rate limit", result.blockers[0].message)
+        self.assertEqual(SyncStatus.ERROR, result.result.status)
+        self.assertEqual(NextAction.RETRY, result.result.next_action)
+        self.assertEqual("api_error", result.result.blockers[0].code)
+        self.assertEqual("Rate limit", result.result.blockers[0].message)
 
     def test_never_writes_to_notion_or_postgresql(self):
         repository = FakeRepository([FakeRecord()])

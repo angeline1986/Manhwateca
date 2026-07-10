@@ -548,6 +548,63 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertEqual("ok", params[4])
         self.assertIn('"nome": "Alpha"', params[5])
 
+    def test_updates_notion_sync_fields_by_id(self):
+        connection = FakeConnection()
+        repository = MangaRepository(connection)
+
+        updated = repository.update_notion_sync_fields_by_id(
+            7,
+            page_id="page-1",
+            status="synced",
+            synced_at="2026-01-01T00:00:00",
+        )
+
+        self.assertTrue(updated)
+        query, params = connection.updated[0]
+        self.assertIn("where id = %s", query)
+        self.assertEqual("page-1", params[0])
+        self.assertEqual("2026-01-01T00:00:00", params[1])
+        self.assertEqual("synced", params[2])
+        self.assertEqual(7, params[3])
+
+    def test_update_notion_sync_fields_by_id_preserves_timestamp_without_synced_at(self):
+        connection = FakeConnection()
+        repository = MangaRepository(connection)
+
+        repository.update_notion_sync_fields_by_id(
+            7,
+            page_id="page-1",
+            status="error",
+            synced_at=None,
+        )
+
+        query, params = connection.updated[0]
+        self.assertIn("coalesce(%s, notion_last_synced_at)", query)
+        self.assertIsNone(params[1])
+        self.assertEqual("error", params[2])
+
+    def test_records_sync_event_by_id_with_payload(self):
+        connection = FakeConnection()
+        repository = MangaRepository(connection)
+
+        recorded = repository.record_sync_event_by_id(
+            7,
+            event_type="notion_metadata_sync",
+            status="conflict",
+            page_id="page-1",
+            message="stale",
+            payload={"code": "stale_notion_page"},
+        )
+
+        self.assertTrue(recorded)
+        params = connection.sync_events[0]
+        self.assertEqual(7, params[0])
+        self.assertEqual("page-1", params[1])
+        self.assertEqual("notion_metadata_sync", params[2])
+        self.assertEqual("conflict", params[3])
+        self.assertEqual("stale", params[4])
+        self.assertIn('"code": "stale_notion_page"', params[5])
+
     def test_enqueues_mangaupdates_decision(self):
         connection = FakeConnection()
         repository = MangaRepository(connection)

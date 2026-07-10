@@ -335,6 +335,34 @@ class MangaRepository:
         self._connection().commit()
         return True
 
+    def update_notion_sync_fields_by_id(
+        self,
+        work_id: int,
+        *,
+        page_id=None,
+        status=statuses.SYNCED,
+        synced_at=None,
+    ) -> bool:
+        statuses.validate_status(status)
+        self._execute(
+            """
+            UPDATE mangas
+            SET
+                notion_page_id = COALESCE(%s, notion_page_id),
+                notion_last_synced_at = COALESCE(%s, notion_last_synced_at),
+                notion_sync_status = %s
+            WHERE id = %s
+            """,
+            (
+                _string_or_none(page_id),
+                synced_at,
+                status,
+                work_id,
+            ),
+        )
+        self._connection().commit()
+        return True
+
     def record_sync_event(
         self,
         name: str,
@@ -362,6 +390,40 @@ class MangaRepository:
             """,
             (
                 manga_id,
+                _string_or_none(page_id),
+                event_type,
+                status,
+                message,
+                json.dumps(payload or {}, ensure_ascii=False),
+            ),
+        )
+        return True
+
+    def record_sync_event_by_id(
+        self,
+        work_id: int,
+        *,
+        event_type: str,
+        status: str,
+        page_id=None,
+        message=None,
+        payload=None,
+    ) -> bool:
+        statuses.validate_status(status)
+        self._execute(
+            """
+            INSERT INTO sync_events (
+                manga_id,
+                notion_page_id,
+                event_type,
+                sync_status,
+                message,
+                payload
+            )
+            VALUES (%s, %s, %s, %s, %s, %s::jsonb)
+            """,
+            (
+                work_id,
                 _string_or_none(page_id),
                 event_type,
                 status,
