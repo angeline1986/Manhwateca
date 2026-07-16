@@ -397,6 +397,7 @@ class MangaRepository:
                 json.dumps(payload or {}, ensure_ascii=False),
             ),
         )
+        self._connection().commit()
         return True
 
     def record_sync_event_by_id(
@@ -431,6 +432,7 @@ class MangaRepository:
                 json.dumps(payload or {}, ensure_ascii=False),
             ),
         )
+        self._connection().commit()
         return True
 
     def enqueue_decision(

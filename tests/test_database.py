@@ -547,6 +547,7 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertEqual("synced", params[3])
         self.assertEqual("ok", params[4])
         self.assertIn('"nome": "Alpha"', params[5])
+        self.assertEqual(1, len(connection.commits))
 
     def test_updates_notion_sync_fields_by_id(self):
         connection = FakeConnection()
@@ -604,6 +605,7 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertEqual("conflict", params[3])
         self.assertEqual("stale", params[4])
         self.assertIn('"code": "stale_notion_page"', params[5])
+        self.assertEqual(1, len(connection.commits))
 
     def test_enqueues_mangaupdates_decision(self):
         connection = FakeConnection()

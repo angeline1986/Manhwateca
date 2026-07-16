@@ -42,7 +42,8 @@ class OfficialNotionSyncApplierTests(unittest.TestCase):
 
         self.assertEqual(SyncStatus.BLOCKED, result.status)
         self.assertEqual(0, result.applied_count)
-        self.assertEqual("pending", repository.updated[0]["status"])
+        self.assertEqual([], repository.updated)
+        self.assertEqual([], repository.events)
 
     def test_blocks_duplicate_page_without_writing(self):
         notion = fake_notion()
@@ -53,8 +54,20 @@ class OfficialNotionSyncApplierTests(unittest.TestCase):
         ).apply(sync_plan(blockers=(blocker("duplicate_page"),)))
 
         self.assertEqual(SyncStatus.BLOCKED, result.status)
-        self.assertEqual("conflict", repository.updated[0]["status"])
         self.assertEqual([], notion.pages.updated)
+        self.assertEqual([], repository.updated)
+        self.assertEqual([], repository.events)
+
+    def test_generic_blocker_does_not_persist_locally(self):
+        repository = FakeRepository()
+        result = OfficialNotionSyncApplier(
+            fake_notion(),
+            repository,
+        ).apply(sync_plan(blockers=(blocker("generic_blocker"),)))
+
+        self.assertEqual(SyncStatus.BLOCKED, result.status)
+        self.assertEqual([], repository.updated)
+        self.assertEqual([], repository.events)
 
     def test_rejects_editorial_property(self):
         item = update_plan(properties={"Interesse": {"select": {"name": "Topzera"}}})
@@ -95,7 +108,8 @@ class OfficialNotionSyncApplierTests(unittest.TestCase):
 
         self.assertEqual(SyncStatus.BLOCKED, result.status)
         self.assertEqual("stale_notion_page", result.blockers[0].code)
-        self.assertEqual("conflict", repository.updated[0]["status"])
+        self.assertEqual([], repository.updated)
+        self.assertEqual([], repository.events)
         self.assertEqual([], notion.pages.updated)
 
     def test_aborts_when_current_diff_no_longer_matches_plan(self):

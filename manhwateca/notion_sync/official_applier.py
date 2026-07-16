@@ -33,7 +33,6 @@ class OfficialNotionSyncApplier:
     def apply(self, plan: OfficialNotionSyncPlan) -> NotionApplyResult:
         blockers = _blocking_blockers(plan)
         if blockers:
-            self._record_blockers(blockers)
             return NotionApplyResult(
                 status=SyncStatus.BLOCKED,
                 next_action=plan.result.next_action,
@@ -52,7 +51,6 @@ class OfficialNotionSyncApplier:
 
         stale_blockers = self._prevalidate(plan)
         if stale_blockers:
-            self._record_blockers(stale_blockers)
             return NotionApplyResult(
                 status=SyncStatus.BLOCKED,
                 next_action=NextAction.REVIEW_BLOCKERS,
@@ -145,26 +143,6 @@ class OfficialNotionSyncApplier:
                 blockers.append(_stale_blocker(item))
         return tuple(blockers)
 
-    def _record_blockers(self, blockers):
-        for blocker in blockers:
-            if blocker.work_id is None:
-                continue
-            status = _status_for_blocker(blocker)
-            self.repository.update_notion_sync_fields_by_id(
-                blocker.work_id,
-                page_id=None,
-                status=status,
-                synced_at=None,
-            )
-            self.repository.record_sync_event_by_id(
-                blocker.work_id,
-                event_type="notion_metadata_sync",
-                status=status,
-                page_id=None,
-                message=blocker.message,
-                payload={"code": blocker.code},
-            )
-
     def _record_error(self, item, blocker):
         try:
             self.repository.update_notion_sync_fields_by_id(
@@ -227,11 +205,3 @@ def _api_blocker(item, error):
         message=str(error),
         next_action=NextAction.RETRY,
     )
-
-
-def _status_for_blocker(blocker):
-    if blocker.code == "missing_page":
-        return statuses.PENDING
-    if blocker.code == "api_error":
-        return statuses.ERROR
-    return statuses.CONFLICT
