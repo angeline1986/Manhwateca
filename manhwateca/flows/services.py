@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Protocol
 
-from manhwateca.flows.domain import FlowWarning, StageResult, StageId
+from manhwateca.flows.domain import FlowError, FlowWarning, StageResult, StageId
 from manhwateca.flows.integrations import FlowIntegrations
 
 
@@ -197,7 +197,42 @@ class SyncNotionService(BaseStageService):
     def execute(self, **kwargs) -> StageResult:
         result = self.integrations.notion.sync_page()
         warnings = ()
-        if result.skipped or result.failed:
+        errors = ()
+        status = result.metrics.get("status")
+        if status == "blocked":
+            warnings = (
+                FlowWarning(
+                    result.metrics.get(
+                        "message",
+                        f"Sincronização pausada por {result.skipped} bloqueio(s).",
+                    ),
+                    code="NOTION_SYNC_BLOCKED",
+                    details=result.metrics,
+                ),
+            )
+        elif status == "error" and result.metrics.get("partial"):
+            warnings = (
+                FlowWarning(
+                    result.metrics.get(
+                        "message",
+                        "Sincronização com Notion interrompida com resultado parcial.",
+                    ),
+                    code="NOTION_SYNC_PARTIAL",
+                    details=result.metrics,
+                ),
+            )
+        elif status == "error" or result.failed:
+            errors = (
+                FlowError(
+                    result.metrics.get(
+                        "message",
+                        "Sincronização com Notion falhou.",
+                    ),
+                    code="NOTION_SYNC_ERROR",
+                    details=result.metrics,
+                ),
+            )
+        elif result.skipped:
             warnings = (
                 FlowWarning(
                     "Sincronização com Notion concluída com alertas.",
@@ -207,10 +242,13 @@ class SyncNotionService(BaseStageService):
                     },
                 ),
             )
+        elif status == "synced" and "message" in result.metrics:
+            warnings = ()
         return StageResult(
             processed=result.created + result.updated,
             skipped=result.skipped,
             warnings=warnings,
+            errors=errors,
             metrics={
                 "created": result.created,
                 "updated": result.updated,

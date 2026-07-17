@@ -25,6 +25,8 @@ from manhwateca.flows.normalization import (
 )
 from manhwateca.flows.orchestrator import WorkflowOrchestrator
 from manhwateca.flows.repository import FlowRepository
+from manhwateca.database import MangaRepository
+from manhwateca.notion_sync.flow_integration import OfficialNotionFlowIntegration
 
 
 logger = logging.getLogger(__name__)
@@ -195,14 +197,75 @@ class DeferredNotionIntegration:
         return NotionSyncResult()
 
 
+class UnavailableNotionIntegration:
+    def __init__(self, message: str = "Integração com o Notion indisponível."):
+        self.message = message
+
+    def check_status(self) -> IntegrationCheck:
+        return IntegrationCheck(
+            "Notion",
+            IntegrationStatus.UNAVAILABLE,
+            message=self.message,
+            errors=(
+                FlowError(
+                    self.message,
+                    code="NOTION_UNAVAILABLE",
+                ),
+            ),
+        )
+
+    def validate(self, stage: StageId | None = None) -> IntegrationValidation:
+        return IntegrationValidation(
+            stage=stage,
+            valid=False,
+            errors=(
+                FlowError(
+                    self.message,
+                    code="NOTION_UNAVAILABLE",
+                ),
+            ),
+        )
+
+    def sync_page(self) -> NotionSyncResult:
+        return NotionSyncResult(
+            failed=1,
+            metrics={
+                "status": "error",
+                "message": self.message,
+                "applied_count": 0,
+                "failed_count": 1,
+            },
+        )
+
+
 def default_flow_integrations() -> FlowIntegrations:
     return FlowIntegrations(
         database=DatabaseHealthIntegration(),
         library=LocalLibraryIntegration(),
         mangaupdates=MangaUpdatesFlowIntegration(),
-        notion=DeferredNotionIntegration(),
+        notion=_default_notion_integration(),
         normalization=LocalFileNormalizationIntegration(),
     )
+
+
+def _default_notion_integration():
+    token = os.environ.get("NOTION_TOKEN", "").strip()
+    database_id = os.environ.get("NOTION_DATABASE_ID", "").strip()
+    if not token or not database_id:
+        return UnavailableNotionIntegration(
+            "Integração com o Notion indisponível. Verifique a configuração do Notion.",
+        )
+    try:
+        from notion_client import Client
+
+        return OfficialNotionFlowIntegration(
+            Client(auth=token),
+            database_id,
+            repository=MangaRepository(),
+        )
+    except Exception:
+        logger.warning("Falha ao configurar integração oficial com Notion.")
+        return UnavailableNotionIntegration()
 
 
 def _stale_timeout_minutes() -> int:

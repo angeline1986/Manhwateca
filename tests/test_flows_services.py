@@ -80,6 +80,7 @@ class FlowStageServicesTests(unittest.TestCase):
 
         self.assertEqual(6, result.processed)
         self.assertEqual([7, 9], integrations.mangaupdates.last_selected_ids)
+        self.assertEqual([], integrations.notion.calls)
 
     def test_sync_notion_uses_notion_sync(self):
         integrations = fake_integrations()
@@ -87,6 +88,87 @@ class FlowStageServicesTests(unittest.TestCase):
 
         self.assertEqual(7, result.processed)
         self.assertEqual(["sync_page"], integrations.notion.calls)
+
+    def test_sync_notion_reports_blocked_plan_as_warning(self):
+        integrations = fake_integrations(
+            notion_result=NotionSyncResult(
+                skipped=1,
+                metrics={
+                    "status": "blocked",
+                    "message": "Sincronização pausada por 1 bloqueio(s).",
+                    "blocker_count": 1,
+                },
+            )
+        )
+
+        result = SyncNotionService(integrations).execute()
+
+        self.assertFalse(result.has_errors)
+        self.assertTrue(result.has_warnings)
+        self.assertEqual("NOTION_SYNC_BLOCKED", result.warnings[0].code)
+        self.assertEqual(1, result.skipped)
+        self.assertEqual("blocked", result.metrics["status"])
+
+    def test_sync_notion_reports_total_error_as_stage_error(self):
+        integrations = fake_integrations(
+            notion_result=NotionSyncResult(
+                failed=1,
+                metrics={
+                    "status": "error",
+                    "message": "Erro ao planejar sincronização com Notion.",
+                    "applied_count": 0,
+                    "failed_count": 1,
+                },
+            )
+        )
+
+        result = SyncNotionService(integrations).execute()
+
+        self.assertTrue(result.has_errors)
+        self.assertFalse(result.has_warnings)
+        self.assertEqual("NOTION_SYNC_ERROR", result.errors[0].code)
+        self.assertEqual(1, result.metrics["failed"])
+
+    def test_sync_notion_reports_partial_error_as_warning(self):
+        integrations = fake_integrations(
+            notion_result=NotionSyncResult(
+                updated=1,
+                failed=1,
+                metrics={
+                    "status": "error",
+                    "message": "Erro ao aplicar sincronização com Notion.",
+                    "applied_count": 1,
+                    "failed_count": 1,
+                    "partial": True,
+                },
+            )
+        )
+
+        result = SyncNotionService(integrations).execute()
+
+        self.assertFalse(result.has_errors)
+        self.assertTrue(result.has_warnings)
+        self.assertEqual("NOTION_SYNC_PARTIAL", result.warnings[0].code)
+        self.assertEqual(1, result.processed)
+        self.assertEqual(1, result.metrics["applied_count"])
+
+    def test_sync_notion_no_changes_is_not_warning(self):
+        integrations = fake_integrations(
+            notion_result=NotionSyncResult(
+                metrics={
+                    "status": "synced",
+                    "message": "Nenhuma alteração técnica necessária no Notion.",
+                    "unchanged_count": 2,
+                }
+            )
+        )
+
+        result = SyncNotionService(integrations).execute()
+
+        self.assertFalse(result.has_errors)
+        self.assertFalse(result.has_warnings)
+        self.assertEqual("synced", result.metrics["status"])
+        self.assertEqual(2, result.metrics["unchanged_count"])
 
     def test_validate_raises_when_integration_is_invalid(self):
         service = ResolveIdsService(fake_integrations(valid=False))
@@ -148,21 +230,22 @@ class FakeMangaUpdatesIntegration(FakeDatabaseIntegration):
 
 
 class FakeNotionIntegration(FakeDatabaseIntegration):
-    def __init__(self, valid=True):
+    def __init__(self, valid=True, result=None):
         super().__init__(valid)
         self.calls = []
+        self.result = result
 
     def sync_page(self):
         self.calls.append("sync_page")
-        return NotionSyncResult(created=4, updated=3)
+        return self.result or NotionSyncResult(created=4, updated=3)
 
 
-def fake_integrations(valid=True, library_scan=None):
+def fake_integrations(valid=True, library_scan=None, notion_result=None):
     return FlowIntegrations(
         database=FakeDatabaseIntegration(valid),
         library=FakeLibraryIntegration(valid, library_scan),
         mangaupdates=FakeMangaUpdatesIntegration(valid),
-        notion=FakeNotionIntegration(valid),
+        notion=FakeNotionIntegration(valid, notion_result),
     )
 
 
