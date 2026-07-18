@@ -124,7 +124,17 @@ export function initFlowsPage(elements, options = {}) {
   }
 
   async function refreshAfterStage(stageId) {
-    const maxAttempts = stageId === "update_metadata" ? 60 : 2;
+    const maxAttemptsByStage = {
+      update_metadata: 60,
+      sync_notion: 120,
+    };
+    const terminalStatuses = new Set([
+      "completed",
+      "completed_with_warnings",
+      "failed",
+      "cancelled",
+    ]);
+    const maxAttempts = maxAttemptsByStage[stageId] || 2;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 800));
       const data = await loadFlowsApiState({ includeDetails: false });
@@ -132,7 +142,7 @@ export function initFlowsPage(elements, options = {}) {
       const run = data?.run || { status: "idle", results: {} };
       const stageResult = run.results?.[stageId];
       const completed = stageResult
-        ? stageResult.status === "completed" || stageResult.status === "completed_with_warnings"
+        ? terminalStatuses.has(stageResult.status)
         : run.status !== "running";
       if (completed) break;
     }

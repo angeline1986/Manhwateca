@@ -112,7 +112,11 @@ function renderCurrentPanel(elements, context) {
     return;
   }
   if (selectedStage.id === "sync_notion") {
-    elements.flowsCurrentCards.innerHTML = renderSyncNotionPanel(context.notionMetadata);
+    elements.flowsCurrentCards.innerHTML = renderSyncNotionPanel({
+      stageResult: run.results?.sync_notion,
+      stageStatus: selectedStatus,
+      legacyMetadata: context.notionMetadata,
+    });
     return;
   }
   elements.flowsCurrentCards.innerHTML = defaultCards(selectedStage, data);
@@ -170,6 +174,7 @@ export function primaryLabel(activeStage, activeStatus) {
 
 function renderTopAction(elements, activeStage, activeStatus, visibleRunning) {
   if (elements.flowsStartWorkflow) {
+    elements.flowsStartWorkflow.hidden = activeStage.id === "sync_notion";
     elements.flowsStartWorkflow.disabled = visibleRunning;
     elements.flowsStartWorkflow.textContent = visibleRunning
       ? "Etapa em execução"
