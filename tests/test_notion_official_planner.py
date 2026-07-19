@@ -332,6 +332,45 @@ class NotionOfficialPlannerTests(unittest.TestCase):
             properties["Alias"]["rich_text"][0]["text"]["content"],
         )
 
+    def test_alias_does_not_use_generated_id_from_work_code(self):
+        properties = _expected_metadata_properties(
+            FakeRecord(work_code="123", alternative_title="ID 123"),
+            notion_page("Alpha", "page-1", work_code=123),
+        )
+
+        self.assertEqual(123, properties["ID da obra"]["number"])
+        self.assertNotIn("Alias", properties)
+
+    def test_alias_true_value_is_sent_with_work_code(self):
+        properties = _expected_metadata_properties(
+            FakeRecord(work_code="123", alternative_title="Alfa Real"),
+            notion_page("Alpha", "page-1", work_code=123),
+        )
+
+        self.assertEqual(
+            "Alfa Real",
+            properties["Alias"]["rich_text"][0]["text"]["content"],
+        )
+
+    def test_generated_id_alias_already_in_notion_is_cleared(self):
+        properties = _expected_metadata_properties(
+            FakeRecord(work_code="123", alternative_title=None),
+            notion_page("Alpha", "page-1", work_code=123, alias="ID 123"),
+        )
+
+        self.assertEqual({"rich_text": []}, properties["Alias"])
+
+    def test_generated_id_alias_is_not_preserved_when_mixed_with_real_alias(self):
+        properties = _expected_metadata_properties(
+            FakeRecord(work_code="123", alternative_title="Alpha Alias"),
+            notion_page("Alpha", "page-1", work_code=123, alias="ID 123, Alfa"),
+        )
+
+        self.assertEqual(
+            "Alfa, Alpha Alias",
+            properties["Alias"]["rich_text"][0]["text"]["content"],
+        )
+
 
 def fake_notion(database_pages=None, pages_by_id=None, database_error=None):
     return SimpleNamespace(

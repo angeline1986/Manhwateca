@@ -165,9 +165,9 @@ def _validate_decision(
         )
 
     candidate_title = (
-        selected_title or f"ID {series_id}"
+        _manual_candidate_title(selected_title, series_id)
         if manual_id
-        else str(candidate.get("titulo") or "").strip()
+        else _empty_to_none(candidate.get("titulo"))
     )
     if (
         candidate
@@ -179,6 +179,21 @@ def _validate_decision(
             f"{name}: título selecionado não corresponde ao candidato."
         )
     return (name, series_id, candidate_title), None
+
+
+def _manual_candidate_title(selected_title, series_id):
+    title = _empty_to_none(selected_title)
+    if title is None:
+        return None
+    if title.casefold() == f"id {series_id}".casefold():
+        return None
+    return title
+
+
+def _empty_to_none(value):
+    if value is None or str(value).strip() == "":
+        return None
+    return str(value).strip()
 
 
 def _persist_changes(items, ids_path):

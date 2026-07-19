@@ -431,6 +431,29 @@ class WebMangaUpdatesTests(unittest.TestCase):
             "candidate_title": "Valid",
         }, repository.flow_applied[0])
 
+    def test_apply_manual_decision_does_not_send_generated_id_as_found_title(self):
+        repository = FakeReviewRepository()
+        decision = {
+            "queueId": "flow_42",
+            "Nome": "Alpha",
+            "ID": 999,
+            "Nome encontrado": "ID 999",
+            "Origem": "ID informado manualmente",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            applied, rejected, backup = apply_review_decisions(
+                self._project(directory, []),
+                [decision],
+                repository_factory=lambda: repository,
+            )
+
+        self.assertEqual(["Alpha"], applied)
+        self.assertEqual([], rejected)
+        self.assertIsNone(backup)
+        self.assertEqual(("Alpha", 999, None), repository.confirmed[0])
+        self.assertIsNone(repository.resolved[0]["resolution"]["nome_encontrado"])
+        self.assertIsNone(repository.flow_applied[0]["candidate_title"])
+
     def test_apply_decision_accepts_flow_candidate_review_source(self):
         repository = FakeReviewRepository()
         rows = [{

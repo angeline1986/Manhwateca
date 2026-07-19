@@ -387,7 +387,7 @@ class MangaRepository:
                 """,
                 (
                     normalized_series_id,
-                    _empty_to_none(found_title),
+                    _confirmation_alias(found_title, normalized_series_id),
                     target.id,
                 ),
             )
@@ -1025,6 +1025,19 @@ def _int_or_none(value):
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _confirmation_alias(value, series_id):
+    alias = _empty_to_none(value)
+    if alias is None:
+        return None
+    normalized_series_id = str(series_id or "").strip()
+    if (
+        normalized_series_id
+        and alias.casefold() == f"id {normalized_series_id}".casefold()
+    ):
+        return None
+    return alias
 
 
 def _first_existing(columns, *candidates):

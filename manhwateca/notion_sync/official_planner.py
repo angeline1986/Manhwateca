@@ -283,14 +283,17 @@ def _expected_metadata_properties(record, page):
 
 
 def _merge_alias_property(expected, record, page):
-    aliases = _merged_aliases(
+    aliases, removed_current_alias = _merged_aliases(
         _current_aliases(page),
         split_values(record.alternative_title),
+        record.work_code,
     )
     if aliases:
         expected["Alias"] = {
             "rich_text": [{"text": {"content": ", ".join(aliases)}}]
         }
+    elif removed_current_alias:
+        expected["Alias"] = {"rich_text": []}
     else:
         expected.pop("Alias", None)
 
@@ -316,16 +319,29 @@ def _split_aliases(value):
     ]
 
 
-def _merged_aliases(existing, local):
+def _merged_aliases(existing, local, work_code=None):
     aliases = []
     seen = set()
-    for alias in [*existing, *local]:
+    removed_current_alias = False
+    existing_count = len(existing)
+    for index, alias in enumerate([*existing, *local]):
+        if _is_generated_id_alias(alias, work_code):
+            if index < existing_count:
+                removed_current_alias = True
+            continue
         normalized = normalize_title(alias)
         if not normalized or normalized in seen:
             continue
         aliases.append(alias.strip())
         seen.add(normalized)
-    return aliases
+    return aliases, removed_current_alias
+
+
+def _is_generated_id_alias(alias, work_code):
+    normalized_work_code = str(work_code or "").strip()
+    if not normalized_work_code:
+        return False
+    return str(alias or "").strip().casefold() == f"id {normalized_work_code}".casefold()
 
 
 def _summary_item(record, page):

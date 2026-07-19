@@ -13,7 +13,12 @@ import id_review
 
 class FakeDecisionRepository:
     def __init__(self):
+        self.confirmed = []
         self.resolved = []
+
+    def confirm_mangaupdates_id(self, name, series_id, found_title=None):
+        self.confirmed.append((name, series_id, found_title))
+        return True
 
     def resolve_decision(self, **kwargs):
         self.resolved.append(kwargs)
@@ -283,6 +288,7 @@ class IdReviewTests(unittest.TestCase):
             self.assertEqual(["Unknown"], applied)
             self.assertEqual([], rejected)
             self.assertEqual(999, updated["ID"])
+            self.assertIsNone(updated["Nome encontrado"])
 
     def test_manual_id_does_not_require_candidate_title_match(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -317,6 +323,68 @@ class IdReviewTests(unittest.TestCase):
 
             self.assertEqual(["Ian's Cage"], applied)
             self.assertEqual([], rejected)
+            updated = json.loads(ids_path.read_text(encoding="utf-8"))[0]
+            self.assertIsNone(updated["Nome encontrado"])
+
+    def test_manual_id_with_blank_title_does_not_create_generated_alias(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ids_path = directory / "buscaIds.json"
+            decisions_path = directory / "decisions.json"
+            ids_path.write_text(
+                json.dumps([{"Nome": "Unknown", "Status": "Revisar", "IDs": []}]),
+                encoding="utf-8",
+            )
+            decisions_path.write_text(
+                json.dumps([{
+                    "Nome": "Unknown",
+                    "ID": 999,
+                    "Nome encontrado": "   ",
+                    "Origem": "ID informado manualmente",
+                }]),
+                encoding="utf-8",
+            )
+
+            applied, rejected, _ = id_review.import_decisions(
+                decisions_path,
+                ids_path=ids_path,
+            )
+
+            updated = json.loads(ids_path.read_text(encoding="utf-8"))[0]
+            self.assertEqual(["Unknown"], applied)
+            self.assertEqual([], rejected)
+            self.assertEqual(999, updated["ID"])
+            self.assertIsNone(updated["Nome encontrado"])
+
+    def test_manual_id_with_real_title_preserves_candidate_title(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ids_path = directory / "buscaIds.json"
+            decisions_path = directory / "decisions.json"
+            ids_path.write_text(
+                json.dumps([{"Nome": "Unknown", "Status": "Revisar", "IDs": []}]),
+                encoding="utf-8",
+            )
+            decisions_path.write_text(
+                json.dumps([{
+                    "Nome": "Unknown",
+                    "ID": 999,
+                    "Nome encontrado": "Official Unknown",
+                    "Origem": "ID informado manualmente",
+                }]),
+                encoding="utf-8",
+            )
+
+            applied, rejected, _ = id_review.import_decisions(
+                decisions_path,
+                ids_path=ids_path,
+            )
+
+            updated = json.loads(ids_path.read_text(encoding="utf-8"))[0]
+            self.assertEqual(["Unknown"], applied)
+            self.assertEqual([], rejected)
+            self.assertEqual(999, updated["ID"])
+            self.assertEqual("Official Unknown", updated["Nome encontrado"])
 
     def test_count_confirmed_without_details_uses_cache_by_id(self):
         with tempfile.TemporaryDirectory() as directory:

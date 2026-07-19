@@ -541,6 +541,46 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertEqual(7, params[2])
         self.assertEqual(1, len(connection.commits))
 
+    def test_manual_confirmation_does_not_store_generated_id_as_alias(self):
+        connection = FakeConnection()
+        connection.mangas = [{"id": 7, "title": "Alpha"}]
+        repository = MangaRepository(connection)
+
+        confirmed = repository.confirm_mangaupdates_id(
+            "Alpha",
+            123,
+            found_title="ID 123",
+        )
+
+        self.assertTrue(confirmed)
+        query, params = connection.updated[0]
+        self.assertIn("alternative_title", query)
+        self.assertEqual("123", params[0])
+        self.assertIsNone(params[1])
+        self.assertEqual(7, params[2])
+
+    def test_manual_confirmation_preserves_existing_real_alias(self):
+        connection = FakeConnection()
+        connection.mangas = [{
+            "id": 7,
+            "title": "Alpha",
+            "alternative_title": "Alfa Real",
+        }]
+        repository = MangaRepository(connection)
+
+        confirmed = repository.confirm_mangaupdates_id(
+            "Alpha",
+            123,
+            found_title="ID 123",
+        )
+
+        self.assertTrue(confirmed)
+        query, params = connection.updated[0]
+        self.assertIn("coalesce", query)
+        self.assertEqual("123", params[0])
+        self.assertIsNone(params[1])
+        self.assertEqual(7, params[2])
+
     def test_confirms_mangaupdates_id_by_work_id_blocks_external_id_collision(self):
         connection = FakeConnection()
         connection.mangas = [
