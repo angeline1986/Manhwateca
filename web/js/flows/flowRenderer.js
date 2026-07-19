@@ -116,6 +116,7 @@ function renderCurrentPanel(elements, context) {
       stageResult: run.results?.sync_notion,
       stageStatus: selectedStatus,
       legacyMetadata: context.notionMetadata,
+      journeyWorkIds: run.results?.update_metadata?.metrics?.processed_work_ids || [],
     });
     return;
   }

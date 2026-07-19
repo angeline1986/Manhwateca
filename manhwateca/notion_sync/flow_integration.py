@@ -79,6 +79,9 @@ class OfficialNotionFlowIntegration:
                     "blocker_count": 0,
                 },
             )
+        scope_result = _validate_scope(self.repository, work_ids)
+        if scope_result:
+            return scope_result
         plan = self.planner.plan_metadata_sync_for_ids(work_ids)
         if plan.result.status == SyncStatus.BLOCKED:
             return _blocked_result(plan)
@@ -99,6 +102,43 @@ def _blocked_result(plan):
             "status": SyncStatus.BLOCKED.value,
             "message": f"Sincronização pausada por {blocker_count} bloqueio(s).",
             "blocker_count": blocker_count,
+        },
+    )
+
+
+def _validate_scope(repository, work_ids):
+    if not hasattr(repository, "list_mangas_by_ids"):
+        return None
+    records = repository.list_mangas_by_ids(work_ids)
+    by_id = {int(record.id): record for record in records}
+    blockers = []
+    for work_id in work_ids:
+        record = by_id.get(int(work_id))
+        if record is None:
+            blockers.append(NotionBlocker(
+                code="scope_work_missing",
+                work_id=int(work_id),
+                message="Obra não encontrada no PostgreSQL.",
+            ))
+            continue
+        if not _has_work_code(record):
+            blockers.append(NotionBlocker(
+                code="scope_work_not_eligible",
+                work_id=int(work_id),
+                work_title=record.title,
+                message="Obra sem ID MangaUpdates local para sincronização.",
+            ))
+    if not blockers:
+        return None
+    return FlowNotionSyncResult(
+        skipped=len(blockers),
+        metrics={
+            "status": SyncStatus.BLOCKED.value,
+            "message": "Sincronização pausada por escopo inválido.",
+            "scope": "incremental",
+            "work_ids": work_ids,
+            "blocker_count": len(blockers),
+            "blockers": _blockers_to_dicts(tuple(blockers)),
         },
     )
 
@@ -208,3 +248,8 @@ def _normalize_work_ids(values):
         ordered.append(work_id)
         seen.add(work_id)
     return ordered
+
+
+def _has_work_code(record):
+    value = getattr(record, "work_code", None)
+    return bool(str(value).strip()) if value is not None else False

@@ -214,7 +214,7 @@ class WorkflowOrchestrator:
             if stage_id == StageId.UPDATE_METADATA and payload:
                 stage_kwargs["selected_ids"] = payload.get("selected_ids")
             if stage_id == StageId.SYNC_NOTION:
-                stage_kwargs["work_ids"] = _sync_scope_from_update_metadata(execution)
+                stage_kwargs["work_ids"] = _sync_notion_scope(execution, payload)
             result = service.finalize(service.execute(**stage_kwargs))
         except Exception as error:
             result = StageResult(
@@ -613,6 +613,23 @@ def _sync_scope_from_update_metadata(execution: WorkflowExecution) -> list[int]:
             stage.result.metrics.get("processed_work_ids")
         )
     return []
+
+
+def _sync_notion_scope(
+    execution: WorkflowExecution,
+    payload: dict | None,
+) -> list[int]:
+    if not payload or "work_ids" not in payload:
+        if payload and "selected_ids" in payload:
+            raise ValueError("sync_notion usa work_ids; selected_ids é exclusivo de update_metadata.")
+        return _sync_scope_from_update_metadata(execution)
+    work_ids = payload.get("work_ids")
+    if not isinstance(work_ids, list):
+        raise ValueError("work_ids deve ser uma lista de IDs de obras.")
+    normalized = _normalize_work_ids(work_ids)
+    if not normalized:
+        raise ValueError("Selecione ao menos uma obra para sincronizar com o Notion.")
+    return normalized
 
 
 def _normalize_work_ids(values) -> list[int]:

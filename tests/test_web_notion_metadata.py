@@ -2,9 +2,11 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from manhwateca.notion_sync.csv_status import write_csv_status
 from manhwateca.webapp.notion_metadata import metadata_status
+from manhwateca.webapp.notion_sync_candidates import sync_candidates_payload
 
 
 class WebNotionMetadataTests(unittest.TestCase):
@@ -158,6 +160,38 @@ class WebNotionMetadataTests(unittest.TestCase):
         self.assertIsNone(payload["sync"])
         self.assertIsNone(payload["error"])
 
+    def test_sync_candidates_include_works_with_work_code(self):
+        payload = sync_candidates_payload(repository=FakeCandidateRepository([
+            candidate(259, "Dressed_to_Kill", work_code="38551408461"),
+            candidate(260, "Sem ID", work_code=None),
+            candidate(4, "A Seducao da Serpente", status="synced"),
+            candidate(5, "Duplicada", status="conflict"),
+        ]))
+
+        self.assertEqual(3, payload["summary"]["total"])
+        self.assertEqual(1, payload["summary"]["neverSynced"])
+        self.assertEqual(1, payload["summary"]["synced"])
+        self.assertEqual(1, payload["summary"]["conflict"])
+        titles = [item["title"] for item in payload["items"]]
+        self.assertIn("Dressed_to_Kill", titles)
+        self.assertNotIn("Sem ID", titles)
+        dressed = next(
+            item for item in payload["items"]
+            if item["title"] == "Dressed_to_Kill"
+        )
+        self.assertEqual(259, dressed["workId"])
+        self.assertEqual("Nunca sincronizada", dressed["displayStatus"])
+        self.assertTrue(dressed["selectable"])
+
+    def test_sync_candidates_mark_conflict_as_review_not_normal_selection(self):
+        payload = sync_candidates_payload(repository=FakeCandidateRepository([
+            candidate(5, "Duplicada", work_code="123", status="conflict"),
+        ]))
+
+        item = payload["items"][0]
+        self.assertEqual("Precisa de revisão", item["displayStatus"])
+        self.assertFalse(item["selectable"])
+
     def _metadata_payload(self, summary):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -171,3 +205,34 @@ class WebNotionMetadataTests(unittest.TestCase):
                 source={"kind": "postgresql", "label": "PostgreSQL"},
             )
             return metadata_status(root)
+
+
+class FakeCandidateRepository:
+    def __init__(self, records):
+        self.records = records
+        self.list_calls = 0
+
+    def list_mangas(self):
+        self.list_calls += 1
+        return self.records
+
+
+def candidate(
+    work_id,
+    title,
+    *,
+    work_code="123",
+    status=None,
+    synced_at=None,
+    page_id=None,
+):
+    return SimpleNamespace(
+        id=work_id,
+        title=title,
+        work_code=work_code,
+        mangaupdates_url="https://example.test/work",
+        cover_url="https://example.test/cover.jpg",
+        notion_page_id=page_id,
+        notion_sync_status=status,
+        notion_last_synced_at=synced_at,
+    )

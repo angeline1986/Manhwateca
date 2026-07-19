@@ -7,3 +7,7 @@ export function getNotionStatus() {
 export function getMetadataStatus() {
   return getJson("/api/notion/metadata");
 }
+
+export function getSyncCandidates() {
+  return getJson("/api/notion/sync-candidates");
+}

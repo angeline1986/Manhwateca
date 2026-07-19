@@ -15,6 +15,7 @@ from manhwateca.webapp.mangaupdates_works import works_payload
 from manhwateca.webapp.mangaupdates_status import mangaupdates_status
 from manhwateca.webapp.notion import notion_status
 from manhwateca.webapp.notion_metadata import metadata_status
+from manhwateca.webapp.notion_sync_candidates import sync_candidates_payload
 from manhwateca.webapp.pending_actions import pending_payload
 from manhwateca.webapp.post_routes import handle_direct_post
 from manhwateca.webapp.status import build_status
@@ -86,6 +87,9 @@ def create_handler(project_root, task_manager, workflow_manager=None):
                 return
             if path == "/api/notion/metadata":
                 self._send_json(metadata_status(project_root))
+                return
+            if path == "/api/notion/sync-candidates":
+                self._send_json(sync_candidates_payload())
                 return
             if path == "/api/tasks":
                 self._send_json({"tasks": task_manager.list()})

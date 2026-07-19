@@ -1,5 +1,5 @@
 import { getMangaUpdatesWorks, getReviewItems } from "../api/mangaupdatesApi.js";
-import { getMetadataStatus } from "../api/notionApi.js";
+import { getMetadataStatus, getSyncCandidates } from "../api/notionApi.js";
 
 const EMPTY_WORKS = { kpis: {}, items: [], pagination: {} };
 
@@ -34,11 +34,28 @@ export async function loadMetadataState() {
 }
 
 export async function loadNotionMetadataState() {
+  const [metadata, candidates] = await Promise.all([
+    loadNotionMetadataStatus(),
+    loadNotionSyncCandidates(),
+  ]);
+  return { ...metadata, candidates };
+}
+
+async function loadNotionMetadataStatus() {
   try {
     const { payload } = await getMetadataStatus();
     return payload || {};
   } catch {
     return {};
+  }
+}
+
+async function loadNotionSyncCandidates() {
+  try {
+    const { payload } = await getSyncCandidates();
+    return payload || { items: [], summary: {} };
+  } catch {
+    return { items: [], summary: {} };
   }
 }
 

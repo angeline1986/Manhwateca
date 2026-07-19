@@ -264,6 +264,91 @@ class WorkflowOrchestratorTests(unittest.TestCase):
 
         self.assertEqual({"work_ids": [259]}, sync_service.last_kwargs)
 
+    def test_sync_notion_explicit_work_ids_have_priority_over_journey_scope(self):
+        repository = FakeRepository()
+        repository.save_execution(WorkflowExecution(
+            execution_id="wf_1",
+            status=WorkflowStatus.RUNNING,
+            stages=(
+                StageExecution(
+                    StageId.UPDATE_METADATA,
+                    status=StageStatus.COMPLETED,
+                    result=StageResult(metrics={"processed_work_ids": [259]}),
+                ),
+                *[
+                    stage for stage in FakeRepository.initial_stages()
+                    if stage.stage_id != StageId.UPDATE_METADATA
+                ],
+            ),
+        ))
+        sync_service = FakeStageService()
+        orchestrator = WorkflowOrchestrator(
+            repository,
+            fake_integrations(),
+            stage_services={StageId.SYNC_NOTION: sync_service},
+        )
+
+        orchestrator.run_stage(
+            StageId.SYNC_NOTION,
+            payload={"work_ids": [4, "4", 1]},
+        )
+
+        self.assertEqual({"work_ids": [4, 1]}, sync_service.last_kwargs)
+
+    def test_sync_notion_rejects_selected_ids_contract(self):
+        repository = FakeRepository()
+        repository.save_execution(WorkflowExecution(
+            execution_id="wf_1",
+            status=WorkflowStatus.RUNNING,
+            stages=tuple(FakeRepository.initial_stages()),
+        ))
+        sync_service = FakeStageService()
+        orchestrator = WorkflowOrchestrator(
+            repository,
+            fake_integrations(),
+            stage_services={StageId.SYNC_NOTION: sync_service},
+        )
+
+        result = orchestrator.run_stage(
+            StageId.SYNC_NOTION,
+            payload={"selected_ids": [259]},
+        )
+
+        sync_stage = [
+            stage for stage in result.stages
+            if stage.stage_id == StageId.SYNC_NOTION
+        ][0]
+        self.assertEqual(StageStatus.FAILED, sync_stage.status)
+        self.assertIsNone(sync_service.last_kwargs)
+        self.assertIn("work_ids", sync_stage.result.errors[0].message)
+
+    def test_sync_notion_rejects_invalid_work_ids_payload(self):
+        repository = FakeRepository()
+        repository.save_execution(WorkflowExecution(
+            execution_id="wf_1",
+            status=WorkflowStatus.RUNNING,
+            stages=tuple(FakeRepository.initial_stages()),
+        ))
+        sync_service = FakeStageService()
+        orchestrator = WorkflowOrchestrator(
+            repository,
+            fake_integrations(),
+            stage_services={StageId.SYNC_NOTION: sync_service},
+        )
+
+        result = orchestrator.run_stage(
+            StageId.SYNC_NOTION,
+            payload={"work_ids": "259"},
+        )
+
+        sync_stage = [
+            stage for stage in result.stages
+            if stage.stage_id == StageId.SYNC_NOTION
+        ][0]
+        self.assertEqual(StageStatus.FAILED, sync_stage.status)
+        self.assertIsNone(sync_service.last_kwargs)
+        self.assertIn("work_ids deve ser uma lista", sync_stage.result.errors[0].message)
+
     def test_sync_notion_without_update_metadata_scope_receives_empty_scope(self):
         repository = FakeRepository()
         repository.save_execution(WorkflowExecution(

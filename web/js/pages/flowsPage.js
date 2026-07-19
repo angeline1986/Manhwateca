@@ -12,7 +12,11 @@ import {
   loadReviewState as fetchReviewState,
   loadWorksState as fetchWorksState,
 } from "../flows/flowPageData.js";
-import { handleFlowsChange, handleFlowsClick } from "../flows/flowsClickHandler.js";
+import {
+  handleFlowsChange,
+  handleFlowsClick,
+  handleFlowsInput,
+} from "../flows/flowsClickHandler.js";
 import {
   currentFlowStage,
   normalizeFlowsPayload,
@@ -157,9 +161,7 @@ export function initFlowsPage(elements, options = {}) {
       showPage("mangaupdates");
       return;
     }
-    const payload = stage.id === "update_metadata"
-      ? { selected_ids: selectedMetadataWorkIds() }
-      : {};
+    const payload = stagePayload(stage.id);
     const metadataSelectionCount = payload.selected_ids?.length || 0;
     pendingRequest = true;
     setFeedback(stage.id === "update_metadata"
@@ -210,6 +212,25 @@ export function initFlowsPage(elements, options = {}) {
     return [...area.querySelectorAll("[data-metadata-choice]:checked")]
       .map(input => Number(input.dataset.metadataWorkId))
       .filter(value => Number.isFinite(value) && value > 0);
+  }
+
+  function selectedNotionWorkIds() {
+    const area = elements.flowsCurrentCards;
+    if (!area) return [];
+    return [...area.querySelectorAll("[data-notion-sync-choice]:checked")]
+      .map(input => Number(input.dataset.notionSyncWorkId))
+      .filter(value => Number.isFinite(value) && value > 0);
+  }
+
+  function stagePayload(stageId) {
+    if (stageId === "update_metadata") {
+      return { selected_ids: selectedMetadataWorkIds() };
+    }
+    if (stageId === "sync_notion") {
+      const workIds = selectedNotionWorkIds();
+      return workIds.length ? { work_ids: workIds } : {};
+    }
+    return {};
   }
 
   async function cancelWorkflow() {
@@ -312,6 +333,7 @@ export function initFlowsPage(elements, options = {}) {
     showPage,
   }));
   area?.addEventListener("change", event => handleFlowsChange(event, area));
+  area?.addEventListener("input", event => handleFlowsInput(event, area));
 
   return { loadWorkflow, stopWorkflowPolling };
 }

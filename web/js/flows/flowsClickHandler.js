@@ -100,6 +100,7 @@ export function handleFlowsChange(event, area) {
     updateMetadataSummary(area);
   }
   if (event.target.matches("[data-metadata-choice]")) updateMetadataSummary(area);
+  if (event.target.matches("[data-notion-sync-choice]")) updateNotionSyncSummary(area);
   if (event.target.matches("[data-metadata-page-size-select]")) {
     const card = area.querySelector("[data-metadata-page]");
     if (card) {
@@ -108,6 +109,13 @@ export function handleFlowsChange(event, area) {
     }
     applyMetadataPagination(area);
     updateMetadataSummary(area);
+  }
+}
+
+export function handleFlowsInput(event, area) {
+  if (event.target.matches("[data-notion-sync-search]")) {
+    filterNotionSyncCandidates(area, event.target.value || "");
+    updateNotionSyncSummary(area);
   }
 }
 
@@ -227,6 +235,33 @@ function renderMetadataPager(area, page, pages) {
 function visibleMetadataChoices(area) {
   return [...area.querySelectorAll("[data-metadata-choice]")]
     .filter(input => !input.closest("[data-metadata-index]")?.hidden);
+}
+
+function updateNotionSyncSummary(area) {
+  const choices = [...area.querySelectorAll("[data-notion-sync-choice]:not(:disabled)")];
+  const visibleChoices = choices.filter(input => !input.closest("[data-notion-sync-candidate]")?.hidden);
+  const selected = choices.filter(input => input.checked).length;
+  const selectedText = area.querySelector("[data-notion-sync-selected]");
+  const button = area.querySelector("[data-flow-run-stage]");
+  if (selectedText) {
+    selectedText.textContent = `${selected} ${selected === 1 ? "selecionada" : "selecionadas"}`;
+  }
+  if (button) {
+    const hasInheritedScope = Boolean(area.querySelector(".sync-notion-inherited-scope"));
+    button.disabled = selected === 0 && !hasInheritedScope;
+    button.textContent = selected
+      ? `Sincronizar ${selected} ${selected === 1 ? "obra" : "obras"}`
+      : (hasInheritedScope ? "Sincronizar escopo da jornada" : "Selecione obras");
+  }
+  return visibleChoices;
+}
+
+function filterNotionSyncCandidates(area, value) {
+  const query = String(value || "").trim().toLocaleLowerCase("pt-BR");
+  area.querySelectorAll("[data-notion-sync-candidate]").forEach(item => {
+    const text = item.dataset.notionSyncSearchText || "";
+    item.hidden = Boolean(query) && !text.includes(query);
+  });
 }
 
 function estimateMetadataTime(selected) {

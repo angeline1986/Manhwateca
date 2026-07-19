@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 
 from manhwateca.notion_sync.flow_integration import OfficialNotionFlowIntegration
 from manhwateca.notion_sync.official_applier import NotionApplyResult
@@ -61,6 +62,43 @@ class OfficialNotionFlowIntegrationTests(unittest.TestCase):
         self.assertEqual(0, applier.calls)
         self.assertEqual("blocked", result.metrics["status"])
         self.assertTrue(result.metrics["scope_missing"])
+
+    def test_invalid_scope_blocks_before_planner(self):
+        planner = FakePlanner(synced_plan())
+        applier = FakeApplier()
+
+        result = OfficialNotionFlowIntegration(
+            object(),
+            "database_id",
+            repository=FakeRepository([]),
+            planner=planner,
+            applier=applier,
+        ).sync_page(work_ids=[259])
+
+        self.assertEqual(0, planner.calls)
+        self.assertEqual(0, planner.scoped_calls)
+        self.assertEqual(0, applier.calls)
+        self.assertEqual("blocked", result.metrics["status"])
+        self.assertEqual("scope_work_missing", result.metrics["blockers"][0]["code"])
+
+    def test_not_eligible_scope_blocks_before_planner(self):
+        planner = FakePlanner(synced_plan())
+        applier = FakeApplier()
+
+        result = OfficialNotionFlowIntegration(
+            object(),
+            "database_id",
+            repository=FakeRepository([
+                SimpleNamespace(id=259, title="Dressed_to_Kill", work_code=None)
+            ]),
+            planner=planner,
+            applier=applier,
+        ).sync_page(work_ids=[259])
+
+        self.assertEqual(0, planner.scoped_calls)
+        self.assertEqual(0, applier.calls)
+        self.assertEqual("blocked", result.metrics["status"])
+        self.assertEqual("scope_work_not_eligible", result.metrics["blockers"][0]["code"])
 
     def test_planning_error_does_not_call_applier(self):
         blocker = NotionBlocker(
@@ -217,6 +255,17 @@ class FakeApplier:
             status=SyncStatus.SYNCED,
             next_action=NextAction.NONE,
         )
+
+
+class FakeRepository:
+    def __init__(self, records):
+        self.records = records
+        self.list_by_ids_calls = []
+
+    def list_mangas_by_ids(self, work_ids):
+        self.list_by_ids_calls.append(list(work_ids))
+        wanted = {int(work_id) for work_id in work_ids}
+        return [record for record in self.records if int(record.id) in wanted]
 
 
 def integration(plan, applier=None):

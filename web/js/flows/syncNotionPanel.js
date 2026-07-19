@@ -21,14 +21,18 @@ const BLOCKER_LABELS = {
 export function renderSyncNotionPanel(input = {}) {
   const context = normalizeContext(input);
   const state = officialState(context);
+  const actionDisabled = state.actionDisabled || (
+    !context.running && context.journeyWorkIds.length === 0
+  );
   return `
     <section class="sync-notion-panel sync-notion-panel--${escapeHtml(state.tone)}">
       ${header(state)}
+      ${candidatePicker(context)}
       ${state.note ? note(state.note) : ""}
       ${state.metrics.length ? metricsGrid(state.metrics) : ""}
       ${nextAction(state)}
       ${state.blockers.length ? blockersList(state.blockers) : state.clearMessage ? note(state.clearMessage) : ""}
-      ${actionButton(state.actionLabel, state.actionDisabled)}
+      ${actionButton(state.actionLabel, actionDisabled)}
       ${legacySection(context.legacyMetadata, state.hasOfficialResult)}
     </section>
   `;
@@ -47,6 +51,8 @@ function normalizeContext(input) {
       stageResult: input.stageResult || null,
       stageStatus: input.stageStatus || input.stageResult?.status || "waiting",
       legacyMetadata: input.legacyMetadata || {},
+      candidates: input.legacyMetadata?.candidates || { items: [], summary: {} },
+      journeyWorkIds: Array.isArray(input.journeyWorkIds) ? input.journeyWorkIds : [],
       running: input.stageStatus === "running",
     };
   }
@@ -54,6 +60,8 @@ function normalizeContext(input) {
     stageResult: null,
     stageStatus: "waiting",
     legacyMetadata: input || {},
+    candidates: input?.candidates || { items: [], summary: {} },
+    journeyWorkIds: [],
     running: false,
   };
 }
@@ -92,7 +100,7 @@ function officialState(context) {
       blockers: [],
       nextAction: "Sincronizar quando estiver pronta",
       actionLabel: "Sincronizar com o Notion",
-      actionDisabled: false,
+      actionDisabled: context.journeyWorkIds.length === 0,
       clearMessage: "",
       hasOfficialResult: false,
     };
@@ -189,7 +197,7 @@ function officialState(context) {
     blockers: [],
     nextAction: "Executar a etapa manualmente",
     actionLabel: "Sincronizar com o Notion",
-    actionDisabled: false,
+    actionDisabled: context.journeyWorkIds.length === 0,
     clearMessage: "",
     hasOfficialResult,
   };
@@ -204,6 +212,80 @@ function header(state) {
         <p>${escapeHtml(state.lead)}</p>
       </div>
     </header>
+  `;
+}
+
+function candidatePicker(context) {
+  const candidates = context.candidates || { items: [], summary: {} };
+  const items = Array.isArray(candidates.items) ? candidates.items : [];
+  const summary = candidates.summary || {};
+  const journeyCount = context.journeyWorkIds.length;
+  return `
+    <section class="sync-notion-candidates" data-notion-sync-candidates>
+      <div class="sync-notion-candidate-header">
+        <div>
+          <h4>Selecionar obras para sincronização</h4>
+          <p>Escolha obras elegíveis do PostgreSQL. O planner oficial decide se há diferenças no Notion.</p>
+        </div>
+        <span data-notion-sync-selected>0 selecionadas</span>
+      </div>
+      <div class="sync-notion-candidate-tools">
+        <label>
+          <span>Buscar obra</span>
+          <input type="search" placeholder="Digite título ou ID" data-notion-sync-search>
+        </label>
+        <div class="sync-notion-candidate-summary">
+          ${candidateSummary(summary)}
+        </div>
+      </div>
+      ${journeyCount ? `
+        <div class="flow-panel-note sync-notion-inherited-scope">
+          ${escapeHtml(`${journeyCount} obra(s) processada(s) nesta jornada podem ser usadas se nenhuma seleção manual for feita.`)}
+        </div>
+      ` : ""}
+      <div class="sync-notion-candidate-list">
+        ${items.length ? items.map(candidateItem).join("") : emptyCandidates()}
+      </div>
+    </section>
+  `;
+}
+
+function candidateSummary(summary) {
+  return [
+    `Total: ${summary.total || 0}`,
+    `Nunca sincronizadas: ${summary.neverSynced || 0}`,
+    `Sincronizadas: ${summary.synced || 0}`,
+    `Erro: ${summary.error || 0}`,
+    `Revisão: ${summary.conflict || 0}`,
+  ].map(item => `<span>${escapeHtml(item)}</span>`).join("");
+}
+
+function candidateItem(item) {
+  const workId = item.workId || "";
+  const title = item.title || "Obra sem título";
+  const status = item.displayStatus || "Estado local não informado";
+  const selectable = item.selectable !== false;
+  const search = [
+    title,
+    item.workCode || "",
+    String(workId || ""),
+  ].join(" ").toLocaleLowerCase("pt-BR");
+  return `
+    <label class="sync-notion-candidate ${selectable ? "" : "is-disabled"}" data-notion-sync-candidate data-notion-sync-search-text="${escapeHtml(search)}">
+      <input type="checkbox" data-notion-sync-choice data-notion-sync-work-id="${escapeHtml(String(workId))}" ${selectable ? "" : "disabled"}>
+      <span>
+        <strong>${escapeHtml(title)}</strong>
+        <small>${escapeHtml(status)} · ID ${escapeHtml(String(workId || "--"))} · MangaUpdates ${escapeHtml(item.workCode || "--")}</small>
+      </span>
+    </label>
+  `;
+}
+
+function emptyCandidates() {
+  return `
+    <div class="flow-panel-note sync-notion-empty-candidates">
+      Nenhuma obra elegível encontrada no PostgreSQL.
+    </div>
   `;
 }
 
