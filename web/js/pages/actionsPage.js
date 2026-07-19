@@ -11,11 +11,6 @@ export function initActionsPage({ elements, startTask }) {
       apply_organization: ["Move as obras para os grupos alfabéticos corretos.", "Altera as pastas após confirmação."],
       apply_renaming: ["Padroniza os nomes de capítulos, capas e títulos fora do padrão.", "Renomeia os arquivos após confirmação."],
       run_tests: ["Verifica automaticamente as regras principais do sistema.", "Mostra os resultados no histórico."],
-      mangaupdates_search: ["Pesquisa obras ainda sem ID confirmado.", "Registra candidatos e decisões no PostgreSQL."],
-      mangaupdates_refresh: ["Completa candidatos sem link ou descrição.", "Atualiza dados de revisão no PostgreSQL."],
-      mangaupdates_details: ["Consulta detalhes dos IDs confirmados.", "Atualiza URL, capa e metadados no PostgreSQL."],
-      mangaupdates_force_refresh: ["Reconsulta IDs confirmados mesmo com dados salvos.", "Use somente quando quiser atualizar dados antigos."],
-      mangaupdates_csv: ["Usa os dados já salvos, sem consultar a API.", "Atualiza o CSV preservando campos manuais."],
       notion_simulate_batch: ["Compara o catálogo com as páginas do Notion.", "Mostra o próximo lote sem alterar o Notion."],
       notion_apply_batch: ["Cria as próximas páginas ausentes.", "Publica até 25 obras após confirmação."],
       notion_update_existing: ["Envia novas contagens para páginas existentes.", "Atualiza o Notion sem criar páginas."],
@@ -82,8 +77,8 @@ export function initActionsPage({ elements, startTask }) {
       }),
       render(entries.filter(([id]) => organizationIds.has(id))),
     ].join("");
-    elements.mangaActionGrid.innerHTML = render(entries.filter(([id, action]) =>
-      action.group === "mangaupdates" && id !== "mangaupdates_csv"
+    elements.mangaActionGrid.innerHTML = render(entries.filter(([_id, action]) =>
+      action.group === "mangaupdates"
     ));
     elements.notionActionGrid.innerHTML = render(entries.filter(([id]) => notionIds.has(id)));
     elements.supportActionGrid.innerHTML = render(entries.filter(([id]) => id === "run_tests"));

@@ -54,6 +54,22 @@ def metadata_record(
     )
 
 
+def _save_json_for_test(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(f"{path.suffix}.tmp")
+    temporary.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+
+
+def _related_files(path):
+    return sorted(
+        item.name for item in path.parent.glob(f"{path.name}*")
+    )
+
+
 class FakeDecisionRepository:
     def __init__(self):
         self.queued = []
@@ -484,6 +500,7 @@ class MangaUpdatesTests(unittest.TestCase):
             directory = Path(directory)
             ids_path = directory / "ids.json"
             cache_path = directory / "cache.json"
+            state_path = directory / "mangaupdates_state.json"
             ids_path.write_text(
                 json.dumps([
                     {
@@ -512,6 +529,7 @@ class MangaUpdatesTests(unittest.TestCase):
                     ids_path,
                     delay=0,
                     cache_path=cache_path,
+                    state_path=state_path,
                 )
 
             self.assertEqual(1, processed)
@@ -550,6 +568,104 @@ class MangaUpdatesTests(unittest.TestCase):
             self.assertEqual(0, pending)
             self.assertEqual("cache_valido", state["series"]["2"]["status"])
             self.assertIn("last_checked_at", state["series"]["2"])
+
+    def test_fetch_confirmed_details_does_not_write_project_json_files(self):
+        project_root = Path(__file__).resolve().parents[1]
+        protected_paths = tuple(
+            (project_root / relative).resolve()
+            for relative in (
+                "reports/integrations/buscaIds.json",
+                "data/mangaupdates.json",
+                "reports/integrations/mangaupdates_state.json",
+            )
+        )
+        protected_state = {
+            path: {
+                "exists": path.exists(),
+                "content": path.read_bytes() if path.exists() else None,
+                "siblings": _related_files(path),
+            }
+            for path in protected_paths
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory).resolve()
+            ids_path = directory / "ids.json"
+            cache_path = directory / "cache.json"
+            state_path = directory / "mangaupdates_state.json"
+            regression_ids_path = directory / "regression_ids.json"
+            regression_cache_path = directory / "regression_cache.json"
+            ids_path.write_text(
+                json.dumps([{
+                    "Nome": "Pendente",
+                    "Status": "Confirmado automaticamente",
+                    "ID": 2,
+                }]),
+                encoding="utf-8",
+            )
+            cache_path.write_text("{}", encoding="utf-8")
+            regression_ids_path.write_text(
+                json.dumps([{
+                    "Nome": "Regressão",
+                    "Status": "Confirmado automaticamente",
+                    "ID": 999999,
+                }]),
+                encoding="utf-8",
+            )
+            regression_cache_path.write_text("{}", encoding="utf-8")
+
+            def guarded_save_json(path, data):
+                target = Path(path).resolve()
+                if target in protected_paths:
+                    raise AssertionError(
+                        "Teste tentou escrever em arquivo JSON real do projeto: "
+                        f"{target}"
+                    )
+                if not target.is_relative_to(directory):
+                    raise AssertionError(
+                        f"Teste tentou escrever fora do diretório temporário: {target}"
+                    )
+                _save_json_for_test(target, data)
+
+            with (
+                mock.patch(
+                    "manhwateca.mangaupdates_service.cache.save_json",
+                    side_effect=guarded_save_json,
+                ),
+                mock.patch(
+                    "manhwateca.mangaupdates_service.state.save_json",
+                    side_effect=guarded_save_json,
+                ),
+                mock.patch(
+                    "mangaupdates.get_series",
+                    return_value={"series_id": 2, "title": "Pendente"},
+                ),
+            ):
+                processed, pending = mangaupdates.fetch_confirmed_details(
+                    ids_path,
+                    delay=0,
+                    cache_path=cache_path,
+                    state_path=state_path,
+                )
+
+                self.assertEqual(1, processed)
+                self.assertEqual(0, pending)
+
+                with self.assertRaisesRegex(
+                    AssertionError,
+                    "Teste tentou escrever em arquivo JSON real do projeto",
+                ):
+                    mangaupdates.fetch_confirmed_details(
+                        regression_ids_path,
+                        delay=0,
+                        cache_path=regression_cache_path,
+                    )
+
+        for path, before in protected_state.items():
+            self.assertEqual(before["exists"], path.exists())
+            if before["exists"]:
+                self.assertEqual(before["content"], path.read_bytes())
+            self.assertEqual(before["siblings"], _related_files(path))
 
     def test_fetch_confirmed_details_refreshes_expired_cache(self):
         with tempfile.TemporaryDirectory() as directory:

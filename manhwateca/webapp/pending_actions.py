@@ -114,19 +114,20 @@ def _mangaupdates_database_pending(repository_factory=MangaRepository):
         pending.append(_item(
             "mangaupdates",
             "Consultar detalhes na API",
-            f"{confirmed_without_details} ID(s) confirmados ainda não têm detalhes no banco.",
-            "mangaupdates_details",
-            "mangaupdates",
-            panel="mangaActionsPanel",
+            (
+                f"{confirmed_without_details} ID(s) confirmados ainda não têm "
+                "detalhes no banco. Use Atualizar metadados no fluxo oficial."
+            ),
+            None,
+            "flows",
         ))
     if without_id and not review:
         pending.append(_item(
             "mangaupdates",
             "Buscar IDs no MangaUpdates",
             f"{without_id} obra(s) ainda não têm ID MangaUpdates no banco.",
-            "mangaupdates_search",
-            "mangaupdates",
-            panel="mangaActionsPanel",
+            None,
+            "flows",
         ))
     return pending
 
@@ -146,8 +147,8 @@ def _csv_pending(root):
             "csv",
             "Atualizar CSV",
             f"{len(missing)} obra(s) catalogadas ainda não aparecem no CSV.",
-            "mangaupdates_csv",
-            "mangaupdates",
+            None,
+            "flows",
         ))
     if orphaned:
         items.append(_item(

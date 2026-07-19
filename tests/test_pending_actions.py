@@ -3,9 +3,13 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from manhwateca.webapp.pending_actions import pending_payload
+from manhwateca.webapp.pending_actions import (
+    _mangaupdates_database_pending,
+    pending_payload,
+)
 
 
 class PendingActionsTests(unittest.TestCase):
@@ -17,7 +21,7 @@ class PendingActionsTests(unittest.TestCase):
         self.assertEqual(0, payload["total"])
         self.assertIn("Nenhuma", payload["empty_message"])
 
-    def test_detects_catalog_work_missing_from_csv(self):
+    def test_csv_gap_does_not_create_web_action_without_database(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             _write_json(root / "data/mangas.json", [{"nome": "Alpha"}])
@@ -25,8 +29,7 @@ class PendingActionsTests(unittest.TestCase):
             with patch.dict("os.environ", {}, clear=True):
                 payload = pending_payload(root)
 
-        self.assertEqual("Atualizar CSV", payload["items"][0]["title"])
-        self.assertEqual("mangaupdates_csv", payload["items"][0]["action"])
+        self.assertEqual(0, payload["total"])
 
     def test_csv_gap_is_not_operational_pending_when_database_is_active(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -48,7 +51,7 @@ class PendingActionsTests(unittest.TestCase):
         self.assertEqual(0, payload["total"])
         self.assertEqual("postgresql", payload["source"]["kind"])
 
-    def test_detects_orphaned_csv_rows(self):
+    def test_orphaned_csv_rows_do_not_create_web_action_without_database(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             _write_json(root / "data/mangas.json", [{"nome": "Alpha"}])
@@ -65,10 +68,9 @@ class PendingActionsTests(unittest.TestCase):
             with patch.dict("os.environ", {}, clear=True):
                 payload = pending_payload(root)
 
-        self.assertEqual("Revisar obras fora do catálogo", payload["items"][0]["title"])
-        self.assertEqual("warning", payload["items"][0]["severity"])
+        self.assertEqual(0, payload["total"])
 
-    def test_detects_review_and_uncached_confirmed_ids(self):
+    def test_legacy_json_review_and_cache_do_not_create_web_actions(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             _write_json(root / "reports/integrations/buscaIds.json", [
@@ -83,9 +85,34 @@ class PendingActionsTests(unittest.TestCase):
             with patch.dict("os.environ", {}, clear=True):
                 payload = pending_payload(root)
 
-        titles = {item["title"] for item in payload["items"]}
+        self.assertEqual(0, payload["total"])
+
+    def test_database_mangaupdates_pending_links_to_official_flows(self):
+        class FakeRepository:
+            def list_decisions(self, **_kwargs):
+                return [{
+                    "payload": json.dumps({
+                        "nome": "Alpha",
+                        "candidatos": [],
+                    })
+                }]
+
+            def list_mangas(self):
+                return [
+                    SimpleNamespace(work_code="123", mangaupdates_url=None, cover_url=None),
+                    SimpleNamespace(work_code=None, mangaupdates_url=None, cover_url=None),
+                ]
+
+        items = _mangaupdates_database_pending(
+            repository_factory=lambda: FakeRepository()
+        )
+
+        titles = {item["title"] for item in items}
         self.assertIn("Revisar correspondências", titles)
         self.assertIn("Consultar detalhes na API", titles)
+        details = next(item for item in items if item["title"] == "Consultar detalhes na API")
+        self.assertIsNone(details["action"])
+        self.assertEqual("flows", details["page"])
 
     def test_detects_sync_state_pending_items(self):
         with tempfile.TemporaryDirectory() as directory:

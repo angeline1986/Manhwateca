@@ -23,12 +23,12 @@ class WebWorkflowTests(unittest.TestCase):
             first_count = len(commands)
 
             manager.complete_manual("review_ids")
-            completed = self._wait(manager, "completed")
+            next_manual = self._wait(manager, "waiting_manual")
 
         self.assertEqual("completed", waiting["results"]["catalog"]["status"])
         self.assertEqual("manual", waiting["results"]["review_ids"]["status"])
-        self.assertEqual("completed", completed["results"]["details"]["status"])
-        self.assertEqual(first_count + 2, len(commands))
+        self.assertEqual("manual", next_manual["results"]["details"]["status"])
+        self.assertEqual(first_count, len(commands))
 
     def test_workflow_stops_on_failure(self):
         calls = 0
@@ -59,13 +59,13 @@ class WebWorkflowTests(unittest.TestCase):
             root = Path(directory)
             path = root / "workflow.json"
             manager = WorkflowManager(root, runner=runner, status_path=path)
-            manager.start(selected=["catalog", "details"])
+            manager.start(selected=["catalog", "notion_catalog"])
             self._wait(manager, "failed")
-            manager.start(selected=["catalog", "details"], resume=True)
+            manager.start(selected=["catalog", "notion_catalog"], resume=True)
             completed = self._wait(manager, "completed")
             saved = json.loads(path.read_text(encoding="utf-8"))
 
-        self.assertEqual(4, len(calls))
+        self.assertEqual(3, len(calls))
         self.assertEqual("completed", completed["results"]["catalog"]["status"])
         self.assertEqual("completed", saved["status"])
 

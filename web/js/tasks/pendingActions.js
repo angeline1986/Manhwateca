@@ -5,7 +5,6 @@ export function pendingRequiresConfirmation(action) {
     "notion_apply_batch",
     "notion_update_existing",
     "notion_csv_apply",
-    "mangaupdates_force_refresh",
     "catalog_scan",
   ].includes(action);
 }

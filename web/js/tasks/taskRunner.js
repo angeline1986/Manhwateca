@@ -16,19 +16,14 @@ export function initTaskRunner({ elements, callbacks, showPage, getNotionUncatal
       "notion_update_existing",
       "notion_csv_apply",
     ].includes(action);
-    const externalRefresh = action === "mangaupdates_force_refresh";
     const massCatalog = action === "catalog_scan";
     elements.confirmationTitle.textContent = massCatalog
       ? "Confirmar Catalogação em Massa"
-      : externalRefresh
-      ? "Confirmar consultas externas"
       : notionWrite
       ? "Confirmar alteração no Notion"
       : "Confirmar alteração na biblioteca";
     elements.confirmationText.textContent = massCatalog
       ? `Você está prestes a registrar ${getNotionUncataloged()} nova(s) obra(s) no banco de dados. Deseja prosseguir?`
-      : externalRefresh
-      ? "Esta ação reconsulta o MangaUpdates mesmo quando já existe cache. Deseja continuar?"
       : notionWrite
       ? "Esta ação enviará alterações ao Notion. Deseja continuar?"
       : "Esta ação alterará arquivos ou pastas da biblioteca. Deseja continuar?";
@@ -46,13 +41,6 @@ export function initTaskRunner({ elements, callbacks, showPage, getNotionUncatal
     if (requiresConfirmation) {
       if (!await confirmTask(action)) return;
       confirmation = "APLICAR";
-    }
-    if (action === "mangaupdates_search") {
-      const initials = window.prompt(
-        "Letras iniciais (ex.: A, ABC ou 0-9). Deixe vazio para todas."
-      );
-      if (initials === null) return;
-      parameters = { initials };
     }
     const { response, payload } = await startTaskAction(action, {
       confirmation,
@@ -153,60 +141,6 @@ export function initTaskRunner({ elements, callbacks, showPage, getNotionUncatal
     const manga = task.metrics?.mangaupdates || {};
     const notion = task.metrics?.notion || {};
     const items = task.metrics?.items || {};
-
-    if (["mangaupdates_search", "mangaupdates_refresh"].includes(task.action)) {
-      const actionableReview = manga.actionable_review ?? manga.review ?? 0;
-      if (actionableReview > 0) {
-        return {
-          label: "Revisar IDs pendentes",
-          page: "mangaupdates",
-          panel: "idReviewPanel",
-          text: `${actionableReview} correspondência(s) aparecem na seção de revisão e precisam de decisão antes de consultar detalhes na API.`,
-        };
-      }
-      if ((manga.pending || 0) > 0) {
-        return {
-          label: "Buscar próximo lote",
-          page: "mangaupdates",
-          panel: "mangaActionsPanel",
-          text: `${manga.pending} obra(s) ainda não foram pesquisadas. Execute somente “Buscar próximo lote de IDs”.`,
-        };
-      }
-      if ((manga.not_found || 0) > 0) {
-        return {
-          label: "Pesquisar manualmente",
-          page: "mangaupdates",
-          panel: "apiSearchPanel",
-          text: `${manga.not_found} obra(s) já foram pesquisadas e não tiveram candidato útil. Use a pesquisa avulsa ou ajuste nomes de busca.`,
-        };
-      }
-    }
-
-    if (task.action === "mangaupdates_details") {
-      if ((manga.pending || 0) > 0) {
-        return {
-          label: "Consultar próximo lote",
-          page: "mangaupdates",
-          panel: "mangaActionsPanel",
-          text: `${manga.pending} ID(s) confirmado(s) ainda aguardam detalhes da API.`,
-        };
-      }
-      return {
-        label: "Ver banco atualizado",
-        page: "mangaupdates",
-        panel: "mangaActionsPanel",
-        text: "Os detalhes consultados já foram salvos no banco quando PostgreSQL está ativo.",
-      };
-    }
-
-    if (task.action === "mangaupdates_csv" && (manga.pending || 0) > 0) {
-      return {
-        label: "Consultar detalhes",
-        page: "mangaupdates",
-        panel: "mangaActionsPanel",
-        text: `${manga.pending} obra(s) confirmadas ainda precisam de detalhes antes de entrar no CSV.`,
-      };
-    }
 
     if (task.action === "catalog_scan") {
       return {

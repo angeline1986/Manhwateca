@@ -8,10 +8,24 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from manhwateca.webapp.actions import SAFE_ACTIONS
 from manhwateca.webapp.tasks import TaskManager
 
 
 class WebTaskTests(unittest.TestCase):
+    def test_web_actions_do_not_expose_legacy_mangaupdates_scripts(self):
+        retired_actions = {
+            "mangaupdates_search",
+            "mangaupdates_refresh",
+            "mangaupdates_details",
+            "mangaupdates_force_refresh",
+            "mangaupdates_csv",
+        }
+
+        self.assertTrue(retired_actions.isdisjoint(SAFE_ACTIONS))
+        for action in SAFE_ACTIONS.values():
+            self.assertNotIn("scripts/mangaupdates.py", action["command"])
+
     def test_notion_batch_is_blocked_when_drive_has_uncataloged_work(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -97,30 +111,28 @@ class WebTaskTests(unittest.TestCase):
             completed["metrics"]["external_calls"]["notion_writes"],
         )
 
-    def test_mangaupdates_task_records_external_call_estimate(self):
-        output = "\n".join([
-            "Processadas nesta execução: 5",
-            "IDs confirmados: 8",
-            "Para revisão: 2",
-            "Pendentes: 0",
-        ])
-        result = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout=output, stderr=""
-        )
+    def test_retired_mangaupdates_web_actions_do_not_start_tasks(self):
+        calls = []
+
+        def capture(*_args, **_kwargs):
+            calls.append(True)
+            return subprocess.CompletedProcess([], 0, "", "")
+
+        retired_actions = [
+            "mangaupdates_search",
+            "mangaupdates_refresh",
+            "mangaupdates_details",
+            "mangaupdates_force_refresh",
+            "mangaupdates_csv",
+        ]
         with tempfile.TemporaryDirectory() as directory:
-            manager = TaskManager(
-                directory,
-                process_runner=lambda *_args, **_kwargs: result,
-            )
+            manager = TaskManager(directory, process_runner=capture)
+            for action in retired_actions:
+                with self.subTest(action=action):
+                    with self.assertRaises(KeyError):
+                        manager.start(action)
 
-            task = manager.start("mangaupdates_search")
-            completed = self._wait(manager, task["id"])
-
-        self.assertEqual(5, completed["metrics"]["mangaupdates"]["processed"])
-        self.assertEqual(
-            5,
-            completed["metrics"]["external_calls"]["mangaupdates"],
-        )
+        self.assertEqual([], calls)
 
     def test_task_records_affected_items_from_tagged_output(self):
         output = "\n".join([
@@ -215,25 +227,6 @@ class WebTaskTests(unittest.TestCase):
         self.assertNotIn("_catalog_before", saved)
         self.assertEqual(["Beta"], completed["catalog_changes"]["new"])
         self.assertEqual("Alpha", completed["catalog_changes"]["updated"][0]["nome"])
-
-    def test_mangaupdates_initials_are_sanitized(self):
-        commands = []
-
-        def capture(command, **_kwargs):
-            commands.append(command)
-            return subprocess.CompletedProcess([], 0, "", "")
-
-        with tempfile.TemporaryDirectory() as directory:
-            manager = TaskManager(directory, process_runner=capture)
-            task = manager.start(
-                "mangaupdates_search",
-                parameters={"initials": "A; rm -rf /"},
-            )
-            self._wait(manager, task["id"])
-
-        self.assertEqual("--initials", commands[0][-2])
-        self.assertEqual("ARM-RF", commands[0][-1])
-        self.assertNotIn(";", commands[0])
 
     def test_notion_writes_require_exact_confirmation(self):
         with tempfile.TemporaryDirectory() as directory:

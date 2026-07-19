@@ -25,7 +25,13 @@ WORKFLOW_STEPS = [
     {
         "id": "ids",
         "label": "Buscar IDs no MangaUpdates",
-        "actions": ["mangaupdates_search", "mangaupdates_refresh"],
+        "manual": True,
+        "action_page": "flows",
+        "action_label": "Ir para Fluxos",
+        "instructions": (
+            "Use o fluxo operacional oficial para buscar candidatos no "
+            "MangaUpdates e resolver IDs no PostgreSQL."
+        ),
     },
     {
         "id": "review_ids",
@@ -41,7 +47,13 @@ WORKFLOW_STEPS = [
     {
         "id": "details",
         "label": "Consultar detalhes no banco",
-        "actions": ["mangaupdates_details"],
+        "manual": True,
+        "action_page": "flows",
+        "action_label": "Ir para Fluxos",
+        "instructions": (
+            "Use a etapa Atualizar metadados do fluxo operacional oficial. "
+            "As ações web legadas do MangaUpdates foram aposentadas."
+        ),
     },
     {
         "id": "notion_catalog",
