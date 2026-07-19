@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 from manhwateca.database.connection import (
     DatabaseConfigurationError,
@@ -9,19 +8,13 @@ from manhwateca.database.connection import (
 from manhwateca.database.manga_repository import MangaRepository
 from manhwateca.webapp.candidate_filters import ranked_unique_candidates
 from manhwateca.webapp.mangaupdates_review import flow_candidates_review_payload
-from manhwateca.mangaupdates_service.review.data import (
-    CONFIRMED_STATUSES,
-    consolidate_review_items,
-)
 from manhwateca.mangaupdates_service.review.decisions import (
     apply_decisions,
-    load_items,
 )
 
 
-IDS_PATH = Path("reports/integrations/buscaIds.json")
-CSV_PATH = Path("reports/integrations/manhwateca_import.csv")
-METADATA_PATH = Path("config/catalog_metadata.json")
+class MangaUpdatesReviewUnavailable(RuntimeError):
+    pass
 
 
 def review_payload(
@@ -37,26 +30,9 @@ def review_payload(
     if database_payload is not None:
         return database_payload
 
-    return {
-        "source": {
-            "kind": "postgresql",
-            "label": "PostgreSQL",
-            "detail": "decision_queue",
-            "role": "fila de revisão de IDs",
-            "available": False,
-        },
-        "summary": {
-            "total": 0,
-            "review": 0,
-            "confirmed": 0,
-            "pending": 0,
-        },
-        "items": [],
-        "warning": (
-            "PostgreSQL indisponível. A revisão de IDs não usa mais "
-            "buscaIds.json como fonte principal."
-        ),
-    }
+    raise MangaUpdatesReviewUnavailable(
+        "Não foi possível carregar a fila de revisão."
+    )
 
 def _database_review_payload(repository_factory):
     try:
@@ -94,56 +70,19 @@ def _database_review_payload(repository_factory):
     }
 
 
-def _legacy_review_payload(root):
-    path = root / IDS_PATH
-    items = load_items(path) if path.is_file() else []
-    review = consolidate_review_items(
-        items,
-        csv_path=root / CSV_PATH,
-        metadata_path=root / METADATA_PATH,
-    )
-    return {
-        "source": {
-            "kind": "json",
-            "label": "JSON legado",
-            "detail": str(IDS_PATH),
-            "role": "staging de revisão de IDs",
-        },
-        "summary": {
-            "total": len(items),
-            "review": len(review),
-            "confirmed": sum(
-                item.get("Status") in CONFIRMED_STATUSES for item in items
-            ),
-            "pending": sum(not item.get("Status") for item in items),
-        },
-        "items": [_public_item(item) for item in review],
-    }
-
-
 def apply_review_decisions(
     project_root,
     decisions,
     repository_factory=MangaRepository,
     connection_factory=connect,
 ):
-    root = Path(project_root)
-    path = root / IDS_PATH
-    repository = _optional_repository(repository_factory)
+    repository = _require_repository(repository_factory)
     flow_items = _flow_review_items(connection_factory)
     database_items = flow_items or _pending_decision_items(repository)
-    if repository is not None:
-        return apply_decisions(
-            decisions,
-            database_items,
-            None,
-            decision_repository=repository,
-        )
-    items = load_items(path)
     return apply_decisions(
         decisions,
-        items,
-        path,
+        database_items,
+        None,
         decision_repository=repository,
     )
 
@@ -176,6 +115,15 @@ def _optional_repository(repository_factory=MangaRepository):
         return None
 
 
+def _require_repository(repository_factory=MangaRepository):
+    repository = _optional_repository(repository_factory)
+    if repository is None:
+        raise MangaUpdatesReviewUnavailable(
+            "Não foi possível carregar a fila de revisão."
+        )
+    return repository
+
+
 def _pending_decision_items(repository):
     if repository is None:
         return []
@@ -187,19 +135,6 @@ def _pending_decision_items(repository):
     except Exception:
         return []
     return [_decision_to_item(decision) for decision in decisions]
-
-
-def _merge_json_mirror(path, database_items):
-    if not path.exists():
-        return database_items
-    try:
-        legacy = load_items(path)
-    except (OSError, ValueError):
-        return database_items
-    by_name = {item.get("Nome"): item for item in legacy}
-    for item in database_items:
-        by_name[item.get("Nome")] = item
-    return list(by_name.values())
 
 
 def _decision_to_item(decision):

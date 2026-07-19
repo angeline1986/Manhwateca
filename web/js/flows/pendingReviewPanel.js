@@ -5,11 +5,16 @@ export function pendingTab(review, selectedDecisions = {}, activeKey = "", optio
   if (!items.length) return '<p class="empty">Não há correspondências pendentes.</p>';
   const savedKeys = new Set(options.savedKeys || []);
   const showResolved = Boolean(options.showResolved);
-  const pendingItems = items.filter(item => !savedKeys.has(itemKey(item)));
-  if (!pendingItems.length && !showResolved) return reviewCompleted(savedKeys.size);
-  const visibleItems = showResolved ? items : pendingItems;
+  const searchQuery = options.searchQuery || "";
+  const sortedItems = [...items].sort(compareItemsByTitle);
+  const filteredItems = sortedItems.filter(item => matchesSearch(item, searchQuery));
+  const pendingItems = filteredItems.filter(item => !savedKeys.has(itemKey(item)));
+  if (!pendingItems.length && !showResolved && !searchQuery.trim()) {
+    return reviewCompleted(savedKeys.size);
+  }
+  const visibleItems = showResolved ? filteredItems : pendingItems;
   const selectedItem = visibleItems.find(item => itemKey(item) === activeKey) || visibleItems[0];
-  const activeItemKey = itemKey(selectedItem);
+  const activeItemKey = selectedItem ? itemKey(selectedItem) : "";
   return `
     <div class="flow-review-workbench">
       <aside class="flow-review-queue" aria-label="Obras pendentes">
@@ -19,10 +24,12 @@ export function pendingTab(review, selectedDecisions = {}, activeKey = "", optio
         </div>
         <label class="flow-queue-search">
           <span>Filtrar por nome</span>
-          <input type="search" placeholder="Filtrar por nome...">
+          <input type="search" placeholder="Filtrar por nome..." data-flow-review-search value="${escapeHtml(searchQuery)}">
         </label>
         <p>${reviewSummary(items, savedKeys)}</p>
-        ${visibleItems.map(item => queueItem(item, selectedDecisions, itemKey(item) === activeItemKey)).join("")}
+        ${visibleItems.length
+          ? visibleItems.map(item => queueItem(item, selectedDecisions, itemKey(item) === activeItemKey)).join("")
+          : '<p class="empty">Nenhuma pendência encontrada para esse filtro.</p>'}
       </aside>
       ${decisionPanel(selectedItem, selectedDecisions)}
     </div>
@@ -44,6 +51,13 @@ function reviewCompleted(count) {
 }
 
 function decisionPanel(item, selectedDecisions) {
+  if (!item) {
+    return `
+      <section class="flow-decision-panel">
+        <p class="empty">Selecione uma pendência para revisar.</p>
+      </section>
+    `;
+  }
   const title = item.localTitle || item.nome || "Obra sem título";
   const key = itemKey(item);
   const selected = selectedDecisions[key];
@@ -67,6 +81,7 @@ function decisionPanel(item, selectedDecisions) {
           <p>${escapeHtml(aliases)}</p>
         </div>
       </div>
+      ${conflictNotice(item)}
       <div class="flow-candidate-grid">
         ${candidates.map((candidate, index) => candidateButton(key, title, candidate, selected, index)).join("")
           || '<p class="empty">Sem candidato seguro. Informe um ID manual.</p>'}
@@ -112,7 +127,7 @@ function queueItem(item, selectedDecisions, active) {
       <strong>${escapeHtml(title)}</strong>
       <span>${escapeHtml(reasonLabel(item.reason || item.decisionStatus, candidates.length))} · ${candidates.length}</span>
       ${marked ? "<em>Marcada</em>" : ""}
-      <small class="flow-queue-tip">${escapeHtml(reasonText(candidates))}</small>
+      <small class="flow-queue-tip">${escapeHtml(reasonText(item, candidates))}</small>
     </button>
   `;
 }
@@ -163,6 +178,7 @@ function rankedCandidates(candidates) {
 }
 
 function reasonLabel(reason, candidateCount = null) {
+  if (reason === "EXTERNAL_ID_ALREADY_ASSIGNED") return "ID já associado";
   if (candidateCount === 0) return "Sem resultado";
   if (candidateCount === 1) return "Candidato encontrado";
   return {
@@ -171,6 +187,7 @@ function reasonLabel(reason, candidateCount = null) {
     NO_RESULT: "Sem resultado",
     PENDING_REVIEW: "Requer revisão",
     MANUAL_ID_REQUIRED: "ID manual necessário",
+    EXTERNAL_ID_ALREADY_ASSIGNED: "ID já associado",
   }[reason] || "Requer revisão";
 }
 
@@ -178,7 +195,10 @@ function itemKey(item) {
   return item.queueId || item.nome_decisao || item.localTitle || item.nome || "obra";
 }
 
-function reasonText(candidates) {
+function reasonText(item, candidates) {
+  if (item?.reason === "EXTERNAL_ID_ALREADY_ASSIGNED") {
+    return "Este ID já está associado a outra obra.";
+  }
   if (candidates.length > 1) return `A busca encontrou ${candidates.length} candidatos acima de 64% para comparação.`;
   if (!candidates.length) return "A API não retornou candidato útil acima de 64% para esta obra.";
   return "Revise o candidato encontrado antes de marcar a decisão.";
@@ -188,6 +208,43 @@ function reviewSummary(items, savedKeys) {
   const ready = savedKeys.size;
   const noResult = items.filter(item => !rankedCandidates(item.candidates || []).length).length;
   return `${items.length} pendentes · ${noResult} sem resultado · ${ready} prontas para aplicar`;
+}
+
+function conflictNotice(item) {
+  if (item?.reason !== "EXTERNAL_ID_ALREADY_ASSIGNED") return "";
+  const conflict = item.conflict || {};
+  const existing = conflict.existingTitle || "outra obra";
+  const externalId = conflict.candidateExternalId || "o ID sugerido";
+  return `
+    <div class="flow-review-warning">
+      <strong>Este ID já está associado a outra obra.</strong>
+      <p>ID ${escapeHtml(String(externalId))} pertence a ${escapeHtml(existing)}. Revise antes de aplicar qualquer decisão.</p>
+    </div>
+  `;
+}
+
+function compareItemsByTitle(left, right) {
+  return itemTitle(left).localeCompare(itemTitle(right), "pt-BR", {
+    sensitivity: "base",
+  });
+}
+
+function itemTitle(item) {
+  return item.localTitle || item.nome || item.searchedTitle || item.normalizedTitle || "";
+}
+
+function matchesSearch(item, query) {
+  const normalizedQuery = normalizeSearch(query);
+  if (!normalizedQuery) return true;
+  return normalizeSearch(itemTitle(item)).includes(normalizedQuery);
+}
+
+function normalizeSearch(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .trim();
 }
 
 function boxIcon() {

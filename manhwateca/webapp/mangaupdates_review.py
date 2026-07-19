@@ -87,6 +87,9 @@ def _rows_to_items(rows):
 def _item(row):
     status = "PENDING_REVIEW" if row.get("status") == "pending_review" else "MANUAL_ID_REQUIRED"
     title = row.get("local_title") or row.get("searched_title") or ""
+    details = _payload_dict(row.get("details"))
+    reason = details.get("reason")
+    conflict = _conflict_details(details)
     return {
         "queueId": f"flow_{row.get('work_id') or row.get('id')}",
         "mangaId": row.get("work_id"),
@@ -97,7 +100,12 @@ def _item(row):
         "manualMangaupdatesId": None,
         "decisionStatus": status,
         "confidence": _float_or_none(row.get("confidence")),
-        "reason": "NO_RESULT" if status == "MANUAL_ID_REQUIRED" else "AMBIGUOUS",
+        "reason": (
+            "EXTERNAL_ID_ALREADY_ASSIGNED"
+            if reason == "external_id_already_assigned"
+            else ("NO_RESULT" if status == "MANUAL_ID_REQUIRED" else "AMBIGUOUS")
+        ),
+        "conflict": conflict,
         "updatedAt": _string_or_none(row.get("created_at")),
         "nome": title,
         "nome_decisao": title,
@@ -122,6 +130,19 @@ def _candidate(row):
         "ano": candidate.get("ano"),
         "descricao": candidate.get("descricao"),
         "bl": candidate.get("bl"),
+    }
+
+
+def _conflict_details(details):
+    if details.get("reason") != "external_id_already_assigned":
+        return None
+    return {
+        "reason": details.get("reason"),
+        "candidateExternalId": details.get("candidateExternalId"),
+        "targetWorkId": details.get("targetWorkId"),
+        "existingWorkId": details.get("existingWorkId"),
+        "existingTitle": details.get("existingTitle"),
+        "message": details.get("message"),
     }
 
 

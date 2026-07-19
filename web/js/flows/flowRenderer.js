@@ -39,6 +39,7 @@ export function renderFlowsOverview(elements, data, options = {}) {
     savedReviewKeys: options.savedReviewKeys || [],
     visibleStatuses,
     review: options.review,
+    reviewSearchQuery: options.reviewSearchQuery || "",
     metadata: options.metadata,
     notionMetadata: options.notionMetadata,
     works: options.works,

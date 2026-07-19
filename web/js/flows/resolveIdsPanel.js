@@ -7,6 +7,7 @@ export function renderResolveIdsPanel({
   activeReviewKey,
   showResolvedReview,
   review,
+  reviewSearchQuery,
   run,
   selectedDecisions,
   savedReviewKeys,
@@ -18,6 +19,7 @@ export function renderResolveIdsPanel({
     ${activeSubtab === "buscar" ? searchTab(metrics, summary, review, works) : ""}
     ${activeSubtab === "pendencias" ? pendingTab(review, selectedDecisions, activeReviewKey, {
       savedKeys: savedReviewKeys,
+      searchQuery: reviewSearchQuery,
       showResolved: showResolvedReview,
     }) : ""}
     ${activeSubtab === "decisoes" ? decisionsTab(review, selectedDecisions) : ""}

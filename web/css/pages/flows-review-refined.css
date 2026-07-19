@@ -73,6 +73,24 @@
 .flow-queue-item:hover .flow-queue-tip {
   display: block;
 }
+.flow-review-warning {
+  border: 1px solid #f0d8c1;
+  border-radius: 8px;
+  background: #fff8f0;
+  color: #7b3b12;
+  margin: 14px 0;
+  padding: 12px 14px;
+}
+.flow-review-warning strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.flow-review-warning p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
 .flow-queue-item span::before {
   content: "";
   display: inline-block;

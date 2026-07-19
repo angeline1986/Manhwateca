@@ -48,7 +48,11 @@ def apply_decisions(decisions, items, ids_path=None, decision_repository=None):
     applied = []
     rejected = []
     seen = set()
-    repository = decision_repository or _optional_decision_repository()
+    repository = (
+        decision_repository
+        if decision_repository is not None
+        else (None if ids_path is not None else _optional_decision_repository())
+    )
 
     for decision in decisions:
         validated, error = _validate_decision(
@@ -64,17 +68,22 @@ def apply_decisions(decisions, items, ids_path=None, decision_repository=None):
 
         name, series_id, candidate_title = validated
         item = items[by_name[name]]
+        if repository is not None:
+            confirmation = _confirm_mangaupdates_id(
+                repository,
+                name=name,
+                series_id=series_id,
+                candidate_title=candidate_title,
+            )
+            if not confirmation:
+                rejected.append(_confirmation_error(name, confirmation))
+                continue
+
         item["Status"] = "Confirmado manualmente"
         item["ID"] = series_id
         item["Nome encontrado"] = candidate_title
         item.pop("IDs", None)
         applied.append(name)
-        _confirm_mangaupdates_id(
-            repository,
-            name=name,
-            series_id=series_id,
-            candidate_title=candidate_title,
-        )
         _resolve_match_decision(
             repository,
             name=name,
@@ -234,6 +243,19 @@ def _confirm_mangaupdates_id(
         )
     except Exception:
         return False
+
+
+def _confirmation_error(name, confirmation):
+    status = getattr(confirmation, "status", None)
+    if status == "external_id_already_assigned":
+        existing = getattr(confirmation, "existing_title", None)
+        series_id = getattr(confirmation, "series_id", None)
+        if existing:
+            return f"{name}: ID {series_id} já está associado a {existing}."
+        return f"{name}: ID {series_id} já está associado a outra obra."
+    if status == "target_missing":
+        return f"{name}: obra local não encontrada para confirmar ID."
+    return f"{name}: não foi possível confirmar o ID MangaUpdates."
 
 
 def _mark_flow_candidate_applied(

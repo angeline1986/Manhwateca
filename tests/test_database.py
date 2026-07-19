@@ -50,6 +50,17 @@ class FakeCursor:
             )
             return
 
+        if "from vw_mangas" in normalized and "where id = %s" in normalized:
+            self.row = next(
+                (
+                    row
+                    for row in self.connection.mangas
+                    if row.get("id") == params[0]
+                ),
+                None,
+            )
+            return
+
         if "from vw_mangas" in normalized and "where id = any" in normalized:
             ids = set(params[0])
             self.rows = sorted(
@@ -529,6 +540,47 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertEqual("Official Alpha", params[1])
         self.assertEqual(7, params[2])
         self.assertEqual(1, len(connection.commits))
+
+    def test_confirms_mangaupdates_id_by_work_id_blocks_external_id_collision(self):
+        connection = FakeConnection()
+        connection.mangas = [
+            {"id": 7, "title": "Target"},
+            {"id": 9, "title": "Existing", "work_code": "123"},
+        ]
+        repository = MangaRepository(connection)
+
+        confirmed = repository.confirm_mangaupdates_id_by_work_id(
+            7,
+            123,
+            found_title="Official Target",
+        )
+
+        self.assertFalse(confirmed)
+        self.assertEqual("external_id_already_assigned", confirmed.status)
+        self.assertEqual(7, confirmed.work_id)
+        self.assertEqual(9, confirmed.existing_work_id)
+        self.assertEqual("Existing", confirmed.existing_title)
+        self.assertEqual([], connection.updated)
+        self.assertEqual([], connection.commits)
+
+    def test_confirms_mangaupdates_id_by_work_id_is_idempotent_for_same_work(self):
+        connection = FakeConnection()
+        connection.mangas = [
+            {"id": 7, "title": "Target", "work_code": "123"},
+        ]
+        repository = MangaRepository(connection)
+
+        confirmed = repository.confirm_mangaupdates_id_by_work_id(
+            7,
+            123,
+            found_title="Official Target",
+        )
+
+        self.assertTrue(confirmed)
+        self.assertEqual("already_applied", confirmed.status)
+        self.assertEqual(7, confirmed.work_id)
+        self.assertEqual([], connection.updated)
+        self.assertEqual([], connection.commits)
 
     def test_updates_notion_sync_fields_by_page_id(self):
         connection = FakeConnection()

@@ -112,7 +112,10 @@ export function handleFlowsChange(event, area) {
   }
 }
 
-export function handleFlowsInput(event, area) {
+export function handleFlowsInput(event, area, context = {}) {
+  if (event.target.matches("[data-flow-review-search]")) {
+    context.setReviewSearchQuery?.(event.target.value || "");
+  }
   if (event.target.matches("[data-notion-sync-search]")) {
     filterNotionSyncCandidates(area, event.target.value || "");
     updateNotionSyncSummary(area);

@@ -1,10 +1,28 @@
 import json
+from dataclasses import dataclass
 from datetime import datetime
 
 from manhwateca.database.connection import connect
 from manhwateca.database.models import MangaRecord, manga_from_row
 from manhwateca.notion_sync import statuses
 from manhwateca.notion_sync.matching import normalize_title
+
+
+@dataclass(frozen=True)
+class MangaUpdatesConfirmationResult:
+    status: str
+    work_id: int | None = None
+    series_id: str | None = None
+    existing_work_id: int | None = None
+    existing_title: str | None = None
+    message: str | None = None
+
+    @property
+    def applied(self) -> bool:
+        return self.status in {"applied", "already_applied"}
+
+    def __bool__(self) -> bool:
+        return self.applied
 
 
 class MangaRepository:
@@ -57,6 +75,22 @@ class MangaRepository:
             LIMIT 1
             """,
             (str(work_code).strip(),),
+        )
+        return manga_from_row(row) if row else None
+
+    def find_by_id(self, work_id) -> MangaRecord | None:
+        try:
+            normalized_id = int(work_id)
+        except (TypeError, ValueError):
+            return None
+        row = self._fetch_one(
+            """
+            SELECT *
+            FROM vw_mangas
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (normalized_id,),
         )
         return manga_from_row(row) if row else None
 
@@ -291,32 +325,86 @@ class MangaRepository:
         name: str,
         series_id,
         found_title: str | None = None,
-    ) -> bool:
-        manga = self.find_by_work_code(series_id)
+    ) -> MangaUpdatesConfirmationResult:
+        manga = self.find_by_normalized_title(name)
         if manga is None:
-            manga = self.find_by_normalized_title(name)
-        if manga is None:
-            return False
-
-        self._execute(
-            """
-            UPDATE mangas
-            SET
-                work_code = %s,
-                alternative_title = COALESCE(
-                    NULLIF(alternative_title, ''),
-                    %s
-                )
-            WHERE id = %s
-            """,
-            (
-                _string_or_none(series_id),
-                _empty_to_none(found_title),
-                manga.id,
-            ),
+            return MangaUpdatesConfirmationResult(
+                status="target_missing",
+                series_id=_string_or_none(series_id),
+                message="Obra local não encontrada para confirmar ID MangaUpdates.",
+            )
+        return self.confirm_mangaupdates_id_by_work_id(
+            manga.id,
+            series_id,
+            found_title=found_title,
         )
-        self._connection().commit()
-        return True
+
+    def confirm_mangaupdates_id_by_work_id(
+        self,
+        work_id,
+        series_id,
+        found_title: str | None = None,
+    ) -> MangaUpdatesConfirmationResult:
+        normalized_series_id = _string_or_none(series_id)
+        target = self.find_by_id(work_id)
+        if target is None:
+            return MangaUpdatesConfirmationResult(
+                status="target_missing",
+                work_id=_int_or_none(work_id),
+                series_id=normalized_series_id,
+                message="Obra local não encontrada para confirmar ID MangaUpdates.",
+            )
+
+        existing = self.find_by_work_code(normalized_series_id)
+        if existing is not None and _int_or_none(existing.id) != _int_or_none(target.id):
+            return MangaUpdatesConfirmationResult(
+                status="external_id_already_assigned",
+                work_id=_int_or_none(target.id),
+                series_id=normalized_series_id,
+                existing_work_id=_int_or_none(existing.id),
+                existing_title=existing.title,
+                message="ID MangaUpdates já associado a outra obra.",
+            )
+
+        if str(target.work_code or "").strip() == str(normalized_series_id or "").strip():
+            return MangaUpdatesConfirmationResult(
+                status="already_applied",
+                work_id=_int_or_none(target.id),
+                series_id=normalized_series_id,
+            )
+
+        try:
+            self._execute(
+                """
+                UPDATE mangas
+                SET
+                    work_code = %s,
+                    alternative_title = COALESCE(
+                        NULLIF(alternative_title, ''),
+                        %s
+                    )
+                WHERE id = %s
+                """,
+                (
+                    normalized_series_id,
+                    _empty_to_none(found_title),
+                    target.id,
+                ),
+            )
+            self._connection().commit()
+        except Exception as exc:
+            return MangaUpdatesConfirmationResult(
+                status="persistence_error",
+                work_id=_int_or_none(target.id),
+                series_id=normalized_series_id,
+                message=str(exc),
+            )
+        return MangaUpdatesConfirmationResult(
+            status="applied",
+            work_id=_int_or_none(target.id),
+            series_id=normalized_series_id,
+        )
+
 
     def update_notion_sync_fields(
         self,
@@ -930,6 +1018,13 @@ def _string_or_none(value):
     if value is None or str(value).strip() == "":
         return None
     return str(value).strip()
+
+
+def _int_or_none(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _first_existing(columns, *candidates):

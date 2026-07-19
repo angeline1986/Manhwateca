@@ -7,7 +7,10 @@ from manhwateca.webapp.catalog_pending import (
     reconcile_catalog_aliases,
 )
 from manhwateca.webapp.editorial import update_editorial
-from manhwateca.webapp.mangaupdates import apply_review_decisions
+from manhwateca.webapp.mangaupdates import (
+    MangaUpdatesReviewUnavailable,
+    apply_review_decisions,
+)
 from manhwateca.webapp.mangaupdates_decisions import (
     apply_decisions_payload,
     validate_decisions_payload,
@@ -38,14 +41,20 @@ def handle_direct_post(path, payload, project_root, workflow_manager=None):
         if path == "/api/mangaupdates/decisions/validate":
             return validate_decisions_payload(decisions or queue_ids), 200
         if path == "/api/mangaupdates/decisions/apply":
-            return apply_decisions_payload(
-                project_root,
-                decisions or queue_ids,
-                apply_review_decisions,
+            try:
+                return apply_decisions_payload(
+                    project_root,
+                    decisions or queue_ids,
+                    apply_review_decisions,
+                )
+            except MangaUpdatesReviewUnavailable as error:
+                return {"error": str(error)}, 503
+        try:
+            applied, rejected, backup = apply_review_decisions(
+                project_root, decisions
             )
-        applied, rejected, backup = apply_review_decisions(
-            project_root, decisions
-        )
+        except MangaUpdatesReviewUnavailable as error:
+            return {"error": str(error)}, 503
         result = {
             "applied": applied,
             "rejected": rejected,

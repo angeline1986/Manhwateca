@@ -11,6 +11,8 @@ def ranked_unique_candidates(
 ):
     unique = {}
     for candidate in candidates:
+        if candidate.get("bl") is False:
+            continue
         score = candidate_score(candidate, score_key)
         if score <= MIN_CANDIDATE_SCORE:
             continue

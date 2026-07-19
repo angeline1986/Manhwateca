@@ -31,6 +31,7 @@ export function initFlowsPage(elements, options = {}) {
   let activeSubtab = "buscar";
   let worksPage = 1;
   let activeReviewKey = "";
+  let reviewSearchQuery = "";
   let showResolvedReview = false;
   let reviewState = { summary: {}, items: [] };
   let selectedDecisions = {};
@@ -94,6 +95,7 @@ export function initFlowsPage(elements, options = {}) {
       activeReviewKey,
       showResolvedReview,
       review: reviewState,
+      reviewSearchQuery,
       selectedDecisions: activeSubtab === "decisoes" ? readyDecisions() : selectedDecisions,
       savedReviewKeys: [...savedReviewKeys],
       metadata: metadataState,
@@ -300,6 +302,41 @@ export function initFlowsPage(elements, options = {}) {
     renderWorkflow(workflowState);
   }
 
+  function setReviewSearchQuery(value) {
+    reviewSearchQuery = value || "";
+    activeReviewKey = firstVisibleReviewKey(reviewSearchQuery);
+    renderWorkflow(workflowState);
+    const input = area?.querySelector("[data-flow-review-search]");
+    if (input) {
+      input.focus();
+      const cursor = input.value.length;
+      input.setSelectionRange(cursor, cursor);
+    }
+  }
+
+  function firstVisibleReviewKey(query) {
+    const normalized = normalizeReviewSearch(query);
+    const items = [...(reviewState.items || [])].sort((left, right) =>
+      reviewTitle(left).localeCompare(reviewTitle(right), "pt-BR", { sensitivity: "base" })
+    );
+    const visible = items.find(item =>
+      !normalized || normalizeReviewSearch(reviewTitle(item)).includes(normalized)
+    );
+    return visible ? itemKey(visible) : "";
+  }
+
+  function reviewTitle(item) {
+    return item.localTitle || item.nome || item.searchedTitle || item.normalizedTitle || "";
+  }
+
+  function normalizeReviewSearch(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("pt-BR")
+      .trim();
+  }
+
   function afterApply(updatedDecisions) {
     selectedDecisions = updatedDecisions;
     if (!Object.keys(updatedDecisions).length) savedReviewKeys = new Set(); renderWorkflow(workflowState);
@@ -326,6 +363,7 @@ export function initFlowsPage(elements, options = {}) {
     runCurrentFlowStage,
     saveCurrentReviewDecision,
     setActiveReviewKey: value => { activeReviewKey = value; },
+    setReviewSearchQuery,
     setActiveSubtab,
     setFeedback,
     setSelectedDecisions: value => { selectedDecisions = value; },
@@ -333,7 +371,9 @@ export function initFlowsPage(elements, options = {}) {
     showPage,
   }));
   area?.addEventListener("change", event => handleFlowsChange(event, area));
-  area?.addEventListener("input", event => handleFlowsInput(event, area));
+  area?.addEventListener("input", event => handleFlowsInput(event, area, {
+    setReviewSearchQuery,
+  }));
 
   return { loadWorkflow, stopWorkflowPolling };
 }
