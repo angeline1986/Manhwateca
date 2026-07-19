@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 
+from manhwateca.database.connection import DatabaseConfigurationError
+from manhwateca.database.manga_repository import MangaUpdatesConfirmationResult
 from manhwateca.webapp.mangaupdates import (
+    MangaUpdatesReviewUnavailable,
     apply_review_decisions,
     review_payload,
 )
@@ -14,6 +17,8 @@ from manhwateca.webapp.mangaupdates_decisions import (
     validate_decisions_payload,
 )
 from manhwateca.webapp.mangaupdates_status import mangaupdates_status
+from manhwateca.webapp.mangaupdates_status import MangaUpdatesStatusUnavailable
+from manhwateca.webapp.post_routes import handle_direct_post
 
 
 @dataclass
@@ -21,6 +26,7 @@ class FakeMangaRecord:
     title: str
     work_code: str | None = None
     mangaupdates_url: str | None = None
+    cover_url: str | None = None
     latest_mangaupdates_chapter: Decimal | None = None
 
 
@@ -31,6 +37,7 @@ class FakeRepository:
                 title="Cached",
                 work_code="1",
                 mangaupdates_url="https://example.test/cached",
+                cover_url="https://cdn.example.test/cached.jpg",
             ),
             FakeMangaRecord(title="Missing", work_code="2"),
             FakeMangaRecord(title="No ID"),
@@ -38,10 +45,11 @@ class FakeRepository:
 
 
 class FakeReviewRepository:
-    def __init__(self):
+    def __init__(self, confirmation=None):
         self.confirmed = []
         self.resolved = []
         self.flow_applied = []
+        self.confirmation = confirmation
 
     def list_decisions(self, *, decision_type=None, status=None):
         return [{
@@ -75,6 +83,8 @@ class FakeReviewRepository:
         ]
 
     def confirm_mangaupdates_id(self, name, series_id, found_title=None):
+        if self.confirmation is not None:
+            return self.confirmation
         self.confirmed.append((name, series_id, found_title))
         return True
 
@@ -85,6 +95,14 @@ class FakeReviewRepository:
     def mark_flow_id_candidates_applied(self, **kwargs):
         self.flow_applied.append(kwargs)
         return True
+
+
+class EmptyReviewRepository(FakeReviewRepository):
+    def list_decisions(self, *, decision_type=None, status=None):
+        return []
+
+    def list_mangas(self):
+        return []
 
 
 class FakeFlowConnection:
@@ -113,22 +131,55 @@ class FakeFlowConnection:
 
 class WebMangaUpdatesTests(unittest.TestCase):
     def test_review_payload_filters_low_score_and_explicit_non_bl(self):
-        items = [{
-            "Nome": "Alpha",
-            "Status": "Revisar",
-            "IDs": [
-                {"id": 1, "titulo": "Valid", "pontuacao": 0.9, "bl": True},
-                {"id": 2, "titulo": "Low", "pontuacao": 0.7, "bl": True},
-                {"id": 3, "titulo": "Not BL", "pontuacao": 0.95, "bl": False},
-            ],
-        }]
+        rows = [
+            {
+                "id": 10,
+                "work_id": 7,
+                "searched_title": "Alpha",
+                "candidate_external_id": "1",
+                "candidate_title": "Valid",
+                "confidence": Decimal("0.9"),
+                "status": "pending_review",
+                "details": {"candidate": {"bl": True}},
+                "created_at": "2026-07-01 10:00:00",
+                "local_title": "Alpha",
+            },
+            {
+                "id": 11,
+                "work_id": 7,
+                "searched_title": "Alpha",
+                "candidate_external_id": "2",
+                "candidate_title": "Low",
+                "confidence": Decimal("0.6"),
+                "status": "pending_review",
+                "details": {"candidate": {"bl": True}},
+                "created_at": "2026-07-01 10:00:00",
+                "local_title": "Alpha",
+            },
+            {
+                "id": 12,
+                "work_id": 7,
+                "searched_title": "Alpha",
+                "candidate_external_id": "3",
+                "candidate_title": "Not BL",
+                "confidence": Decimal("0.95"),
+                "status": "pending_review",
+                "details": {"candidate": {"bl": False}},
+                "created_at": "2026-07-01 10:00:00",
+                "local_title": "Alpha",
+            },
+        ]
         with tempfile.TemporaryDirectory() as directory:
-            root = self._project(directory, items)
-            payload = review_payload(root)
+            payload = review_payload(
+                self._project(directory, []),
+                repository_factory=lambda: FakeReviewRepository(),
+                connection_factory=lambda: FakeFlowConnection(rows),
+            )
 
-        self.assertEqual("json", payload["source"]["kind"])
+        self.assertEqual("postgresql", payload["source"]["kind"])
+        self.assertEqual("flow_id_candidates", payload["source"]["detail"])
         self.assertEqual(1, payload["summary"]["review"])
-        self.assertEqual([1], [
+        self.assertEqual(["1"], [
             candidate["id"] for candidate in payload["items"][0]["candidates"]
         ])
 
@@ -148,6 +199,33 @@ class WebMangaUpdatesTests(unittest.TestCase):
         self.assertEqual([1], [
             candidate["id"] for candidate in payload["items"][0]["candidates"]
         ])
+
+    def test_review_payload_empty_database_queue_is_success(self):
+        with tempfile.TemporaryDirectory() as directory:
+            payload = review_payload(
+                self._project(directory, []),
+                repository_factory=lambda: EmptyReviewRepository(),
+                connection_factory=lambda: FakeFlowConnection([]),
+            )
+
+        self.assertEqual("postgresql", payload["source"]["kind"])
+        self.assertEqual([], payload["items"])
+        self.assertEqual(0, payload["summary"]["review"])
+
+    def test_review_payload_without_repository_fails_without_reading_json(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._project(directory, [])
+            (root / "reports/integrations/buscaIds.json").write_text(
+                "{arquivo invalido",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(MangaUpdatesReviewUnavailable):
+                review_payload(
+                    root,
+                    repository_factory=unavailable_database,
+                    connection_factory=unavailable_database,
+                )
 
     def test_review_payload_uses_flow_candidates_before_decision_queue(self):
         rows = [
@@ -190,6 +268,40 @@ class WebMangaUpdatesTests(unittest.TestCase):
         self.assertEqual(["101", "102"], [
             candidate["id"] for candidate in payload["items"][0]["candidates"]
         ])
+
+    def test_review_payload_exposes_external_id_collision(self):
+        rows = [{
+            "id": 10,
+            "work_id": 269,
+            "searched_title": "How to Win Over Your Crush",
+            "candidate_external_id": "74840589785",
+            "candidate_title": "How to Win Over Your Crush",
+            "confidence": Decimal("1.0"),
+            "status": "pending_review",
+            "details": {
+                "reason": "external_id_already_assigned",
+                "candidateExternalId": "74840589785",
+                "targetWorkId": 269,
+                "existingWorkId": 53,
+                "existingTitle": "Segredo para Conquistar o Amor Não Correspondido",
+            },
+            "created_at": "2026-07-01 10:00:00",
+            "local_title": "How to Win Over Your Crush",
+        }]
+        with tempfile.TemporaryDirectory() as directory:
+            payload = review_payload(
+                self._project(directory, []),
+                repository_factory=lambda: FakeReviewRepository(),
+                connection_factory=lambda: FakeFlowConnection(rows),
+            )
+
+        item = payload["items"][0]
+        self.assertEqual("EXTERNAL_ID_ALREADY_ASSIGNED", item["reason"])
+        self.assertEqual(53, item["conflict"]["existingWorkId"])
+        self.assertEqual(
+            "Segredo para Conquistar o Amor Não Correspondido",
+            item["conflict"]["existingTitle"],
+        )
 
     def test_review_payload_deduplicates_orders_filters_and_limits_candidates(self):
         rows = []
@@ -266,7 +378,7 @@ class WebMangaUpdatesTests(unittest.TestCase):
         self.assertEqual([], payload["applied"])
         self.assertEqual(1, payload["blocked"])
 
-    def test_apply_manual_decision_updates_json_and_creates_backup(self):
+    def test_apply_manual_decision_without_repository_fails_without_json_backup(self):
         items = [{"Nome": "Alpha", "Status": "Revisar", "IDs": []}]
         decision = {
             "Nome": "Alpha",
@@ -276,21 +388,22 @@ class WebMangaUpdatesTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as directory:
             root = self._project(directory, items)
-            applied, rejected, backup = apply_review_decisions(
-                root, [decision]
-            )
+            with self.assertRaises(MangaUpdatesReviewUnavailable):
+                apply_review_decisions(
+                    root,
+                    [decision],
+                    repository_factory=unavailable_database,
+                    connection_factory=unavailable_database,
+                )
             saved = json.loads(
                 (root / "reports/integrations/buscaIds.json").read_text()
             )
+            backups = list((root / "reports/integrations").glob("*.backup-*"))
 
-        self.assertEqual(["Alpha"], applied)
-        self.assertEqual([], rejected)
-        self.assertTrue(backup.name.startswith("buscaIds.backup-"))
-        self.assertEqual(99, saved[0]["ID"])
-        self.assertEqual("Confirmado manualmente", saved[0]["Status"])
-        self.assertNotIn("IDs", saved[0])
+        self.assertEqual(items, saved)
+        self.assertEqual([], backups)
 
-    def test_apply_decision_uses_decision_queue_and_mirrors_json(self):
+    def test_apply_decision_uses_decision_queue_without_json_backup(self):
         repository = FakeReviewRepository()
         decision = {
             "queueId": "flow_42",
@@ -352,47 +465,82 @@ class WebMangaUpdatesTests(unittest.TestCase):
         self.assertEqual(("Boredom", 22961829567, "Boredom"), repository.confirmed[0])
         self.assertEqual(42, repository.flow_applied[0]["work_id"])
 
-    def test_status_counts_predicted_api_calls_without_network(self):
-        items = [
-            {
-                "Nome": "Cached",
-                "Status": "Confirmado automaticamente",
-                "ID": 1,
-            },
-            {
-                "Nome": "Missing",
-                "Status": "Confirmado manualmente",
-                "ID": 2,
-            },
-        ]
+    def test_apply_decision_rejects_external_id_collision(self):
+        repository = FakeReviewRepository(
+            MangaUpdatesConfirmationResult(
+                status="external_id_already_assigned",
+                work_id=269,
+                series_id="74840589785",
+                existing_work_id=53,
+                existing_title="Segredo para Conquistar o Amor Não Correspondido",
+            )
+        )
+        rows = [{
+            "id": 10,
+            "work_id": 269,
+            "searched_title": "How to Win Over Your Crush",
+            "candidate_external_id": "74840589785",
+            "candidate_title": "How to Win Over Your Crush",
+            "confidence": Decimal("1.0"),
+            "status": "pending_review",
+            "details": {},
+            "created_at": "2026-07-01 10:00:00",
+            "local_title": "How to Win Over Your Crush",
+        }]
+        decision = {
+            "queueId": "flow_269",
+            "Nome": "How to Win Over Your Crush",
+            "ID": 74840589785,
+            "Nome encontrado": "How to Win Over Your Crush",
+        }
         with tempfile.TemporaryDirectory() as directory:
-            root = self._project(directory, items)
+            applied, rejected, backup = apply_review_decisions(
+                self._project(directory, []),
+                [decision],
+                repository_factory=lambda: repository,
+                connection_factory=lambda: FakeFlowConnection(rows),
+            )
+
+        self.assertEqual([], applied)
+        self.assertEqual(1, len(rejected))
+        self.assertIn("já está associado", rejected[0])
+        self.assertEqual([], repository.resolved)
+        self.assertEqual([], repository.flow_applied)
+        self.assertIsNone(backup)
+
+    def test_status_empty_database_returns_zero_counts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            payload = mangaupdates_status(
+                self._project(directory, []),
+                batch_size=10,
+                repository_factory=lambda: EmptyReviewRepository(),
+            )
+
+        self.assertEqual("postgresql", payload["source"]["kind"])
+        self.assertEqual(0, payload["summary"]["confirmed_ids"])
+        self.assertEqual(0, payload["summary"]["cached_ids"])
+        self.assertEqual(0, payload["summary"]["calls_needed"])
+        self.assertEqual([], payload["next_batch"])
+
+    def test_status_without_database_fails_without_reading_json(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._project(directory, [])
             (root / "data").mkdir()
             (root / "data/mangaupdates.json").write_text(
-                json.dumps({"1": {"series_id": 1}}),
+                "{arquivo invalido",
                 encoding="utf-8",
             )
             (root / "reports/integrations/mangaupdates_state.json").write_text(
-                json.dumps({
-                    "series": {
-                        "1": {
-                            "last_checked_at": "2099-01-01T00:00:00+00:00",
-                            "status": "cache_valido",
-                        }
-                    }
-                }),
+                "{arquivo invalido",
                 encoding="utf-8",
             )
-            payload = mangaupdates_status(root, batch_size=10)
 
-        self.assertEqual("json", payload["source"]["kind"])
-        self.assertEqual(2, payload["summary"]["confirmed_ids"])
-        self.assertEqual(1, payload["summary"]["cached_ids"])
-        self.assertEqual(1, payload["summary"]["calls_needed"])
-        self.assertEqual(2, payload["summary"]["force_refresh_calls"])
-        self.assertEqual(["Missing"], [
-            item["name"] for item in payload["next_batch"]
-        ])
+            with self.assertRaises(MangaUpdatesStatusUnavailable):
+                mangaupdates_status(
+                    root,
+                    batch_size=10,
+                    repository_factory=unavailable_database,
+                )
 
     def test_status_prefers_database_when_available(self):
         payload = mangaupdates_status(
@@ -417,3 +565,7 @@ class WebMangaUpdatesTests(unittest.TestCase):
             json.dumps(items), encoding="utf-8"
         )
         return root
+
+
+def unavailable_database():
+    raise DatabaseConfigurationError("database unavailable in test")

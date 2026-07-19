@@ -10,9 +10,15 @@ from manhwateca.webapp.actions import public_actions
 from manhwateca.webapp.catalog import catalog_payload
 from manhwateca.webapp.editorial import dashboard_payload
 from manhwateca.webapp.diagnostics import build_diagnostics
-from manhwateca.webapp.mangaupdates import review_payload
+from manhwateca.webapp.mangaupdates import (
+    MangaUpdatesReviewUnavailable,
+    review_payload,
+)
 from manhwateca.webapp.mangaupdates_works import works_payload
-from manhwateca.webapp.mangaupdates_status import mangaupdates_status
+from manhwateca.webapp.mangaupdates_status import (
+    MangaUpdatesStatusUnavailable,
+    mangaupdates_status,
+)
 from manhwateca.webapp.notion import notion_status
 from manhwateca.webapp.notion_metadata import metadata_status
 from manhwateca.webapp.notion_sync_candidates import sync_candidates_payload
@@ -74,13 +80,19 @@ def create_handler(project_root, task_manager, workflow_manager=None):
                 self._send_json(dashboard_payload(project_root))
                 return
             if path == "/api/mangaupdates/review":
-                self._send_json(review_payload(project_root))
+                try:
+                    self._send_json(review_payload(project_root))
+                except MangaUpdatesReviewUnavailable as error:
+                    self._send_json({"error": str(error)}, status=503)
                 return
             if path == "/api/mangaupdates/works":
                 self._send_json(works_payload(urlparse(self.path).query))
                 return
             if path == "/api/mangaupdates/status":
-                self._send_json(mangaupdates_status(project_root))
+                try:
+                    self._send_json(mangaupdates_status(project_root))
+                except MangaUpdatesStatusUnavailable as error:
+                    self._send_json({"error": str(error)}, status=503)
                 return
             if path == "/api/notion/status":
                 self._send_json(notion_status(project_root))

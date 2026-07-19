@@ -14,6 +14,8 @@ from manhwateca.flows.repository import (
     IdCandidateRecord,
 )
 from manhwateca.mangaupdates_service.client import search_series
+from manhwateca.mangaupdates_service.client import get_series
+from manhwateca.mangaupdates_service.details import summarize_series
 from manhwateca.mangaupdates_service.matching import (
     filter_relevant_candidates,
     rank_search_results,
@@ -28,6 +30,8 @@ class MangaUpdatesFlowIntegration:
         flow_repository_factory=FlowRepository,
         manga_repository_factory=MangaRepository,
         search_function=search_series,
+        detail_function=get_series,
+        summarize_function=summarize_series,
         per_page: int = 5,
         timeout: int = 8,
         retries: int = 0,
@@ -35,6 +39,8 @@ class MangaUpdatesFlowIntegration:
         self.flow_repository_factory = flow_repository_factory
         self.manga_repository_factory = manga_repository_factory
         self.search_function = search_function
+        self.detail_function = detail_function
+        self.summarize_function = summarize_function
         self.per_page = per_page
         self.timeout = timeout
         self.retries = retries
@@ -115,21 +121,50 @@ class MangaUpdatesFlowIntegration:
                 )[:self.per_page]
                 selected, status = select_ranked_candidate(ranked)
                 if selected:
-                    manga_repository.confirm_mangaupdates_id(
-                        work.title,
+                    confirmation = manga_repository.confirm_mangaupdates_id_by_work_id(
+                        work.work_id,
                         selected["id"],
-                        selected.get("titulo"),
+                        found_title=selected.get("titulo"),
                     )
                     _commit_repository(manga_repository)
-                    flow_repository.append_id_candidate(_candidate_record(
-                        execution.execution_id,
-                        work.work_id,
-                        work.title,
-                        selected,
-                        "auto_matched",
-                        {"selectionStatus": status},
-                    ))
-                    matched += 1
+                    if confirmation:
+                        flow_repository.append_id_candidate(_candidate_record(
+                            execution.execution_id,
+                            work.work_id,
+                            work.title,
+                            selected,
+                            "auto_matched",
+                            {"selectionStatus": status},
+                        ))
+                        matched += 1
+                    elif confirmation.status == "external_id_already_assigned":
+                        flow_repository.append_id_candidate(_candidate_record(
+                            execution.execution_id,
+                            work.work_id,
+                            work.title,
+                            selected,
+                            "pending_review",
+                            {
+                                "selectionStatus": status,
+                                **_confirmation_details(confirmation),
+                            },
+                        ))
+                        _enqueue_review(manga_repository, work, [selected])
+                        pending += 1
+                    else:
+                        flow_repository.append_id_candidate(_candidate_record(
+                            execution.execution_id,
+                            work.work_id,
+                            work.title,
+                            selected,
+                            "error",
+                            {
+                                "selectionStatus": status,
+                                **_confirmation_details(confirmation),
+                            },
+                        ))
+                        pending += 1
+                        errors += 1
                 elif ranked:
                     for candidate in ranked:
                         flow_repository.append_id_candidate(_candidate_record(
@@ -210,24 +245,134 @@ class MangaUpdatesFlowIntegration:
         )
 
     def get_metadata(self, selected_ids=None) -> MetadataUpdateResult:
-        from manhwateca.mangaupdates_service import compatibility
+        repository = self.manga_repository_factory()
+        return _fetch_metadata_from_repository(
+            repository,
+            selected_ids=selected_ids,
+            detail_function=self.detail_function,
+            summarize_function=self.summarize_function,
+        )
 
+
+def _fetch_metadata_from_repository(
+    repository,
+    *,
+    selected_ids,
+    detail_function,
+    summarize_function,
+) -> MetadataUpdateResult:
+    selected_work_ids = _ordered_ids(_normalize_work_ids(selected_ids))
+    if not selected_work_ids:
+        return MetadataUpdateResult(metrics=_metadata_metrics(
+            selected_work_ids=(),
+            attempted_work_ids=(),
+            processed_work_ids=(),
+            failed_work_ids=(),
+            skipped_work_ids=(),
+        ))
+
+    records = repository.list_mangas_by_ids(selected_work_ids)
+    by_id = {
+        int(getattr(record, "id", 0) or 0): record
+        for record in records
+        if getattr(record, "id", None) is not None
+    }
+    updated = 0
+    failed_ids = []
+    skipped_ids = []
+    attempted_ids = []
+    processed_ids = []
+
+    for work_id in selected_work_ids:
+        manga = by_id.get(work_id)
+        if manga is None or not str(getattr(manga, "work_code", "") or "").strip():
+            skipped_ids.append(work_id)
+            continue
+        processed_ids.append(work_id)
+        if not _metadata_needs_update(manga):
+            continue
+        attempted_ids.append(work_id)
         try:
-            details = compatibility.fetch_confirmed_details_result(
-                "reports/integrations/buscaIds.json",
-                delay=0,
-                limit=None,
-                force_refresh=False,
-                selected_ids=selected_ids,
-            )
-            return MetadataUpdateResult(
-                updated=details.updated,
-                skipped=details.skipped,
-                failed=details.failed,
-                metrics=details.metrics(),
-            )
+            raw_data = detail_function(manga.work_code)
+            if not raw_data:
+                failed_ids.append(work_id)
+                continue
+            summary = summarize_function(raw_data)
+            if repository.update_mangaupdates_fields(
+                manga.title,
+                manga.work_code,
+                summary,
+            ):
+                updated += 1
+            else:
+                failed_ids.append(work_id)
         except Exception:
-            return MetadataUpdateResult()
+            failed_ids.append(work_id)
+
+    failed_set = set(failed_ids)
+    processed_ids = [work_id for work_id in processed_ids if work_id not in failed_set]
+    return MetadataUpdateResult(
+        updated=updated,
+        skipped=len(skipped_ids) + max(0, len(attempted_ids) - updated - len(failed_ids)),
+        failed=len(failed_ids),
+        metrics=_metadata_metrics(
+            selected_work_ids=selected_work_ids,
+            attempted_work_ids=attempted_ids,
+            processed_work_ids=processed_ids,
+            failed_work_ids=failed_ids,
+            skipped_work_ids=skipped_ids,
+        ),
+    )
+
+
+def _metadata_needs_update(manga) -> bool:
+    return (
+        not str(getattr(manga, "mangaupdates_url", "") or "").strip()
+        or not str(getattr(manga, "cover_url", "") or "").strip()
+    )
+
+
+def _metadata_metrics(
+    *,
+    selected_work_ids,
+    attempted_work_ids,
+    processed_work_ids,
+    failed_work_ids,
+    skipped_work_ids,
+) -> dict:
+    return {
+        "selected_work_ids": list(selected_work_ids),
+        "attempted_work_ids": list(_ordered_ids(attempted_work_ids)),
+        "processed_work_ids": list(_ordered_ids(processed_work_ids)),
+        "failed_work_ids": list(_ordered_ids(failed_work_ids)),
+        "skipped_work_ids": list(_ordered_ids(skipped_work_ids)),
+    }
+
+
+def _normalize_work_ids(values) -> list[int]:
+    if values is None:
+        return []
+    result = []
+    for value in values:
+        try:
+            work_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if work_id > 0 and work_id not in result:
+            result.append(work_id)
+    return result
+
+
+def _ordered_ids(values) -> tuple[int, ...]:
+    ordered = []
+    for value in values or ():
+        try:
+            work_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if work_id > 0 and work_id not in ordered:
+            ordered.append(work_id)
+    return tuple(ordered)
 
 
 def _candidate_record(
@@ -248,6 +393,17 @@ def _candidate_record(
         status=status,
         details={**details, "candidate": candidate},
     )
+
+
+def _confirmation_details(result) -> dict:
+    return {
+        "reason": result.status,
+        "candidateExternalId": result.series_id,
+        "targetWorkId": result.work_id,
+        "existingWorkId": result.existing_work_id,
+        "existingTitle": result.existing_title,
+        "message": result.message,
+    }
 
 
 def _enqueue_review(manga_repository, work, candidates) -> None:

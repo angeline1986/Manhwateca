@@ -1,21 +1,12 @@
-from pathlib import Path
-
 from manhwateca.database.connection import (
     DatabaseConfigurationError,
     DatabaseConnectionError,
 )
 from manhwateca.database.manga_repository import MangaRepository
-from manhwateca.mangaupdates_service.candidates import (
-    CONFIRMED_STATUSES,
-    load_id_searches,
-)
-from manhwateca.mangaupdates_service.repository import load_json_object
-from manhwateca.mangaupdates_service.state import should_fetch_series
 
 
-IDS_PATH = Path("reports/integrations/buscaIds.json")
-CACHE_PATH = Path("data/mangaupdates.json")
-STATE_PATH = Path("reports/integrations/mangaupdates_state.json")
+class MangaUpdatesStatusUnavailable(RuntimeError):
+    pass
 
 
 def mangaupdates_status(
@@ -25,17 +16,16 @@ def mangaupdates_status(
     batch_size=10,
     repository_factory=MangaRepository,
 ):
-    root = Path(project_root)
     try:
         return _database_status(
             repository_factory(),
             batch_size=batch_size,
             ttl_days=ttl_days,
         )
-    except (DatabaseConfigurationError, DatabaseConnectionError):
-        pass
-
-    return _legacy_status(root, ttl_days=ttl_days, batch_size=batch_size)
+    except (DatabaseConfigurationError, DatabaseConnectionError) as error:
+        raise MangaUpdatesStatusUnavailable(
+            "Não foi possível carregar o status do MangaUpdates."
+        ) from error
 
 
 def _database_status(repository, *, batch_size, ttl_days):
@@ -71,69 +61,6 @@ def _database_status(repository, *, batch_size, ttl_days):
         },
         "next_batch": calls[:batch_size],
         "force_refresh_batch": forced_calls[:batch_size],
-    }
-
-
-def _legacy_status(root, *, ttl_days, batch_size):
-    items = _load_items(root / IDS_PATH)
-    cache = _load_object(root / CACHE_PATH)
-    state = _load_object(root / STATE_PATH)
-    confirmed = [
-        item for item in items
-        if item.get("Status") in CONFIRMED_STATUSES and item.get("ID")
-    ]
-    calls = [
-        _public_item(item)
-        for item in confirmed
-        if should_fetch_series(item["ID"], cache, state, ttl_days=ttl_days)
-    ]
-    forced_calls = [_public_item(item) for item in confirmed]
-    return {
-        "source": {
-            "kind": "json",
-            "label": "JSON legado",
-            "detail": f"{IDS_PATH} + {CACHE_PATH}",
-        },
-        "summary": {
-            "confirmed_ids": len(confirmed),
-            "cached_ids": sum(
-                1 for item in confirmed if str(item["ID"]) in cache
-            ),
-            "calls_needed": len(calls),
-            "next_batch": len(calls[:batch_size]),
-            "force_refresh_calls": len(forced_calls),
-            "force_refresh_batch": len(forced_calls[:batch_size]),
-            "batch_size": batch_size,
-            "ttl_days": ttl_days,
-        },
-        "next_batch": calls[:batch_size],
-        "force_refresh_batch": forced_calls[:batch_size],
-    }
-
-
-def _load_items(path):
-    if not path.is_file():
-        return []
-    try:
-        return load_id_searches(path)
-    except (OSError, ValueError):
-        return []
-
-
-def _load_object(path):
-    if not path.is_file():
-        return {}
-    try:
-        return load_json_object(path)
-    except (OSError, ValueError):
-        return {}
-
-
-def _public_item(item):
-    return {
-        "name": item.get("Nome"),
-        "id": item.get("ID"),
-        "title": item.get("Nome encontrado") or item.get("Nome"),
     }
 
 

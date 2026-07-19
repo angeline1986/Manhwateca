@@ -100,8 +100,23 @@ export function initMangaUpdatesPage({ elements, onDecisionsApplied }) {
     </article>`;
   }
 
-  async function loadMangaUpdatesStatus() {
-    const { payload } = await getMangaUpdatesStatus();
+  function renderMangaUpdatesStatusError(message) {
+    const safeMessage = escapeHtml(message || "Não foi possível carregar o status do MangaUpdates.");
+    elements.mangaCacheSummary.innerHTML = `
+      <article>
+        <strong>Erro</strong>
+        <span>${safeMessage}</span>
+      </article>
+    `;
+    elements.mangaCacheLists.innerHTML = `
+      <article class="notion-list">
+        <strong>Status indisponível</strong>
+        <p>${safeMessage}</p>
+      </article>
+    `;
+  }
+
+  function renderMangaUpdatesStatus(payload) {
     const summary = payload.summary || {};
     elements.mangaCacheSummary.innerHTML = [
       summaryCard("IDs confirmados", summary.confirmed_ids || 0),
@@ -119,6 +134,19 @@ export function initMangaUpdatesPage({ elements, onDecisionsApplied }) {
         A opção normal consulta apenas ausentes ou expirados.</p>
       </article>`,
     ].join("");
+  }
+
+  async function loadMangaUpdatesStatus() {
+    try {
+      const { response, payload } = await getMangaUpdatesStatus();
+      if (!response.ok) {
+        renderMangaUpdatesStatusError(payload.error);
+        return;
+      }
+      renderMangaUpdatesStatus(payload);
+    } catch (error) {
+      renderMangaUpdatesStatusError();
+    }
   }
 
   function handleReviewDecisionClick(event, list, feedback) {
