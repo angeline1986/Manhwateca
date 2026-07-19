@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 
@@ -20,6 +21,37 @@ class FakeMangaRepository:
     def update_mangaupdates_fields(self, name, series_id, summary):
         self.updated.append((name, series_id, summary))
         return True
+
+
+class FakeMetadataRepository:
+    def __init__(self, records, update_result=True):
+        self.records = records
+        self.update_result = update_result
+        self.updated = []
+
+    def list_mangas(self):
+        return self.records
+
+    def update_mangaupdates_fields(self, name, series_id, summary):
+        self.updated.append((name, series_id, summary))
+        return self.update_result
+
+
+def metadata_record(
+    work_id,
+    title,
+    work_code,
+    *,
+    mangaupdates_url=None,
+    cover_url=None,
+):
+    return SimpleNamespace(
+        id=work_id,
+        title=title,
+        work_code=work_code,
+        mangaupdates_url=mangaupdates_url,
+        cover_url=cover_url,
+    )
 
 
 class FakeDecisionRepository:
@@ -733,6 +765,50 @@ class MangaUpdatesTests(unittest.TestCase):
                 [("Beyond Memories", 46829042951, summary)],
                 repository.updated,
             )
+
+    def test_fetch_confirmed_details_result_includes_valid_unchanged_work_id(self):
+        repository = FakeMetadataRepository([
+            metadata_record(
+                259,
+                "Dressed_to_Kill",
+                "38551408461",
+                mangaupdates_url="https://example.test/dressed",
+                cover_url="https://example.test/dressed.jpg",
+            ),
+        ])
+
+        result = mangaupdates._fetch_database_confirmed_details(
+            repository,
+            detail_function=lambda _series_id: {},
+            summarize_function=lambda _raw: {},
+            wait_function=lambda _delay: None,
+            delay=0,
+            selected_ids=[259],
+        )
+
+        self.assertEqual(0, result.updated)
+        self.assertEqual((259,), result.selected_work_ids)
+        self.assertEqual((), result.attempted_work_ids)
+        self.assertEqual((259,), result.processed_work_ids)
+        self.assertEqual((), result.failed_work_ids)
+
+    def test_fetch_confirmed_details_result_excludes_failed_update_from_processed_ids(self):
+        repository = FakeMetadataRepository([
+            metadata_record(259, "Dressed_to_Kill", "38551408461"),
+        ], update_result=False)
+
+        result = mangaupdates._fetch_database_confirmed_details(
+            repository,
+            detail_function=lambda _series_id: {"id": "38551408461"},
+            summarize_function=lambda _raw: {"url": "https://example.test/dressed"},
+            wait_function=lambda _delay: None,
+            delay=0,
+            selected_ids=[259],
+        )
+
+        self.assertEqual((259,), result.attempted_work_ids)
+        self.assertEqual((), result.processed_work_ids)
+        self.assertEqual((259,), result.failed_work_ids)
 
     def test_update_csv_distinguishes_uncached_from_missing_rows(self):
         with tempfile.TemporaryDirectory() as directory:

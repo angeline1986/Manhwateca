@@ -50,6 +50,17 @@ class FakeCursor:
             )
             return
 
+        if "from vw_mangas" in normalized and "where id = any" in normalized:
+            ids = set(params[0])
+            self.rows = sorted(
+                [
+                    row for row in self.connection.mangas
+                    if row.get("id") in ids
+                ],
+                key=lambda row: row.get("title", ""),
+            )
+            return
+
         if "from vw_mangas" in normalized:
             self.rows = sorted(
                 self.connection.mangas,
@@ -277,6 +288,29 @@ class MangaRepositoryTests(unittest.TestCase):
         mangas = MangaRepository(connection).list_next_reads()
 
         self.assertEqual(["Alpha Agenda"], [manga.title for manga in mangas])
+
+    def test_lists_mangas_by_ids_with_parameterized_filter(self):
+        connection = FakeConnection()
+        connection.mangas = [
+            {"id": 1, "title": "Alpha"},
+            {"id": 2, "title": "Beta"},
+            {"id": 3, "title": "Gamma"},
+        ]
+
+        mangas = MangaRepository(connection).list_mangas_by_ids([3, "1", 3, None])
+
+        self.assertEqual(["Alpha", "Gamma"], [manga.title for manga in mangas])
+        query, params = connection.queries[-1]
+        self.assertIn("where id = any", query)
+        self.assertEqual(([3, 1],), params)
+
+    def test_list_mangas_by_ids_empty_does_not_query_database(self):
+        connection = FakeConnection()
+
+        mangas = MangaRepository(connection).list_mangas_by_ids([])
+
+        self.assertEqual([], mangas)
+        self.assertEqual([], connection.queries)
 
     def test_finds_by_work_code_and_notion_page_id(self):
         connection = FakeConnection()

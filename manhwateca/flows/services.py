@@ -163,6 +163,7 @@ class UpdateMetadataService(BaseStageService):
     def execute(self, **kwargs) -> StageResult:
         selected_ids = kwargs.get("selected_ids")
         result = self.integrations.mangaupdates.get_metadata(selected_ids=selected_ids)
+        metrics = _metadata_scope_metrics(result.metrics, selected_ids)
         warnings = ()
         if result.skipped or result.failed:
             warnings = (
@@ -182,7 +183,7 @@ class UpdateMetadataService(BaseStageService):
                 "updated": result.updated,
                 "skipped": result.skipped,
                 "failed": result.failed,
-                **result.metrics,
+                **metrics,
             },
         )
 
@@ -195,7 +196,29 @@ class SyncNotionService(BaseStageService):
         super().__init__(integrations, StageId.SYNC_NOTION)
 
     def execute(self, **kwargs) -> StageResult:
-        result = self.integrations.notion.sync_page()
+        work_ids = _normalize_work_ids(kwargs.get("work_ids"))
+        if not work_ids:
+            return StageResult(
+                metrics={
+                    "status": "blocked",
+                    "message": "Nenhuma obra processada nesta jornada está disponível para sincronização.",
+                    "scope": "incremental",
+                    "scope_missing": True,
+                    "work_ids": [],
+                    "blocker_count": 0,
+                    "updated_count": 0,
+                    "unchanged_count": 0,
+                    "missing_count": 0,
+                    "duplicate_count": 0,
+                },
+                warnings=(
+                    FlowWarning(
+                        "Nenhuma obra processada nesta jornada está disponível para sincronização.",
+                        code="NOTION_SYNC_SCOPE_MISSING",
+                    ),
+                ),
+            )
+        result = self.integrations.notion.sync_page(work_ids=work_ids)
         warnings = ()
         errors = ()
         status = result.metrics.get("status")
@@ -270,3 +293,39 @@ def default_stage_services(integrations: FlowIntegrations) -> dict[StageId, Stag
         StageId.UPDATE_METADATA: UpdateMetadataService(integrations),
         StageId.SYNC_NOTION: SyncNotionService(integrations),
     }
+
+
+def _metadata_scope_metrics(metrics, selected_ids):
+    metrics = dict(metrics or {})
+    selected = _normalize_work_ids(metrics.get("selected_work_ids"))
+    if not selected:
+        selected = _normalize_work_ids(selected_ids)
+    processed = _normalize_work_ids(metrics.get("processed_work_ids"))
+    attempted = _normalize_work_ids(metrics.get("attempted_work_ids"))
+    failed = _normalize_work_ids(metrics.get("failed_work_ids"))
+    skipped = _normalize_work_ids(metrics.get("skipped_work_ids"))
+    return {
+        **metrics,
+        "selected_work_ids": selected,
+        "attempted_work_ids": attempted,
+        "processed_work_ids": processed,
+        "failed_work_ids": failed,
+        "skipped_work_ids": skipped,
+    }
+
+
+def _normalize_work_ids(values):
+    if not values:
+        return []
+    ordered = []
+    seen = set()
+    for value in values:
+        try:
+            work_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if work_id <= 0 or work_id in seen:
+            continue
+        ordered.append(work_id)
+        seen.add(work_id)
+    return ordered

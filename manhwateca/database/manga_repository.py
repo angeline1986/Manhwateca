@@ -22,6 +22,21 @@ class MangaRepository:
         )
         return [manga_from_row(row) for row in rows]
 
+    def list_mangas_by_ids(self, work_ids) -> list[MangaRecord]:
+        ids = _normalize_ids(work_ids)
+        if not ids:
+            return []
+        rows = self._fetch_all(
+            """
+            SELECT *
+            FROM vw_mangas
+            WHERE id = ANY(%s)
+            ORDER BY title
+            """,
+            (ids,),
+        )
+        return [manga_from_row(row) for row in rows]
+
     def list_next_reads(self) -> list[MangaRecord]:
         rows = self._fetch_all(
             """
@@ -945,3 +960,18 @@ def _mangaupdates_themes(summary: dict):
             if str(value or "").strip():
                 values.append(str(value).strip())
     return values
+
+
+def _normalize_ids(values):
+    ordered = []
+    seen = set()
+    for value in values or ():
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            continue
+        if number <= 0 or number in seen:
+            continue
+        ordered.append(number)
+        seen.add(number)
+    return ordered

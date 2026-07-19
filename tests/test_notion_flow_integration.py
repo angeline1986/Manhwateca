@@ -32,7 +32,7 @@ class OfficialNotionFlowIntegrationTests(unittest.TestCase):
         )
         applier = FakeApplier()
 
-        result = integration(plan=plan, applier=applier).sync_page()
+        result = integration(plan=plan, applier=applier).sync_page(work_ids=[1])
 
         self.assertEqual(0, applier.calls)
         self.assertEqual(0, result.updated)
@@ -43,6 +43,24 @@ class OfficialNotionFlowIntegrationTests(unittest.TestCase):
         self.assertEqual(1, result.metrics["missing_count"])
         self.assertEqual(1, result.metrics["blocker_count"])
         self.assertEqual("missing_page", result.metrics["blockers"][0]["code"])
+
+    def test_without_scope_blocks_without_planning(self):
+        planner = FakePlanner(synced_plan())
+        applier = FakeApplier()
+
+        result = OfficialNotionFlowIntegration(
+            object(),
+            "database_id",
+            repository=object(),
+            planner=planner,
+            applier=applier,
+        ).sync_page()
+
+        self.assertEqual(0, planner.calls)
+        self.assertEqual(0, planner.scoped_calls)
+        self.assertEqual(0, applier.calls)
+        self.assertEqual("blocked", result.metrics["status"])
+        self.assertTrue(result.metrics["scope_missing"])
 
     def test_planning_error_does_not_call_applier(self):
         blocker = NotionBlocker(
@@ -59,7 +77,7 @@ class OfficialNotionFlowIntegrationTests(unittest.TestCase):
         )
         applier = FakeApplier()
 
-        result = integration(plan=plan, applier=applier).sync_page()
+        result = integration(plan=plan, applier=applier).sync_page(work_ids=[1])
 
         self.assertEqual(0, applier.calls)
         self.assertEqual(0, result.updated)
@@ -80,7 +98,7 @@ class OfficialNotionFlowIntegrationTests(unittest.TestCase):
         )
         applier = FakeApplier()
 
-        result = integration(plan=plan, applier=applier).sync_page()
+        result = integration(plan=plan, applier=applier).sync_page(work_ids=[1])
 
         self.assertEqual(0, applier.calls)
         self.assertEqual(0, result.updated)
@@ -109,7 +127,7 @@ class OfficialNotionFlowIntegrationTests(unittest.TestCase):
             )
         )
 
-        result = integration(plan=plan, applier=applier).sync_page()
+        result = integration(plan=plan, applier=applier).sync_page(work_ids=[1])
 
         self.assertEqual(1, applier.calls)
         self.assertIs(plan, applier.last_plan)
@@ -145,7 +163,7 @@ class OfficialNotionFlowIntegrationTests(unittest.TestCase):
             )
         )
 
-        result = integration(plan=plan, applier=applier).sync_page()
+        result = integration(plan=plan, applier=applier).sync_page(work_ids=[1])
 
         self.assertEqual(1, applier.calls)
         self.assertEqual(1, result.updated)
@@ -173,9 +191,16 @@ class FakePlanner:
     def __init__(self, plan):
         self.plan = plan
         self.calls = 0
+        self.scoped_calls = 0
+        self.last_work_ids = None
 
     def plan_metadata_sync(self):
         self.calls += 1
+        return self.plan
+
+    def plan_metadata_sync_for_ids(self, work_ids):
+        self.scoped_calls += 1
+        self.last_work_ids = work_ids
         return self.plan
 
 

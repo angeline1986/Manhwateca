@@ -193,7 +193,7 @@ class DeferredNotionIntegration:
     def validate(self, stage: StageId | None = None) -> IntegrationValidation:
         return IntegrationValidation(stage=stage, valid=True)
 
-    def sync_page(self) -> NotionSyncResult:
+    def sync_page(self, work_ids=None) -> NotionSyncResult:
         return NotionSyncResult()
 
 
@@ -226,7 +226,7 @@ class UnavailableNotionIntegration:
             ),
         )
 
-    def sync_page(self) -> NotionSyncResult:
+    def sync_page(self, work_ids=None) -> NotionSyncResult:
         return NotionSyncResult(
             failed=1,
             metrics={

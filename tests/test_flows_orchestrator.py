@@ -236,6 +236,52 @@ class WorkflowOrchestratorTests(unittest.TestCase):
         self.assertTrue(execution.errors)
         self.assertEqual("failed", repository.summary_metrics["status"])
 
+    def test_sync_notion_receives_scope_from_update_metadata_result(self):
+        repository = FakeRepository()
+        repository.save_execution(WorkflowExecution(
+            execution_id="wf_1",
+            status=WorkflowStatus.RUNNING,
+            stages=(
+                StageExecution(
+                    StageId.UPDATE_METADATA,
+                    status=StageStatus.COMPLETED,
+                    result=StageResult(metrics={"processed_work_ids": [259, "259", None]}),
+                ),
+                *[
+                    stage for stage in FakeRepository.initial_stages()
+                    if stage.stage_id != StageId.UPDATE_METADATA
+                ],
+            ),
+        ))
+        sync_service = FakeStageService()
+        orchestrator = WorkflowOrchestrator(
+            repository,
+            fake_integrations(),
+            stage_services={StageId.SYNC_NOTION: sync_service},
+        )
+
+        orchestrator.run_stage(StageId.SYNC_NOTION)
+
+        self.assertEqual({"work_ids": [259]}, sync_service.last_kwargs)
+
+    def test_sync_notion_without_update_metadata_scope_receives_empty_scope(self):
+        repository = FakeRepository()
+        repository.save_execution(WorkflowExecution(
+            execution_id="wf_1",
+            status=WorkflowStatus.RUNNING,
+            stages=tuple(FakeRepository.initial_stages()),
+        ))
+        sync_service = FakeStageService()
+        orchestrator = WorkflowOrchestrator(
+            repository,
+            fake_integrations(),
+            stage_services={StageId.SYNC_NOTION: sync_service},
+        )
+
+        orchestrator.run_stage(StageId.SYNC_NOTION)
+
+        self.assertEqual({"work_ids": []}, sync_service.last_kwargs)
+
 
 class FakeStageService:
     def __init__(self, processed=0, warning=None, error=None, inventory=()):
@@ -243,11 +289,13 @@ class FakeStageService:
         self.warning = warning
         self.error = error
         self.inventory = inventory
+        self.last_kwargs = None
 
     def validate(self):
         return (self.warning,) if self.warning else ()
 
-    def execute(self):
+    def execute(self, **kwargs):
+        self.last_kwargs = kwargs
         if self.error:
             return StageResult(errors=(self.error,))
         return StageResult(processed=self.processed, inventory=self.inventory)

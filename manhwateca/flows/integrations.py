@@ -187,7 +187,7 @@ class NotionIntegration(Protocol):
     def validate(self, stage: StageId | None = None) -> IntegrationValidation:
         ...
 
-    def sync_page(self) -> NotionSyncResult:
+    def sync_page(self, work_ids=None) -> NotionSyncResult:
         ...
 
 

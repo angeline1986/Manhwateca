@@ -1,5 +1,6 @@
 import time
 import urllib.error
+from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -71,6 +72,30 @@ CSV_FILE = Path("reports/integrations/manhwateca_import.csv")
 STATE_FILE = Path("reports/integrations/mangaupdates_state.json")
 PROGRESS_FILE = Path("data/mangaupdates_progress.json")
 METADATA_FILE = Path("config/catalog_metadata.json")
+
+
+@dataclass(frozen=True)
+class ConfirmedDetailsResult:
+    updated: int = 0
+    skipped: int = 0
+    failed: int = 0
+    selected_work_ids: tuple[int, ...] = ()
+    attempted_work_ids: tuple[int, ...] = ()
+    processed_work_ids: tuple[int, ...] = ()
+    failed_work_ids: tuple[int, ...] = ()
+    skipped_work_ids: tuple[int, ...] = ()
+
+    def legacy_counts(self):
+        return self.updated, self.skipped
+
+    def metrics(self):
+        return {
+            "selected_work_ids": list(self.selected_work_ids),
+            "attempted_work_ids": list(self.attempted_work_ids),
+            "processed_work_ids": list(self.processed_work_ids),
+            "failed_work_ids": list(self.failed_work_ids),
+            "skipped_work_ids": list(self.skipped_work_ids),
+        }
 def add_catalog_titles_to_id_searches(items, catalog_path=CATALOG_FILE):
     return _add_catalog_titles(items, catalog_path)
 
@@ -200,6 +225,29 @@ def fetch_confirmed_details(
     force_refresh=False,
     selected_ids=None,
 ):
+    result = fetch_confirmed_details_result(
+        ids_path,
+        delay=delay,
+        limit=limit,
+        cache_path=cache_path,
+        state_path=state_path,
+        ttl_days=ttl_days,
+        force_refresh=force_refresh,
+        selected_ids=selected_ids,
+    )
+    return result.legacy_counts()
+
+
+def fetch_confirmed_details_result(
+    ids_path,
+    delay=3.0,
+    limit=None,
+    cache_path=CACHE_FILE,
+    state_path=STATE_FILE,
+    ttl_days=30,
+    force_refresh=False,
+    selected_ids=None,
+):
     repository = _optional_decision_repository()
     if repository is not None:
         try:
@@ -216,7 +264,7 @@ def fetch_confirmed_details(
         except (DatabaseConfigurationError, DatabaseConnectionError):
             pass
 
-    return _fetch_confirmed_details(
+    updated, skipped = _fetch_confirmed_details(
         ids_path,
         detail_function=get_series,
         summarize_function=summarize_series,
@@ -228,6 +276,7 @@ def fetch_confirmed_details(
         ttl_days=ttl_days,
         force_refresh=force_refresh,
     )
+    return ConfirmedDetailsResult(updated=updated, skipped=skipped)
 
 
 def _fetch_database_confirmed_details(
@@ -241,6 +290,7 @@ def _fetch_database_confirmed_details(
     selected_ids=None,
 ):
     selected_ids = _normalize_selected_ids(selected_ids)
+    selected_work_ids = _ordered_ids(selected_ids or ())
     confirmed = [
         manga for manga in repository.list_mangas()
         if getattr(manga, "work_code", None)
@@ -249,6 +299,17 @@ def _fetch_database_confirmed_details(
             or int(getattr(manga, "id", 0) or 0) in selected_ids
         )
     ]
+    confirmed_ids = _ordered_ids(
+        int(getattr(manga, "id", 0) or 0)
+        for manga in confirmed
+    )
+    skipped_ids = []
+    if selected_ids is not None:
+        confirmed_set = set(confirmed_ids)
+        skipped_ids.extend(
+            work_id for work_id in selected_work_ids
+            if work_id not in confirmed_set
+        )
     
     pending = []
     for manga in confirmed:
@@ -266,10 +327,16 @@ def _fetch_database_confirmed_details(
             pending.append(manga)
 
     selected = pending[:limit] if limit is not None else pending
+    attempted_ids = _ordered_ids(
+        int(getattr(manga, "id", 0) or 0)
+        for manga in selected
+    )
 
     success_count = 0
+    failed_ids = []
     for manga in selected:
         series_id = manga.work_code
+        manga_id = int(getattr(manga, "id", 0) or 0)
         try:
             print(f"[SINCronizando] {manga.title} (ID: {series_id})...")
             # Busca na API
@@ -291,13 +358,30 @@ def _fetch_database_confirmed_details(
                 print(f"[OK] {manga.title} atualizado.")
             else:
                 print(f"[AVISO] Repositório não encontrou registro para {manga.title}")
+                failed_ids.append(manga_id)
                 
         except Exception as e:
             print(f"[ERRO] Falha ao processar {manga.title}: {e}")
+            failed_ids.append(manga_id)
             
         wait_function(delay)
 
-    return success_count, len(pending) - success_count
+    failed_ids = _ordered_ids(failed_ids)
+    failed_set = set(failed_ids)
+    processed_ids = _ordered_ids(
+        work_id for work_id in confirmed_ids
+        if work_id not in failed_set
+    )
+    return ConfirmedDetailsResult(
+        updated=success_count,
+        skipped=(len(pending) - success_count) + len(skipped_ids),
+        failed=len(failed_ids),
+        selected_work_ids=tuple(selected_work_ids),
+        attempted_work_ids=tuple(attempted_ids),
+        processed_work_ids=tuple(processed_ids),
+        failed_work_ids=tuple(failed_ids),
+        skipped_work_ids=tuple(_ordered_ids(skipped_ids)),
+    )
 
 
 def refresh_cache(mappings_path=MAPPINGS_FILE, cache_path=CACHE_FILE):
@@ -326,6 +410,21 @@ def _normalize_selected_ids(selected_ids):
         except (TypeError, ValueError):
             continue
     return normalized or None
+
+
+def _ordered_ids(values):
+    ordered = []
+    seen = set()
+    for value in values:
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            continue
+        if number <= 0 or number in seen:
+            continue
+        ordered.append(number)
+        seen.add(number)
+    return ordered
 
 
 def main():

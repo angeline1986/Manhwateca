@@ -4,6 +4,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from manhwateca.notion_sync.official_planner import (
+    OfficialNotionSyncPlanner,
     _expected_metadata_properties,
     plan_official_metadata_sync,
 )
@@ -33,9 +34,17 @@ class FakeRepository:
     def __init__(self, records):
         self.records = records
         self.updated = []
+        self.list_calls = 0
+        self.list_by_ids_calls = []
 
     def list_mangas(self):
+        self.list_calls += 1
         return self.records
+
+    def list_mangas_by_ids(self, work_ids):
+        self.list_by_ids_calls.append(list(work_ids))
+        wanted = {int(work_id) for work_id in work_ids}
+        return [record for record in self.records if int(record.id) in wanted]
 
     def update_notion_sync_fields(self, *args, **kwargs):
         self.updated.append((args, kwargs))
@@ -126,6 +135,63 @@ class NotionOfficialPlannerTests(unittest.TestCase):
         self.assertEqual(NextAction.REVIEW_MISSING, result.result.next_action)
         self.assertEqual("missing_page", result.result.blockers[0].code)
         self.assertEqual(1, result.result.blockers[0].work_id)
+
+    def test_incremental_plan_uses_only_requested_ids(self):
+        records = [
+            FakeRecord(id=259, title="Dressed_to_Kill"),
+            FakeRecord(id=258, title="Boredom"),
+        ]
+        repository = FakeRepository(records)
+        notion = fake_notion(database_pages=[
+            notion_page("Dressed_to_Kill", "page-259"),
+        ])
+
+        result = plan_official_metadata_sync(
+            notion,
+            "database",
+            repository=repository,
+        )
+        incremental = OfficialNotionSyncPlanner(
+            notion,
+            "database",
+            repository=repository,
+        ).plan_metadata_sync_for_ids([259])
+
+        self.assertEqual(1, repository.list_calls)
+        self.assertEqual([[259]], repository.list_by_ids_calls)
+        self.assertEqual(SyncStatus.PAUSED, incremental.result.status)
+        self.assertEqual(1, len(incremental.updates))
+        self.assertEqual(259, incremental.updates[0].work_id)
+        self.assertEqual(0, incremental.result.missing_count)
+        self.assertEqual(SyncStatus.BLOCKED, result.result.status)
+
+    def test_incremental_plan_empty_scope_does_not_query_repository(self):
+        repository = FakeRepository([FakeRecord(id=259)])
+        planner = OfficialNotionSyncPlanner(
+            fake_notion(),
+            "database",
+            repository=repository,
+        )
+
+        result = planner.plan_metadata_sync_for_ids([])
+
+        self.assertEqual(SyncStatus.SYNCED, result.result.status)
+        self.assertEqual(0, repository.list_calls)
+        self.assertEqual([], repository.list_by_ids_calls)
+
+    def test_incremental_plan_reports_missing_scope_work_id(self):
+        repository = FakeRepository([FakeRecord(id=259)])
+        planner = OfficialNotionSyncPlanner(
+            fake_notion(database_pages=[notion_page("Dressed_to_Kill", "page-259")]),
+            "database",
+            repository=repository,
+        )
+
+        result = planner.plan_metadata_sync_for_ids([259, 999999])
+
+        self.assertEqual(SyncStatus.BLOCKED, result.result.status)
+        self.assertEqual("scope_work_missing", result.result.blockers[-1].code)
+        self.assertEqual(999999, result.result.blockers[-1].work_id)
 
     def test_reports_duplicate_page(self):
         pages = [

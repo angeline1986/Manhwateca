@@ -10,7 +10,13 @@ from manhwateca.notion_sync.csv_properties import (
 from manhwateca.notion_sync.matching import normalize_title
 from manhwateca.notion_sync.pages import extract_title
 from manhwateca.notion_sync.property_diff import changed_properties
-from manhwateca.notion_sync.sync_plan import NotionSyncResult, build_sync_result
+from manhwateca.notion_sync.sync_plan import (
+    NextAction,
+    NotionBlocker,
+    NotionSyncResult,
+    SyncStatus,
+    build_sync_result,
+)
 
 
 OFFICIAL_METADATA_PROPERTIES = {
@@ -58,6 +64,61 @@ class OfficialNotionSyncPlanner:
         self._pages_by_name = None
 
     def plan_metadata_sync(self):
+        try:
+            records = self.repository.list_mangas()
+        except Exception as error:
+            return _error_plan(error)
+        return self._plan_records(records)
+
+    def plan_metadata_sync_for_ids(self, work_ids):
+        work_ids = _normalize_work_ids(work_ids)
+        if not work_ids:
+            return OfficialNotionSyncPlan(
+                result=NotionSyncResult(
+                    status=SyncStatus.SYNCED,
+                    next_action=NextAction.NONE,
+                )
+            )
+        try:
+            records = self.repository.list_mangas_by_ids(work_ids)
+        except Exception as error:
+            return _error_plan(error)
+        plan = self._plan_records(records)
+        found_ids = {
+            int(record.id) for record in records
+            if getattr(record, "id", None) is not None
+        }
+        missing_ids = tuple(work_id for work_id in work_ids if work_id not in found_ids)
+        if not missing_ids:
+            return plan
+        blockers = (
+            *plan.result.blockers,
+            *(
+                NotionBlocker(
+                    code="scope_work_missing",
+                    work_id=work_id,
+                    message="Obra do escopo incremental não encontrada no PostgreSQL.",
+                    next_action=NextAction.REVIEW_BLOCKERS,
+                )
+                for work_id in missing_ids
+            ),
+        )
+        return OfficialNotionSyncPlan(
+            result=NotionSyncResult(
+                status=SyncStatus.BLOCKED,
+                next_action=NextAction.REVIEW_BLOCKERS,
+                created_count=plan.result.created_count,
+                updated_count=plan.result.updated_count,
+                missing_count=plan.result.missing_count,
+                duplicate_count=plan.result.duplicate_count,
+                unchanged_count=plan.result.unchanged_count,
+                blockers=blockers,
+            ),
+            updates=plan.updates,
+            unchanged=plan.unchanged,
+        )
+
+    def _plan_records(self, records):
         summary = {
             "updates": [],
             "unchanged": [],
@@ -68,7 +129,6 @@ class OfficialNotionSyncPlanner:
         updates = []
         unchanged = []
         try:
-            records = self.repository.list_mangas()
             for record in records:
                 self._plan_record(record, summary, updates, unchanged)
         except Exception as error:
@@ -173,6 +233,29 @@ def _record_title_candidates(record):
         for name in names
         if str(name or "").strip()
     }
+
+
+def _error_plan(error):
+    return OfficialNotionSyncPlan(
+        result=build_sync_result({"errors": [{"message": str(error)}]})
+    )
+
+
+def _normalize_work_ids(values):
+    if not values:
+        return []
+    ordered = []
+    seen = set()
+    for value in values:
+        try:
+            work_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if work_id <= 0 or work_id in seen:
+            continue
+        ordered.append(work_id)
+        seen.add(work_id)
+    return ordered
 
 
 def _record_to_sync_row(record):

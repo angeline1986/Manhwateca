@@ -213,14 +213,19 @@ class MangaUpdatesFlowIntegration:
         from manhwateca.mangaupdates_service import compatibility
 
         try:
-            updated, skipped = compatibility.fetch_confirmed_details(
+            details = compatibility.fetch_confirmed_details_result(
                 "reports/integrations/buscaIds.json",
                 delay=0,
                 limit=None,
                 force_refresh=False,
                 selected_ids=selected_ids,
             )
-            return MetadataUpdateResult(updated=updated, skipped=skipped)
+            return MetadataUpdateResult(
+                updated=details.updated,
+                skipped=details.skipped,
+                failed=details.failed,
+                metrics=details.metrics(),
+            )
         except Exception:
             return MetadataUpdateResult()
 

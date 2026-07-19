@@ -85,7 +85,7 @@ class FakeIntegration:
     def get_metadata(self):
         return MetadataUpdateResult(updated=1)
 
-    def sync_page(self):
+    def sync_page(self, work_ids=None):
         return NotionSyncResult(updated=1)
 
 

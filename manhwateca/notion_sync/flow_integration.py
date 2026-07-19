@@ -64,8 +64,22 @@ class OfficialNotionFlowIntegration:
             )
         return IntegrationValidation(stage=stage, valid=True)
 
-    def sync_page(self):
-        plan = self.planner.plan_metadata_sync()
+    def sync_page(self, work_ids=None):
+        work_ids = _normalize_work_ids(work_ids)
+        if not work_ids:
+            return FlowNotionSyncResult(
+                metrics={
+                    "status": SyncStatus.BLOCKED.value,
+                    "message": "Nenhuma obra processada nesta jornada está disponível para sincronização.",
+                    "scope": "incremental",
+                    "scope_missing": True,
+                    "work_ids": [],
+                    "applied_count": 0,
+                    "failed_count": 0,
+                    "blocker_count": 0,
+                },
+            )
+        plan = self.planner.plan_metadata_sync_for_ids(work_ids)
         if plan.result.status == SyncStatus.BLOCKED:
             return _blocked_result(plan)
         if plan.result.status == SyncStatus.ERROR:
@@ -177,3 +191,20 @@ def _blockers_to_dicts(blockers: tuple[NotionBlocker, ...]):
         }
         for blocker in blockers
     )
+
+
+def _normalize_work_ids(values):
+    if not values:
+        return []
+    ordered = []
+    seen = set()
+    for value in values:
+        try:
+            work_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if work_id <= 0 or work_id in seen:
+            continue
+        ordered.append(work_id)
+        seen.add(work_id)
+    return ordered

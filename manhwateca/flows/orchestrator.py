@@ -213,6 +213,8 @@ class WorkflowOrchestrator:
             stage_kwargs = {}
             if stage_id == StageId.UPDATE_METADATA and payload:
                 stage_kwargs["selected_ids"] = payload.get("selected_ids")
+            if stage_id == StageId.SYNC_NOTION:
+                stage_kwargs["work_ids"] = _sync_scope_from_update_metadata(execution)
             result = service.finalize(service.execute(**stage_kwargs))
         except Exception as error:
             result = StageResult(
@@ -601,6 +603,33 @@ def _current_stage_id(execution: WorkflowExecution) -> str | None:
         execution.current_stage.stage_id.value
         if execution.current_stage else None
     )
+
+
+def _sync_scope_from_update_metadata(execution: WorkflowExecution) -> list[int]:
+    for stage in execution.stages:
+        if stage.stage_id != StageId.UPDATE_METADATA or not stage.result:
+            continue
+        return _normalize_work_ids(
+            stage.result.metrics.get("processed_work_ids")
+        )
+    return []
+
+
+def _normalize_work_ids(values) -> list[int]:
+    if not values:
+        return []
+    ordered = []
+    seen = set()
+    for value in values:
+        try:
+            work_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if work_id <= 0 or work_id in seen:
+            continue
+        ordered.append(work_id)
+        seen.add(work_id)
+    return ordered
 
 
 def _audit_status_for_workflow(status: WorkflowStatus) -> str:

@@ -80,14 +80,27 @@ class FlowStageServicesTests(unittest.TestCase):
 
         self.assertEqual(6, result.processed)
         self.assertEqual([7, 9], integrations.mangaupdates.last_selected_ids)
+        self.assertEqual([7, 9], result.metrics["selected_work_ids"])
+        self.assertEqual([7, 9], result.metrics["processed_work_ids"])
         self.assertEqual([], integrations.notion.calls)
 
     def test_sync_notion_uses_notion_sync(self):
         integrations = fake_integrations()
-        result = SyncNotionService(integrations).execute()
+        result = SyncNotionService(integrations).execute(work_ids=[7, 9])
 
         self.assertEqual(7, result.processed)
         self.assertEqual(["sync_page"], integrations.notion.calls)
+        self.assertEqual([7, 9], integrations.notion.last_work_ids)
+
+    def test_sync_notion_without_scope_blocks_safely(self):
+        integrations = fake_integrations()
+
+        result = SyncNotionService(integrations).execute(work_ids=[])
+
+        self.assertTrue(result.has_warnings)
+        self.assertEqual("blocked", result.metrics["status"])
+        self.assertTrue(result.metrics["scope_missing"])
+        self.assertEqual([], integrations.notion.calls)
 
     def test_sync_notion_reports_blocked_plan_as_warning(self):
         integrations = fake_integrations(
@@ -101,7 +114,7 @@ class FlowStageServicesTests(unittest.TestCase):
             )
         )
 
-        result = SyncNotionService(integrations).execute()
+        result = SyncNotionService(integrations).execute(work_ids=[258])
 
         self.assertFalse(result.has_errors)
         self.assertTrue(result.has_warnings)
@@ -122,7 +135,7 @@ class FlowStageServicesTests(unittest.TestCase):
             )
         )
 
-        result = SyncNotionService(integrations).execute()
+        result = SyncNotionService(integrations).execute(work_ids=[1])
 
         self.assertTrue(result.has_errors)
         self.assertFalse(result.has_warnings)
@@ -144,7 +157,7 @@ class FlowStageServicesTests(unittest.TestCase):
             )
         )
 
-        result = SyncNotionService(integrations).execute()
+        result = SyncNotionService(integrations).execute(work_ids=[1, 2])
 
         self.assertFalse(result.has_errors)
         self.assertTrue(result.has_warnings)
@@ -163,7 +176,7 @@ class FlowStageServicesTests(unittest.TestCase):
             )
         )
 
-        result = SyncNotionService(integrations).execute()
+        result = SyncNotionService(integrations).execute(work_ids=[1, 2])
 
         self.assertFalse(result.has_errors)
         self.assertFalse(result.has_warnings)
@@ -226,7 +239,17 @@ class FakeMangaUpdatesIntegration(FakeDatabaseIntegration):
     def get_metadata(self, selected_ids=None):
         self.calls.append("get_metadata")
         self.last_selected_ids = selected_ids
-        return MetadataUpdateResult(updated=6, skipped=1)
+        return MetadataUpdateResult(
+            updated=6,
+            skipped=1,
+            metrics={
+                "selected_work_ids": selected_ids or [],
+                "attempted_work_ids": selected_ids or [],
+                "processed_work_ids": selected_ids or [],
+                "failed_work_ids": [],
+                "skipped_work_ids": [],
+            },
+        )
 
 
 class FakeNotionIntegration(FakeDatabaseIntegration):
@@ -234,9 +257,11 @@ class FakeNotionIntegration(FakeDatabaseIntegration):
         super().__init__(valid)
         self.calls = []
         self.result = result
+        self.last_work_ids = None
 
-    def sync_page(self):
+    def sync_page(self, work_ids=None):
         self.calls.append("sync_page")
+        self.last_work_ids = work_ids
         return self.result or NotionSyncResult(created=4, updated=3)
 
 
