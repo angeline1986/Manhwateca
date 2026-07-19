@@ -6,7 +6,10 @@ from manhwateca.database.connection import (
     connect,
     get_database_url,
 )
-from manhwateca.database.manga_repository import MangaRepository
+from manhwateca.database.manga_repository import (
+    MangaRepository,
+    select_alternative_title,
+)
 
 
 class FakeCursor:
@@ -493,6 +496,7 @@ class MangaRepositoryTests(unittest.TestCase):
                 "url": "https://example.test/beyond",
                 "cover_url": "https://cdn.example.test/beyond.jpg",
                 "format": "Manhwa",
+                "associated_titles": ["Beyond the Memories"],
                 "genres": ["Drama", "Yaoi"],
                 "universe": ["Omegaverse"],
             },
@@ -509,10 +513,77 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertEqual("https://example.test/beyond", params[2])
         self.assertEqual("https://cdn.example.test/beyond.jpg", params[3])
         self.assertEqual("Manhwa", params[4])
-        self.assertEqual(7, params[5])
+        self.assertEqual("Beyond the Memories", params[5])
+        self.assertEqual(7, params[6])
         self.assertIn((7, 1), connection.links)
         self.assertIn((7, 2), connection.links)
         self.assertIn((7, 3), connection.links)
+
+    def test_update_mangaupdates_fields_preserves_existing_alias(self):
+        connection = FakeConnection()
+        connection.mangas = [{
+            "id": 7,
+            "title": "Beyond Memories",
+            "alternative_title": "Alias Real",
+        }]
+        repository = MangaRepository(connection)
+
+        updated = repository.update_mangaupdates_fields(
+            "Beyond Memories",
+            46829042951,
+            {
+                "series_id": 46829042951,
+                "associated_titles": ["Novo Alias"],
+            },
+        )
+
+        self.assertTrue(updated)
+        query, params = connection.updated[0]
+        self.assertIn("alternative_title = case", query)
+        self.assertEqual("Novo Alias", params[5])
+        self.assertEqual(7, params[6])
+
+    def test_select_alternative_title_uses_first_valid_associated_title(self):
+        self.assertEqual(
+            "Outro Nome",
+            select_alternative_title(
+                ["", "  ", "Beyond Memories", "ID 46829042951", "Outro Nome"],
+                "Beyond Memories",
+                46829042951,
+            ),
+        )
+
+    def test_select_alternative_title_returns_none_without_valid_alias(self):
+        self.assertIsNone(select_alternative_title(None, "Alpha", 123))
+        self.assertIsNone(select_alternative_title([], "Alpha", 123))
+        self.assertIsNone(select_alternative_title("Alias", "Alpha", 123))
+        self.assertIsNone(select_alternative_title(["Alpha"], "Alpha", 123))
+        self.assertIsNone(select_alternative_title(["ID 123"], "Alpha", 123))
+        self.assertIsNone(select_alternative_title([" ", ""], "Alpha", 123))
+
+    def test_select_alternative_title_skips_duplicate_before_valid_alias(self):
+        self.assertEqual(
+            "Beta",
+            select_alternative_title(
+                ["Alpha", " alpha ", "Beta", "Beta"],
+                "Alpha",
+                123,
+            ),
+        )
+
+    def test_select_alternative_title_accepts_non_ascii_alias(self):
+        self.assertEqual(
+            "드레스드 투 킬",
+            select_alternative_title(
+                [
+                    "Dressed to kill ～華麗なる逃亡劇～",
+                    "드레스드 투 킬",
+                    "드레스드 투 킬(Dressed to Kill)",
+                ],
+                "Dressed_to_Kill",
+                "38551408461",
+            ),
+        )
 
     def test_confirms_mangaupdates_id_without_touching_manual_fields(self):
         connection = FakeConnection()

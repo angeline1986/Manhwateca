@@ -329,6 +329,7 @@ def _metadata_needs_update(manga) -> bool:
     return (
         not str(getattr(manga, "mangaupdates_url", "") or "").strip()
         or not str(getattr(manga, "cover_url", "") or "").strip()
+        or not str(getattr(manga, "alternative_title", "") or "").strip()
     )
 
 

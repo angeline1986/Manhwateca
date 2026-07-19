@@ -329,12 +329,19 @@ def _merged_aliases(existing, local, work_code=None):
             if index < existing_count:
                 removed_current_alias = True
             continue
-        normalized = normalize_title(alias)
-        if not normalized or normalized in seen:
+        alias_key = _alias_comparison_key(alias)
+        if not alias_key or alias_key in seen:
             continue
         aliases.append(alias.strip())
-        seen.add(normalized)
+        seen.add(alias_key)
     return aliases, removed_current_alias
+
+
+def _alias_comparison_key(value):
+    normalized = normalize_title(value)
+    if normalized:
+        return normalized
+    return str(value or "").strip().casefold()
 
 
 def _is_generated_id_alias(alias, work_code):

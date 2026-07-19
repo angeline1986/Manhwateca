@@ -288,6 +288,11 @@ class MangaRepository:
         mu_cover = summary.get("cover_url") or summary.get("cover") or summary.get("coverUrl")
         mu_chapter = summary.get("latest_chapter") or summary.get("latest_mangaupdates_chapter")
         mu_format = summary.get("format") or summary.get("type")
+        mu_alias = select_alternative_title(
+            summary.get("associated_titles"),
+            manga.title,
+            series_id,
+        )
 
         # SQL Direto: atualiza os campos com o que veio da API
         self._execute(
@@ -298,7 +303,12 @@ class MangaRepository:
                 latest_mangaupdates_chapter = %s,
                 mangaupdates_url = %s,
                 cover_url = %s,
-                format = %s
+                format = %s,
+                alternative_title = CASE
+                    WHEN alternative_title IS NULL OR BTRIM(alternative_title) = ''
+                    THEN %s
+                    ELSE alternative_title
+                END
             WHERE id = %s
             """,
             (
@@ -307,6 +317,7 @@ class MangaRepository:
                 _empty_to_none(mu_url),
                 _empty_to_none(mu_cover),
                 _empty_to_none(mu_format),
+                mu_alias,
                 manga.id,
             ),
         )
@@ -1031,13 +1042,45 @@ def _confirmation_alias(value, series_id):
     alias = _empty_to_none(value)
     if alias is None:
         return None
-    normalized_series_id = str(series_id or "").strip()
-    if (
-        normalized_series_id
-        and alias.casefold() == f"id {normalized_series_id}".casefold()
-    ):
+    if _is_generated_id_alias(alias, series_id):
         return None
     return alias
+
+
+def select_alternative_title(associated_titles, primary_title, work_code):
+    if not isinstance(associated_titles, (list, tuple)):
+        return None
+
+    normalized_primary = normalize_title(primary_title)
+    seen = set()
+    for value in associated_titles:
+        alias = _empty_to_none(value)
+        if alias is None:
+            continue
+        alias_key = _alias_comparison_key(alias)
+        if not alias_key or alias_key in seen:
+            continue
+        seen.add(alias_key)
+        if normalized_primary and alias_key == normalized_primary:
+            continue
+        if _is_generated_id_alias(alias, work_code):
+            continue
+        return alias
+    return None
+
+
+def _alias_comparison_key(value):
+    normalized = normalize_title(value)
+    if normalized:
+        return normalized
+    return str(value or "").strip().casefold()
+
+
+def _is_generated_id_alias(value, work_code):
+    normalized_work_code = str(work_code or "").strip()
+    if not normalized_work_code:
+        return False
+    return str(value or "").strip().casefold() == f"id {normalized_work_code}".casefold()
 
 
 def _first_existing(columns, *candidates):

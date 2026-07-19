@@ -148,7 +148,14 @@ class ResolveIdsFlowTests(unittest.TestCase):
     def test_update_metadata_uses_selected_postgresql_records_only(self):
         manga_repository = FakeMangaRepository(records=[
             manga_record(7, "Alpha", "101"),
-            manga_record(9, "Beta", "102", mangaupdates_url="https://example.test/beta", cover_url="https://cdn.example.test/beta.jpg"),
+            manga_record(
+                9,
+                "Beta",
+                "102",
+                mangaupdates_url="https://example.test/beta",
+                cover_url="https://cdn.example.test/beta.jpg",
+                alternative_title="Beta Alias",
+            ),
             manga_record(11, "Gamma", "103"),
         ])
         integration = MangaUpdatesFlowIntegration(
@@ -159,6 +166,7 @@ class ResolveIdsFlowTests(unittest.TestCase):
                 "url": f"https://example.test/{data['series_id']}",
                 "cover_url": f"https://cdn.example.test/{data['series_id']}.jpg",
                 "format": "Manhwa",
+                "associated_titles": [f"Alias {data['series_id']}"],
                 "genres": [],
                 "universe": [],
             },
@@ -175,6 +183,10 @@ class ResolveIdsFlowTests(unittest.TestCase):
         self.assertEqual([("Alpha", "101")], [
             (title, series_id) for title, series_id, _summary in manga_repository.metadata_updates
         ])
+        self.assertEqual(
+            ["Alias 101"],
+            manga_repository.metadata_updates[0][2]["associated_titles"],
+        )
 
     def test_update_metadata_without_selection_does_not_process_all_records(self):
         manga_repository = FakeMangaRepository(records=[
@@ -190,6 +202,111 @@ class ResolveIdsFlowTests(unittest.TestCase):
         self.assertEqual(0, result.updated)
         self.assertEqual([], manga_repository.requested_ids)
         self.assertEqual([], manga_repository.metadata_updates)
+
+    def test_update_metadata_fetches_selected_work_with_empty_alias(self):
+        manga_repository = FakeMangaRepository(records=[
+            manga_record(
+                7,
+                "Alpha",
+                "101",
+                mangaupdates_url="https://example.test/alpha",
+                cover_url="https://cdn.example.test/alpha.jpg",
+            ),
+        ])
+        integration = MangaUpdatesFlowIntegration(
+            manga_repository_factory=lambda: manga_repository,
+            detail_function=lambda series_id: {"series_id": series_id},
+            summarize_function=lambda data: {
+                "series_id": data["series_id"],
+                "associated_titles": ["Alpha Alias"],
+                "genres": [],
+                "universe": [],
+            },
+        )
+
+        result = integration.get_metadata(selected_ids=[7])
+
+        self.assertEqual(1, result.updated)
+        self.assertEqual([7], result.metrics["attempted_work_ids"])
+        self.assertEqual([7], result.metrics["processed_work_ids"])
+        self.assertEqual(["Alpha Alias"], manga_repository.metadata_updates[0][2]["associated_titles"])
+
+    def test_update_metadata_does_not_fetch_work_with_existing_alias_only(self):
+        manga_repository = FakeMangaRepository(records=[
+            manga_record(
+                7,
+                "Alpha",
+                "101",
+                mangaupdates_url="https://example.test/alpha",
+                cover_url="https://cdn.example.test/alpha.jpg",
+                alternative_title="Alpha Alias",
+            ),
+        ])
+        integration = MangaUpdatesFlowIntegration(
+            manga_repository_factory=lambda: manga_repository,
+            detail_function=FailingSearch(),
+        )
+
+        result = integration.get_metadata(selected_ids=[7])
+
+        self.assertEqual(0, result.updated)
+        self.assertEqual([], result.metrics["attempted_work_ids"])
+        self.assertEqual([7], result.metrics["processed_work_ids"])
+        self.assertEqual([], manga_repository.metadata_updates)
+
+    def test_update_metadata_fetches_work_with_blank_alias(self):
+        manga_repository = FakeMangaRepository(records=[
+            manga_record(
+                7,
+                "Alpha",
+                "101",
+                mangaupdates_url="https://example.test/alpha",
+                cover_url="https://cdn.example.test/alpha.jpg",
+                alternative_title="   ",
+            ),
+        ])
+        integration = MangaUpdatesFlowIntegration(
+            manga_repository_factory=lambda: manga_repository,
+            detail_function=lambda series_id: {"series_id": series_id},
+            summarize_function=lambda data: {
+                "series_id": data["series_id"],
+                "associated_titles": ["Alpha Alias"],
+                "genres": [],
+                "universe": [],
+            },
+        )
+
+        result = integration.get_metadata(selected_ids=[7])
+
+        self.assertEqual(1, result.updated)
+        self.assertEqual([7], result.metrics["attempted_work_ids"])
+
+    def test_update_metadata_fetches_without_associated_titles_but_keeps_alias_empty(self):
+        manga_repository = FakeMangaRepository(records=[
+            manga_record(
+                7,
+                "Alpha",
+                "101",
+                mangaupdates_url="https://example.test/alpha",
+                cover_url="https://cdn.example.test/alpha.jpg",
+            ),
+        ])
+        integration = MangaUpdatesFlowIntegration(
+            manga_repository_factory=lambda: manga_repository,
+            detail_function=lambda series_id: {"series_id": series_id},
+            summarize_function=lambda data: {
+                "series_id": data["series_id"],
+                "associated_titles": [],
+                "genres": [],
+                "universe": [],
+            },
+        )
+
+        result = integration.get_metadata(selected_ids=[7])
+
+        self.assertEqual(1, result.updated)
+        self.assertEqual([7], result.metrics["attempted_work_ids"])
+        self.assertEqual([], manga_repository.metadata_updates[0][2]["associated_titles"])
 
     def test_update_metadata_skips_selected_work_without_work_code(self):
         manga_repository = FakeMangaRepository(records=[
@@ -337,6 +454,7 @@ def manga_record(
     *,
     mangaupdates_url=None,
     cover_url=None,
+    alternative_title=None,
 ):
     return SimpleNamespace(
         id=work_id,
@@ -344,6 +462,7 @@ def manga_record(
         work_code=work_code,
         mangaupdates_url=mangaupdates_url,
         cover_url=cover_url,
+        alternative_title=alternative_title,
     )
 
 

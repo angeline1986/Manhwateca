@@ -352,6 +352,17 @@ class NotionOfficialPlannerTests(unittest.TestCase):
             properties["Alias"]["rich_text"][0]["text"]["content"],
         )
 
+    def test_alias_non_ascii_value_is_sent_with_work_code(self):
+        properties = _expected_metadata_properties(
+            FakeRecord(work_code="123", alternative_title="드레스드 투 킬"),
+            notion_page("Alpha", "page-1", work_code=123),
+        )
+
+        self.assertEqual(
+            "드레스드 투 킬",
+            properties["Alias"]["rich_text"][0]["text"]["content"],
+        )
+
     def test_generated_id_alias_already_in_notion_is_cleared(self):
         properties = _expected_metadata_properties(
             FakeRecord(work_code="123", alternative_title=None),
