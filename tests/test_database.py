@@ -7,6 +7,7 @@ from manhwateca.database.connection import (
     get_database_url,
 )
 from manhwateca.database.manga_repository import (
+    ConfirmedIdCorrectionResult,
     MangaRepository,
     select_alternative_title,
 )
@@ -53,7 +54,10 @@ class FakeCursor:
             )
             return
 
-        if "from vw_mangas" in normalized and "where id = %s" in normalized:
+        if (
+            ("from vw_mangas" in normalized or "from mangas" in normalized)
+            and "where id = %s" in normalized
+        ):
             self.row = next(
                 (
                     row
@@ -101,6 +105,8 @@ class FakeCursor:
             return
 
         if normalized.startswith("insert into sync_events"):
+            if self.connection.fail_sync_event:
+                raise RuntimeError("sync event failed")
             self.connection.sync_events.append(params)
             return
 
@@ -176,10 +182,14 @@ class FakeCursor:
             return
 
         if normalized.startswith("update mangas"):
+            if self.connection.fail_update_mangas:
+                raise RuntimeError("update failed")
             self.connection.updated.append((normalized, params))
             return
 
         if normalized.startswith("delete from manga_themes"):
+            if self.connection.fail_delete_themes:
+                raise RuntimeError("delete themes failed")
             self.connection.deleted.append(params[0])
             return
 
@@ -202,6 +212,10 @@ class FakeConnection:
         self.updated = []
         self.sync_events = []
         self.commits = []
+        self.rollbacks = []
+        self.fail_update_mangas = False
+        self.fail_delete_themes = False
+        self.fail_sync_event = False
         self.decision_queue_schema = [
             ("id", "bigint"),
             ("decision_type", "character varying"),
@@ -222,6 +236,9 @@ class FakeConnection:
 
     def commit(self):
         self.commits.append(True)
+
+    def rollback(self):
+        self.rollbacks.append(True)
 
 
 class DatabaseConnectionTests(unittest.TestCase):
@@ -692,6 +709,175 @@ class MangaRepositoryTests(unittest.TestCase):
         self.assertEqual(7, confirmed.work_id)
         self.assertEqual([], connection.updated)
         self.assertEqual([], connection.commits)
+
+    def test_correct_confirmed_id_invalidates_derived_metadata(self):
+        connection = FakeConnection()
+        connection.mangas = [{
+            "id": 254,
+            "title": "Mad for love",
+            "work_code": "57487635157",
+            "mangaupdates_url": "https://example.test/wrong",
+            "cover_url": "https://example.test/wrong.jpg",
+            "format": "Manhwa",
+            "latest_mangaupdates_chapter": 0,
+            "alternative_title": "Record of Mad Love",
+            "notion_page_id": "page-254",
+            "notion_sync_status": "synced",
+        }]
+        repository = MangaRepository(connection)
+
+        result = repository.correct_confirmed_mangaupdates_id(
+            254,
+            "56302347523",
+            expected_current_work_code="57487635157",
+        )
+
+        self.assertTrue(result)
+        self.assertIsInstance(result, ConfirmedIdCorrectionResult)
+        self.assertEqual("applied", result.status)
+        self.assertEqual("57487635157", result.old_series_id)
+        self.assertEqual("56302347523", result.new_series_id)
+        self.assertEqual("pending", result.notion_sync_status)
+        query, params = connection.updated[0]
+        self.assertIn("work_code = %s", query)
+        self.assertIn("mangaupdates_url = null", query)
+        self.assertIn("cover_url = null", query)
+        self.assertIn("format = null", query)
+        self.assertIn("latest_mangaupdates_chapter = null", query)
+        self.assertIn("alternative_title = null", query)
+        self.assertIn("notion_sync_status = %s", query)
+        self.assertEqual(("56302347523", "pending", 254), params)
+        self.assertEqual([254], connection.deleted)
+        event = connection.sync_events[0]
+        self.assertEqual(254, event[0])
+        self.assertEqual("page-254", event[1])
+        self.assertEqual("mangaupdates_confirmed_id_corrected", event[2])
+        self.assertEqual("pending", event[3])
+        self.assertIn("ID MangaUpdates confirmado corrigido", event[4])
+        self.assertIn("57487635157", event[5])
+        self.assertIn("56302347523", event[5])
+        self.assertEqual(1, len(connection.commits))
+
+    def test_correct_confirmed_id_blocks_external_id_collision(self):
+        connection = FakeConnection()
+        connection.mangas = [
+            {"id": 254, "title": "Mad for love", "work_code": "57487635157"},
+            {"id": 300, "title": "Tuojiang", "work_code": "56302347523"},
+        ]
+        repository = MangaRepository(connection)
+
+        result = repository.correct_confirmed_mangaupdates_id(
+            254,
+            "56302347523",
+            expected_current_work_code="57487635157",
+        )
+
+        self.assertFalse(result)
+        self.assertEqual("external_id_already_assigned", result.status)
+        self.assertEqual(300, result.existing_work_id)
+        self.assertEqual("Tuojiang", result.existing_title)
+        self.assertEqual([], connection.updated)
+        self.assertEqual([], connection.sync_events)
+        self.assertEqual([], connection.commits)
+        self.assertEqual([True], connection.rollbacks)
+
+    def test_correct_confirmed_id_blocks_stale_preview_without_writes(self):
+        connection = FakeConnection()
+        connection.mangas = [{
+            "id": 254,
+            "title": "Mad for love",
+            "work_code": "12345678900",
+        }]
+        repository = MangaRepository(connection)
+
+        result = repository.correct_confirmed_mangaupdates_id(
+            254,
+            "56302347523",
+            expected_current_work_code="57487635157",
+        )
+
+        self.assertFalse(result)
+        self.assertEqual("stale_preview", result.status)
+        self.assertEqual("57487635157", result.expected_current_work_code)
+        self.assertEqual("12345678900", result.actual_current_work_code)
+        self.assertEqual([], connection.updated)
+        self.assertEqual([], connection.deleted)
+        self.assertEqual([], connection.sync_events)
+        self.assertEqual([], connection.commits)
+        self.assertEqual([True], connection.rollbacks)
+
+    def test_correct_confirmed_id_rolls_back_when_audit_insert_fails(self):
+        connection = FakeConnection()
+        connection.fail_sync_event = True
+        connection.mangas = [{
+            "id": 254,
+            "title": "Mad for love",
+            "work_code": "57487635157",
+            "notion_page_id": "page-254",
+        }]
+        repository = MangaRepository(connection)
+
+        result = repository.correct_confirmed_mangaupdates_id(
+            254,
+            "56302347523",
+            expected_current_work_code="57487635157",
+        )
+
+        self.assertFalse(result)
+        self.assertEqual("persistence_error", result.status)
+        self.assertEqual([], connection.commits)
+        self.assertEqual([True], connection.rollbacks)
+
+    def test_correct_confirmed_id_rolls_back_when_metadata_update_fails(self):
+        connection = FakeConnection()
+        connection.fail_update_mangas = True
+        connection.mangas = [{
+            "id": 254,
+            "title": "Mad for love",
+            "work_code": "57487635157",
+            "mangaupdates_url": "https://example.test/wrong",
+            "notion_sync_status": "synced",
+        }]
+        repository = MangaRepository(connection)
+
+        result = repository.correct_confirmed_mangaupdates_id(
+            254,
+            "56302347523",
+            expected_current_work_code="57487635157",
+        )
+
+        self.assertFalse(result)
+        self.assertEqual("persistence_error", result.status)
+        self.assertEqual([], connection.deleted)
+        self.assertEqual([], connection.sync_events)
+        self.assertEqual([], connection.commits)
+        self.assertEqual([True], connection.rollbacks)
+
+    def test_correct_confirmed_id_rolls_back_when_theme_cleanup_fails(self):
+        connection = FakeConnection()
+        connection.fail_delete_themes = True
+        connection.mangas = [{
+            "id": 254,
+            "title": "Mad for love",
+            "work_code": "57487635157",
+            "mangaupdates_url": "https://example.test/wrong",
+            "notion_sync_status": "synced",
+        }]
+        repository = MangaRepository(connection)
+
+        result = repository.correct_confirmed_mangaupdates_id(
+            254,
+            "56302347523",
+            expected_current_work_code="57487635157",
+        )
+
+        self.assertFalse(result)
+        self.assertEqual("persistence_error", result.status)
+        self.assertEqual(1, len(connection.updated))
+        self.assertEqual([], connection.deleted)
+        self.assertEqual([], connection.sync_events)
+        self.assertEqual([], connection.commits)
+        self.assertEqual([True], connection.rollbacks)
 
     def test_updates_notion_sync_fields_by_page_id(self):
         connection = FakeConnection()

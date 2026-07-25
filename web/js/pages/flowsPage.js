@@ -5,6 +5,11 @@ import {
   runFlowStage,
   startWorkflow as startFlowWorkflow,
 } from "../api/flowsApi.js";
+import {
+  applyConfirmedMangaUpdatesIdCorrection,
+  getConfirmedMangaUpdatesIdCandidates,
+  previewConfirmedMangaUpdatesIdCorrection,
+} from "../api/mangaupdatesApi.js";
 import { ACTIVE_FLOW_STEPS, FLOW_STAGE_GROUPS } from "../flows/flowConstants.js";
 import {
   loadMetadataState as fetchMetadataState,
@@ -33,12 +38,22 @@ export function initFlowsPage(elements, options = {}) {
   let activeReviewKey = "";
   let reviewSearchQuery = "";
   let showResolvedReview = false;
+  let confirmedIdCorrection = {
+    search: "",
+    candidates: [],
+    selectedWork: null,
+    newWorkCode: "",
+    preview: null,
+    error: "",
+  };
+  let confirmedIdSearchSequence = 0;
   let reviewState = { summary: {}, items: [] };
   let selectedDecisions = {};
   let savedReviewKeys = new Set();
   let worksState = { kpis: {}, items: [], pagination: {} };
   let metadataState = { kpis: {}, items: [], pagination: {} };
   let notionMetadataState = {};
+  let recentlySyncedNotionWorkIds = [];
   const showPage = options.showPage || (() => {});
 
   async function loadWorkflow() {
@@ -48,6 +63,7 @@ export function initFlowsPage(elements, options = {}) {
       refreshWorksState(),
       refreshMetadataState(),
       refreshNotionMetadataState(),
+      refreshConfirmedIdCandidatesState(),
     ]);
     renderWorkflow(data);
     scheduleWorkflowPolling(data);
@@ -87,6 +103,19 @@ export function initFlowsPage(elements, options = {}) {
   async function refreshWorksState() { worksState = await fetchWorksState(worksPage); }
   async function refreshMetadataState() { metadataState = await fetchMetadataState(); }
   async function refreshNotionMetadataState() { notionMetadataState = await fetchNotionMetadataState(); }
+  async function refreshConfirmedIdCandidatesState(search = confirmedIdCorrection.search || "") {
+    const { response, payload } = await getConfirmedMangaUpdatesIdCandidates({
+      search,
+      limit: 8,
+    });
+    confirmedIdCorrection = {
+      ...confirmedIdCorrection,
+      search,
+      candidates: response.ok ? (payload.items || []) : [],
+      candidatesError: response.ok ? "" : errorMessage(payload),
+      candidatesLoading: false,
+    };
+  }
 
   function renderWorkflow(data) {
     workflowState = data;
@@ -96,10 +125,12 @@ export function initFlowsPage(elements, options = {}) {
       showResolvedReview,
       review: reviewState,
       reviewSearchQuery,
+      confirmedIdCorrection,
       selectedDecisions: activeSubtab === "decisoes" ? readyDecisions() : selectedDecisions,
       savedReviewKeys: [...savedReviewKeys],
       metadata: metadataState,
       notionMetadata: notionMetadataState,
+      recentlySyncedNotionWorkIds,
       works: worksState,
     });
     renderLegacyWorkflow(data);
@@ -165,6 +196,7 @@ export function initFlowsPage(elements, options = {}) {
     }
     const payload = stagePayload(stage.id);
     const metadataSelectionCount = payload.selected_ids?.length || 0;
+    const notionScopeIds = stage.id === "sync_notion" ? notionExecutionScopeIds(payload) : [];
     pendingRequest = true;
     setFeedback(stage.id === "update_metadata"
       ? metadataRunningMessage(metadataSelectionCount)
@@ -177,9 +209,12 @@ export function initFlowsPage(elements, options = {}) {
           ? metadataRunningMessage(metadataSelectionCount)
           : `${stage.title} em execução. Aguarde...`, "info");
         await refreshAfterStage(stage.id);
-        setFeedback(stage.id === "update_metadata"
-          ? metadataSuccessMessage(metadataSelectionCount)
-          : `${stage.title} finalizada.`, "success");
+        if (stage.id === "sync_notion" && notionStageSynced()) {
+          recentlySyncedNotionWorkIds = notionScopeIds;
+          renderWorkflow(workflowState);
+        }
+        const finalFeedback = stageFinalFeedback(stage.id, metadataSelectionCount);
+        setFeedback(finalFeedback.message, finalFeedback.tone);
       } else {
         setFeedback(errorMessage(responsePayload), "error");
         await loadWorkflow();
@@ -189,6 +224,214 @@ export function initFlowsPage(elements, options = {}) {
       await loadWorkflow();
     } finally {
       pendingRequest = false;
+    }
+  }
+
+  async function createMissingNotionPage(workId) {
+    if (!Number.isFinite(workId) || workId <= 0 || pendingRequest) return;
+    pendingRequest = true;
+    setFeedback("Criando página no Notion...", "info");
+    try {
+      const response = await fetch("/api/notion/pages/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ work_id: workId }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setFeedback(errorMessage(payload), "error");
+        await loadWorkflow();
+        return;
+      }
+      recentlySyncedNotionWorkIds = [workId];
+      setFeedback("Página criada no Notion.", "success");
+      await loadWorkflow();
+    } catch (error) {
+      setFeedback(`Falha ao criar página no Notion: ${error.message || "erro desconhecido"}.`, "error");
+      await loadWorkflow();
+    } finally {
+      pendingRequest = false;
+    }
+  }
+
+  async function previewConfirmedIdCorrection() {
+    if (pendingRequest) return;
+    const values = confirmedIdCorrectionValues();
+    if (!values.workId) {
+      confirmedIdCorrection = {
+        ...confirmedIdCorrection,
+        ...values,
+        error: "Selecione uma obra antes de validar o novo ID.",
+      };
+      renderWorkflow(workflowState);
+      return;
+    }
+    confirmedIdCorrection = {
+      ...confirmedIdCorrection,
+      ...values,
+      preview: null,
+      error: "",
+      loading: true,
+    };
+    renderWorkflow(workflowState);
+    focusConfirmedIdSearch();
+    try {
+      const { response, payload } = await previewConfirmedMangaUpdatesIdCorrection({
+        work_id: values.workId,
+        new_work_code: values.newWorkCode,
+      });
+      confirmedIdCorrection = {
+        ...confirmedIdCorrection,
+        ...values,
+        preview: response.ok ? payload : null,
+        error: response.ok ? "" : errorMessage(payload),
+        loading: false,
+      };
+      setFeedback(
+        response.ok ? "ID validado. Revise o preview antes de aplicar." : errorMessage(payload),
+        response.ok ? "info" : "error",
+      );
+    } catch (error) {
+      confirmedIdCorrection = {
+        ...confirmedIdCorrection,
+        ...values,
+        preview: null,
+        error: `Falha ao validar ID: ${error.message || "erro desconhecido"}.`,
+        loading: false,
+      };
+      setFeedback(confirmedIdCorrection.error, "error");
+    }
+    renderWorkflow(workflowState);
+    focusConfirmedIdSearch();
+  }
+
+  function focusConfirmedIdSearch() {
+    const input = area?.querySelector("[data-confirmed-id-search]");
+    if (!input) return;
+    input.focus();
+    const cursor = input.value.length;
+    input.setSelectionRange(cursor, cursor);
+  }
+
+  async function applyConfirmedIdCorrection() {
+    if (pendingRequest || !confirmedIdCorrection.preview?.can_apply) return;
+    pendingRequest = true;
+    const values = confirmedIdCorrectionValues();
+    setFeedback("Aplicando correção do ID confirmado...", "info");
+    try {
+      const { response, payload } = await applyConfirmedMangaUpdatesIdCorrection({
+        work_id: values.workId,
+        expected_current_work_code: confirmedIdCorrection.preview?.work?.current_work_code,
+        new_work_code: values.newWorkCode,
+        confirmed: true,
+      });
+      if (!response.ok) {
+        confirmedIdCorrection = {
+          ...confirmedIdCorrection,
+          ...values,
+          preview: null,
+          error: errorMessage(payload),
+        };
+        setFeedback(errorMessage(payload), "error");
+        renderWorkflow(workflowState);
+        return;
+      }
+      confirmedIdCorrection = {
+        ...confirmedIdCorrection,
+        selectedWork: null,
+        newWorkCode: "",
+        preview: null,
+        error: "",
+      };
+      setFeedback(
+        "ID MangaUpdates corrigido com sucesso. Os metadados derivados foram invalidados. Siga para Atualizar metadados antes de sincronizar com o Notion.",
+        "success",
+      );
+      await refreshMetadataState();
+      await refreshNotionMetadataState();
+      await refreshConfirmedIdCandidatesState();
+      renderWorkflow(workflowState);
+    } catch (error) {
+      setFeedback(`Falha ao aplicar correção: ${error.message || "erro desconhecido"}.`, "error");
+      renderWorkflow(workflowState);
+    } finally {
+      pendingRequest = false;
+    }
+  }
+
+  function confirmedIdCorrectionValues() {
+    const area = elements.flowsCurrentCards;
+    return {
+      workId: confirmedIdCorrection.selectedWork?.id || "",
+      newWorkCode: area?.querySelector("[data-confirmed-id-new]")?.value?.trim() || confirmedIdCorrection.newWorkCode || "",
+    };
+  }
+
+  function selectConfirmedIdCorrectionWork(workId) {
+    const selectedWork = (confirmedIdCorrection.candidates || [])
+      .find(item => Number(item.id) === Number(workId));
+    confirmedIdCorrection = {
+      ...confirmedIdCorrection,
+      selectedWork: selectedWork || null,
+      newWorkCode: "",
+      preview: null,
+      error: selectedWork ? "" : "Obra não encontrada na lista atual.",
+    };
+    setFeedback("");
+    renderWorkflow(workflowState);
+  }
+
+  async function searchConfirmedIdCorrectionWorks(search) {
+    const sequence = confirmedIdSearchSequence + 1;
+    confirmedIdSearchSequence = sequence;
+    confirmedIdCorrection = {
+      ...confirmedIdCorrection,
+      search,
+      candidatesLoading: true,
+      selectedWork: null,
+      newWorkCode: "",
+      preview: null,
+      error: "",
+    };
+    renderWorkflow(workflowState);
+    try {
+      const { response, payload } = await getConfirmedMangaUpdatesIdCandidates({
+        search,
+        limit: 8,
+      });
+      if (sequence !== confirmedIdSearchSequence) return;
+      confirmedIdCorrection = {
+        ...confirmedIdCorrection,
+        candidates: response.ok ? (payload.items || []) : [],
+        candidatesError: response.ok ? "" : errorMessage(payload),
+        candidatesLoading: false,
+      };
+    } catch (error) {
+      if (sequence !== confirmedIdSearchSequence) return;
+      confirmedIdCorrection = {
+        ...confirmedIdCorrection,
+        candidates: [],
+        candidatesError: `Falha ao buscar obras: ${error.message || "erro desconhecido"}.`,
+        candidatesLoading: false,
+      };
+    }
+    renderWorkflow(workflowState);
+  }
+
+  function setConfirmedIdCorrectionNewWorkCode(newWorkCode) {
+    confirmedIdCorrection = {
+      ...confirmedIdCorrection,
+      newWorkCode,
+      preview: null,
+      error: "",
+    };
+    setFeedback("");
+    renderWorkflow(workflowState);
+    const input = area?.querySelector("[data-confirmed-id-new]");
+    if (input) {
+      input.focus();
+      const cursor = input.value.length;
+      input.setSelectionRange(cursor, cursor);
     }
   }
 
@@ -202,6 +445,40 @@ export function initFlowsPage(elements, options = {}) {
     return count > 0
       ? `✅ ${selectedLabel(count, "obra sincronizada", "obras sincronizadas")} com sucesso.`
       : "✅ Metadados atualizados com sucesso.";
+  }
+
+  function stageFinalFeedback(stageId, metadataSelectionCount) {
+    if (stageId === "update_metadata") {
+      return {
+        message: metadataSuccessMessage(metadataSelectionCount),
+        tone: "success",
+      };
+    }
+    const result = workflowState?.run?.results?.[stageId] || {};
+    if (result.status === "failed") {
+      return {
+        message: errorMessage(result),
+        tone: "error",
+      };
+    }
+    if (result.status === "completed_with_warnings") {
+      return {
+        message: stageWarningMessage(result),
+        tone: "warning",
+      };
+    }
+    return {
+      message: `${selectedFlowStage(workflowState?.run)?.title || "Etapa"} finalizada.`,
+      tone: "success",
+    };
+  }
+
+  function stageWarningMessage(result) {
+    return (
+      result.warnings?.[0]?.message
+      || result.messages?.[0]
+      || "Etapa concluída com alertas."
+    );
   }
 
   function selectedLabel(count, singular, plural) {
@@ -230,9 +507,23 @@ export function initFlowsPage(elements, options = {}) {
     }
     if (stageId === "sync_notion") {
       const workIds = selectedNotionWorkIds();
-      return workIds.length ? { work_ids: workIds } : {};
+      return { work_ids: workIds.length ? workIds : remainingJourneyNotionWorkIds() };
     }
     return {};
+  }
+
+  function notionExecutionScopeIds(payload) {
+    return payload.work_ids || [];
+  }
+
+  function remainingJourneyNotionWorkIds() {
+    const hidden = new Set(recentlySyncedNotionWorkIds.map(Number));
+    return (workflowState?.run?.results?.update_metadata?.metrics?.processed_work_ids || [])
+      .filter(workId => !hidden.has(Number(workId)));
+  }
+
+  function notionStageSynced() {
+    return workflowState?.run?.results?.sync_notion?.metrics?.status === "synced";
   }
 
   async function cancelWorkflow() {
@@ -254,6 +545,7 @@ export function initFlowsPage(elements, options = {}) {
     return (
       payload?.errors?.[0]?.message
       || payload?.error
+      || payload?.blockers?.[0]?.message
       || payload?.rejected?.[0]
       || payload?.validation?.blocks?.[0]?.reason
       || "Não foi possível executar."
@@ -361,6 +653,10 @@ export function initFlowsPage(elements, options = {}) {
     renderWorkflow: () => renderWorkflow(workflowState),
     reviewAgain,
     runCurrentFlowStage,
+    createMissingNotionPage,
+    previewConfirmedIdCorrection,
+    applyConfirmedIdCorrection,
+    selectConfirmedIdCorrectionWork,
     saveCurrentReviewDecision,
     setActiveReviewKey: value => { activeReviewKey = value; },
     setReviewSearchQuery,
@@ -373,6 +669,8 @@ export function initFlowsPage(elements, options = {}) {
   area?.addEventListener("change", event => handleFlowsChange(event, area));
   area?.addEventListener("input", event => handleFlowsInput(event, area, {
     setReviewSearchQuery,
+    searchConfirmedIdCorrectionWorks,
+    setConfirmedIdCorrectionNewWorkCode,
   }));
 
   return { loadWorkflow, stopWorkflowPolling };

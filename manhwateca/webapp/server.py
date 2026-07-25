@@ -19,6 +19,7 @@ from manhwateca.webapp.mangaupdates_status import (
     MangaUpdatesStatusUnavailable,
     mangaupdates_status,
 )
+from manhwateca.webapp.mangaupdates_confirmed_id import confirmed_id_candidates_payload
 from manhwateca.webapp.notion import notion_status
 from manhwateca.webapp.notion_metadata import metadata_status
 from manhwateca.webapp.notion_sync_candidates import sync_candidates_payload
@@ -93,6 +94,9 @@ def create_handler(project_root, task_manager, workflow_manager=None):
                     self._send_json(mangaupdates_status(project_root))
                 except MangaUpdatesStatusUnavailable as error:
                     self._send_json({"error": str(error)}, status=503)
+                return
+            if path == "/api/mangaupdates/confirmed-id/candidates":
+                self._send_json(*confirmed_id_candidates_payload(urlparse(self.path).query))
                 return
             if path == "/api/notion/status":
                 self._send_json(notion_status(project_root))

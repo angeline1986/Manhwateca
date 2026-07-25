@@ -15,7 +15,12 @@ from manhwateca.webapp.mangaupdates_decisions import (
     apply_decisions_payload,
     validate_decisions_payload,
 )
+from manhwateca.webapp.mangaupdates_confirmed_id import (
+    apply_confirmed_id_correction_payload,
+    confirmed_id_preview_payload,
+)
 from manhwateca.webapp.mangaupdates_search import search_payload
+from manhwateca.webapp.notion_pages import create_missing_page_payload
 from manhwateca.webapp.reviews import save_review_note
 from manhwateca.webapp.translation import translate_to_portuguese
 
@@ -68,6 +73,10 @@ def handle_direct_post(path, payload, project_root, workflow_manager=None):
             return {"error": str(error)}, 400
         except OSError:
             return {"error": "Não foi possível consultar o MangaUpdates."}, 502
+    if path == "/api/mangaupdates/confirmed-id/preview":
+        return confirmed_id_preview_payload(payload)
+    if path == "/api/mangaupdates/confirmed-id/apply":
+        return apply_confirmed_id_correction_payload(payload)
     if path == "/api/translate":
         try:
             translated = translate_to_portuguese(payload.get("text"))
@@ -87,6 +96,8 @@ def handle_direct_post(path, payload, project_root, workflow_manager=None):
         return _catalog_one(payload)
     if path == "/api/catalog/reconcile-aliases":
         return _reconcile_catalog_aliases(project_root)
+    if path == "/api/notion/pages/create":
+        return create_missing_page_payload(payload)
     if path == "/api/workflow":
         return _start_workflow(payload, workflow_manager)
     if path == "/api/workflow/continue":

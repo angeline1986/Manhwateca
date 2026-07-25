@@ -2,7 +2,11 @@ import { escapeHtml } from "../utils/html.js";
 
 export function pendingTab(review, selectedDecisions = {}, activeKey = "", options = {}) {
   const items = review?.items || [];
-  if (!items.length) return '<p class="empty">Não há correspondências pendentes.</p>';
+  const correction = options.idCorrection || {};
+  if (!items.length) return `
+    <p class="empty">Não há correspondências pendentes.</p>
+    ${confirmedIdCorrectionPanel(correction)}
+  `;
   const savedKeys = new Set(options.savedKeys || []);
   const showResolved = Boolean(options.showResolved);
   const searchQuery = options.searchQuery || "";
@@ -10,7 +14,10 @@ export function pendingTab(review, selectedDecisions = {}, activeKey = "", optio
   const filteredItems = sortedItems.filter(item => matchesSearch(item, searchQuery));
   const pendingItems = filteredItems.filter(item => !savedKeys.has(itemKey(item)));
   if (!pendingItems.length && !showResolved && !searchQuery.trim()) {
-    return reviewCompleted(savedKeys.size);
+    return `
+      ${reviewCompleted(savedKeys.size)}
+      ${confirmedIdCorrectionPanel(correction)}
+    `;
   }
   const visibleItems = showResolved ? filteredItems : pendingItems;
   const selectedItem = visibleItems.find(item => itemKey(item) === activeKey) || visibleItems[0];
@@ -33,6 +40,7 @@ export function pendingTab(review, selectedDecisions = {}, activeKey = "", optio
       </aside>
       ${decisionPanel(selectedItem, selectedDecisions)}
     </div>
+    ${confirmedIdCorrectionPanel(correction)}
   `;
 }
 
@@ -107,6 +115,93 @@ function decisionPanel(item, selectedDecisions) {
         </button>
       </footer>
     </section>
+  `;
+}
+
+function confirmedIdCorrectionPanel(state = {}) {
+  const preview = state.preview || null;
+  const loading = Boolean(state.loading);
+  const selectedWork = state.selectedWork || null;
+  const candidates = state.candidates || [];
+  return `
+    <section class="confirmed-id-correction">
+      <header>
+        <span class="eyebrow">Manutenção controlada</span>
+        <h3>Corrigir ID confirmado</h3>
+        <p>Use quando uma obra já foi vinculada ao ID MangaUpdates errado.</p>
+      </header>
+      <label class="confirmed-id-search">
+        <span>Buscar obra confirmada</span>
+        <input type="search" placeholder="Digite título, ID local ou ID MangaUpdates" data-confirmed-id-search value="${escapeHtml(state.search || "")}">
+      </label>
+      <div class="confirmed-id-candidates">
+        ${state.candidatesLoading ? '<p class="empty">Carregando obras...</p>' : confirmedIdCandidates(candidates, selectedWork)}
+      </div>
+      ${state.candidatesError ? `<p class="flow-review-warning">${escapeHtml(state.candidatesError)}</p>` : ""}
+      <div class="confirmed-id-form">
+        <div class="confirmed-id-selected">
+          <span>Obra selecionada</span>
+          <strong>${selectedWork ? escapeHtml(selectedWork.title) : "Nenhuma obra selecionada"}</strong>
+          <small>${selectedWork ? `ID ${escapeHtml(String(selectedWork.id))} · MangaUpdates ${escapeHtml(String(selectedWork.current_work_code || "--"))}` : "Busque e selecione a obra antes de validar."}</small>
+        </div>
+        <label>
+          <span>Novo ID MangaUpdates</span>
+          <input type="number" min="1" placeholder="Ex.: 56302347523" data-confirmed-id-new value="${escapeHtml(state.newWorkCode || "")}">
+        </label>
+        <button class="secondary-action" type="button" data-confirmed-id-preview ${loading || !selectedWork ? "disabled" : ""}>
+          ${loading ? "Validando..." : "Validar ID"}
+        </button>
+      </div>
+      ${state.error ? `<p class="flow-review-warning">${escapeHtml(state.error)}</p>` : ""}
+      ${preview ? confirmedIdPreview(preview, loading) : ""}
+    </section>
+  `;
+}
+
+function confirmedIdCandidates(candidates, selectedWork) {
+  if (!candidates.length) {
+    return '<p class="empty">Nenhuma obra com ID confirmado encontrada para esse filtro.</p>';
+  }
+  return candidates.map(item => {
+    const selected = selectedWork && Number(selectedWork.id) === Number(item.id);
+    return `
+      <button class="confirmed-id-candidate ${selected ? "selected" : ""}" type="button"
+        data-confirmed-id-select-work="${escapeHtml(String(item.id))}">
+        <strong>${escapeHtml(item.title || "Obra sem título")}</strong>
+        <span>ID ${escapeHtml(String(item.id))} · MangaUpdates ${escapeHtml(String(item.current_work_code || "--"))}</span>
+        ${item.alternative_title ? `<small>Alias: ${escapeHtml(item.alternative_title)}</small>` : ""}
+      </button>
+    `;
+  }).join("");
+}
+
+function confirmedIdPreview(preview, loading) {
+  const current = preview.current || {};
+  const proposed = preview.proposed || {};
+  const blockers = preview.blockers || [];
+  return `
+    <div class="confirmed-id-preview ${preview.can_apply ? "ready" : "blocked"}">
+      <div class="confirmed-id-preview-grid">
+        <article>
+          <span>Vínculo atual</span>
+          <strong>${escapeHtml(current.title || "Não validado")}</strong>
+          <small>ID ${escapeHtml(preview.work?.current_work_code || current.work_code || "--")}</small>
+        </article>
+        <article>
+          <span>Novo vínculo</span>
+          <strong>${escapeHtml(proposed.title || "Não informado")}</strong>
+          <small>ID ${escapeHtml(proposed.work_code || "--")}</small>
+        </article>
+      </div>
+      ${blockers.length ? blockers.map(blocker => `
+        <p class="flow-review-warning">${escapeHtml(blocker.message || "Correção bloqueada.")}</p>
+      `).join("") : `
+        <p>Ao aplicar, o sistema trocará apenas o ID e limpará metadados derivados do ID antigo. A reconstrução ficará para Atualizar metadados.</p>
+      `}
+      <button class="primary-action" type="button" data-confirmed-id-apply ${preview.can_apply && !loading ? "" : "disabled"}>
+        Aplicar correção
+      </button>
+    </div>
   `;
 }
 

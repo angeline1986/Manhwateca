@@ -25,6 +25,28 @@ class MangaUpdatesConfirmationResult:
         return self.applied
 
 
+@dataclass(frozen=True)
+class ConfirmedIdCorrectionResult:
+    status: str
+    work_id: int | None = None
+    old_series_id: str | None = None
+    new_series_id: str | None = None
+    existing_work_id: int | None = None
+    existing_title: str | None = None
+    invalidated_fields: tuple[str, ...] = ()
+    notion_sync_status: str | None = None
+    expected_current_work_code: str | None = None
+    actual_current_work_code: str | None = None
+    message: str | None = None
+
+    @property
+    def applied(self) -> bool:
+        return self.status == "applied"
+
+    def __bool__(self) -> bool:
+        return self.applied
+
+
 class MangaRepository:
     def __init__(self, connection=None, *, connection_factory=None):
         self.connection = connection
@@ -89,6 +111,22 @@ class MangaRepository:
             FROM vw_mangas
             WHERE id = %s
             LIMIT 1
+            """,
+            (normalized_id,),
+        )
+        return manga_from_row(row) if row else None
+
+    def _find_by_id_for_update(self, work_id) -> MangaRecord | None:
+        try:
+            normalized_id = int(work_id)
+        except (TypeError, ValueError):
+            return None
+        row = self._fetch_one(
+            """
+            SELECT *
+            FROM mangas
+            WHERE id = %s
+            FOR UPDATE
             """,
             (normalized_id,),
         )
@@ -415,6 +453,177 @@ class MangaRepository:
             work_id=_int_or_none(target.id),
             series_id=normalized_series_id,
         )
+
+    def correct_confirmed_mangaupdates_id(
+        self,
+        work_id,
+        new_series_id,
+        *,
+        expected_current_work_code=None,
+        event_message=None,
+        event_payload=None,
+    ) -> ConfirmedIdCorrectionResult:
+        normalized_series_id = _string_or_none(new_series_id)
+        expected_series_id = _string_or_none(expected_current_work_code)
+
+        if not normalized_series_id:
+            return ConfirmedIdCorrectionResult(
+                status="invalid_id",
+                work_id=_int_or_none(work_id),
+                message="Informe um ID MangaUpdates válido.",
+            )
+
+        invalidated_fields = (
+            "mangaupdates_url",
+            "cover_url",
+            "format",
+            "latest_mangaupdates_chapter",
+            "alternative_title",
+        )
+        try:
+            target = self._find_by_id_for_update(work_id)
+            if target is None:
+                self._rollback_quietly()
+                return ConfirmedIdCorrectionResult(
+                    status="target_missing",
+                    work_id=_int_or_none(work_id),
+                    new_series_id=normalized_series_id,
+                    expected_current_work_code=expected_series_id,
+                    message="Obra local não encontrada para corrigir ID MangaUpdates.",
+                )
+
+            old_series_id = _string_or_none(target.work_code)
+            if not old_series_id:
+                self._rollback_quietly()
+                return ConfirmedIdCorrectionResult(
+                    status="missing_current_id",
+                    work_id=_int_or_none(target.id),
+                    new_series_id=normalized_series_id,
+                    expected_current_work_code=expected_series_id,
+                    actual_current_work_code=old_series_id,
+                    message="A obra ainda não possui ID MangaUpdates confirmado.",
+                )
+            if expected_series_id and old_series_id != expected_series_id:
+                self._rollback_quietly()
+                return ConfirmedIdCorrectionResult(
+                    status="stale_preview",
+                    work_id=_int_or_none(target.id),
+                    old_series_id=old_series_id,
+                    new_series_id=normalized_series_id,
+                    expected_current_work_code=expected_series_id,
+                    actual_current_work_code=old_series_id,
+                    message=(
+                        "O ID confirmado desta obra foi alterado após o preview. "
+                        "Faça uma nova validação antes de aplicar."
+                    ),
+                )
+            if old_series_id == normalized_series_id:
+                self._rollback_quietly()
+                return ConfirmedIdCorrectionResult(
+                    status="already_applied",
+                    work_id=_int_or_none(target.id),
+                    old_series_id=old_series_id,
+                    new_series_id=normalized_series_id,
+                    expected_current_work_code=expected_series_id,
+                    actual_current_work_code=old_series_id,
+                    message="A obra já está vinculada a este ID MangaUpdates.",
+                )
+
+            existing = self.find_by_work_code(normalized_series_id)
+            if existing is not None and _int_or_none(existing.id) != _int_or_none(target.id):
+                self._rollback_quietly()
+                return ConfirmedIdCorrectionResult(
+                    status="external_id_already_assigned",
+                    work_id=_int_or_none(target.id),
+                    old_series_id=old_series_id,
+                    new_series_id=normalized_series_id,
+                    existing_work_id=_int_or_none(existing.id),
+                    existing_title=existing.title,
+                    expected_current_work_code=expected_series_id,
+                    actual_current_work_code=old_series_id,
+                    message="ID MangaUpdates já associado a outra obra.",
+                )
+
+            self._execute(
+                """
+                UPDATE mangas
+                SET
+                    work_code = %s,
+                    mangaupdates_url = NULL,
+                    cover_url = NULL,
+                    format = NULL,
+                    latest_mangaupdates_chapter = NULL,
+                    alternative_title = NULL,
+                    notion_sync_status = %s
+                WHERE id = %s
+                """,
+                (
+                    normalized_series_id,
+                    statuses.PENDING,
+                    target.id,
+                ),
+            )
+            self._execute(
+                """
+                DELETE FROM manga_themes
+                WHERE manga_id = %s
+                """,
+                (target.id,),
+            )
+            self._execute(
+                """
+                INSERT INTO sync_events (
+                    manga_id,
+                    notion_page_id,
+                    event_type,
+                    sync_status,
+                    message,
+                    payload
+                )
+                VALUES (%s, %s, %s, %s, %s, %s::jsonb)
+                """,
+                (
+                    target.id,
+                    _string_or_none(getattr(target, "notion_page_id", None)),
+                    "mangaupdates_confirmed_id_corrected",
+                    statuses.PENDING,
+                    event_message or "ID MangaUpdates confirmado corrigido.",
+                    json.dumps({
+                        "code": "mangaupdates_confirmed_id_corrected",
+                        "old_work_code": old_series_id,
+                        "new_work_code": normalized_series_id,
+                        "invalidated_fields": list(invalidated_fields),
+                        **(event_payload or {}),
+                    }, ensure_ascii=False),
+                ),
+            )
+            self._connection().commit()
+        except Exception as exc:
+            self._rollback_quietly()
+            return ConfirmedIdCorrectionResult(
+                status="persistence_error",
+                work_id=_int_or_none(work_id),
+                new_series_id=normalized_series_id,
+                expected_current_work_code=expected_series_id,
+                message=str(exc),
+            )
+
+        return ConfirmedIdCorrectionResult(
+            status="applied",
+            work_id=_int_or_none(target.id),
+            old_series_id=old_series_id,
+            new_series_id=normalized_series_id,
+            invalidated_fields=invalidated_fields,
+            notion_sync_status=statuses.PENDING,
+            expected_current_work_code=expected_series_id,
+            actual_current_work_code=old_series_id,
+        )
+
+    def _rollback_quietly(self):
+        try:
+            self._connection().rollback()
+        except Exception:
+            pass
 
 
     def update_notion_sync_fields(

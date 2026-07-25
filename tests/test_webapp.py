@@ -16,6 +16,20 @@ class FakeRepository:
         return [object(), object(), object()]
 
 
+class FakeConfirmedIdRepository:
+    def list_mangas(self):
+        return [
+            type("Work", (), {
+                "id": 254,
+                "title": "Mad for love",
+                "work_code": "56302347523",
+                "mangaupdates_url": None,
+                "alternative_title": None,
+                "notion_sync_status": None,
+            })()
+        ]
+
+
 class WebAppTests(unittest.TestCase):
     def test_status_counts_catalog_without_exposing_secrets(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -81,3 +95,30 @@ class WebAppTests(unittest.TestCase):
         ):
             self.assertIn(f'id="page-{page}"', home)
             self.assertIn(f'data-page="{page}"', home)
+
+    def test_confirmed_id_candidates_route_returns_payload_object(self):
+        project_root = Path(__file__).resolve().parents[1]
+        try:
+            server = create_server(project_root, port=0)
+        except PermissionError:
+            self.skipTest("O ambiente de testes não permite abrir sockets locais.")
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        try:
+            with patch(
+                "manhwateca.webapp.mangaupdates_confirmed_id.MangaRepository",
+                return_value=FakeConfirmedIdRepository(),
+            ):
+                with urllib.request.urlopen(
+                    f"http://{host}:{port}/api/mangaupdates/confirmed-id/candidates?search=mad"
+                ) as response:
+                    payload = json.load(response)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+        self.assertIsInstance(payload, dict)
+        self.assertTrue(payload["success"])
+        self.assertEqual([254], [item["id"] for item in payload["items"]])

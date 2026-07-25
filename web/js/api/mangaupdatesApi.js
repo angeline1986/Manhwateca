@@ -13,8 +13,21 @@ export function getMangaUpdatesWorks(params = {}) {
   return getJson(`/api/mangaupdates/works?${query.toString()}`);
 }
 
+export function getConfirmedMangaUpdatesIdCandidates(params = {}) {
+  const query = new URLSearchParams(params);
+  return getJson(`/api/mangaupdates/confirmed-id/candidates?${query.toString()}`);
+}
+
 export function searchMangaUpdates(payload) {
   return postJson("/api/mangaupdates/search", payload);
+}
+
+export function previewConfirmedMangaUpdatesIdCorrection(payload) {
+  return postJson("/api/mangaupdates/confirmed-id/preview", payload);
+}
+
+export function applyConfirmedMangaUpdatesIdCorrection(payload) {
+  return postJson("/api/mangaupdates/confirmed-id/apply", payload);
 }
 
 export function translateText(payload) {

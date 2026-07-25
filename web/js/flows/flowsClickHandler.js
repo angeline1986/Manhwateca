@@ -77,6 +77,34 @@ export function handleFlowsClick(event, context) {
   }
   if (event.target.closest("[data-flow-cancel]")) return context.cancelWorkflow();
   if (event.target.closest("[data-flow-refresh]")) return context.loadWorkflow();
+  if (event.target.closest("[data-confirmed-id-preview]")) {
+    event.preventDefault();
+    context.previewConfirmedIdCorrection?.();
+    return;
+  }
+  const confirmedIdCandidate = event.target.closest("[data-confirmed-id-select-work]");
+  if (confirmedIdCandidate) {
+    event.preventDefault();
+    context.selectConfirmedIdCorrectionWork?.(Number(confirmedIdCandidate.dataset.confirmedIdSelectWork));
+    return;
+  }
+  if (event.target.closest("[data-confirmed-id-apply]")) {
+    event.preventDefault();
+    context.applyConfirmedIdCorrection?.();
+    return;
+  }
+  const createNotionPage = event.target.closest("[data-notion-create-page]");
+  if (createNotionPage) {
+    event.preventDefault();
+    context.createMissingNotionPage?.(Number(createNotionPage.dataset.notionCreateWorkId));
+    return;
+  }
+  const notionSyncPageButton = event.target.closest("[data-notion-sync-page-action], [data-notion-sync-page-number]");
+  if (notionSyncPageButton) {
+    event.preventDefault();
+    updateNotionSyncPage(context.area, notionSyncPageButton);
+    return;
+  }
   const metadataPageButton = event.target.closest("[data-metadata-page-action], [data-metadata-page-number]");
   if (metadataPageButton) {
     event.preventDefault();
@@ -100,7 +128,20 @@ export function handleFlowsChange(event, area) {
     updateMetadataSummary(area);
   }
   if (event.target.matches("[data-metadata-choice]")) updateMetadataSummary(area);
+  if (event.target.matches("[data-notion-sync-select-all]")) {
+    setNotionSyncChecks(area, event.target.checked);
+    updateNotionSyncSummary(area);
+  }
   if (event.target.matches("[data-notion-sync-choice]")) updateNotionSyncSummary(area);
+  if (event.target.matches("[data-notion-sync-page-size-select]")) {
+    const card = area.querySelector("[data-notion-sync-candidates]");
+    if (card) {
+      card.dataset.notionSyncPage = "1";
+      card.dataset.notionSyncPageSize = event.target.value || "5";
+    }
+    applyNotionSyncPagination(area);
+    updateNotionSyncSummary(area);
+  }
   if (event.target.matches("[data-metadata-page-size-select]")) {
     const card = area.querySelector("[data-metadata-page]");
     if (card) {
@@ -119,6 +160,12 @@ export function handleFlowsInput(event, area, context = {}) {
   if (event.target.matches("[data-notion-sync-search]")) {
     filterNotionSyncCandidates(area, event.target.value || "");
     updateNotionSyncSummary(area);
+  }
+  if (event.target.matches("[data-confirmed-id-search]")) {
+    context.searchConfirmedIdCorrectionWorks?.(event.target.value || "");
+  }
+  if (event.target.matches("[data-confirmed-id-new]")) {
+    context.setConfirmedIdCorrectionNewWorkCode?.(event.target.value || "");
   }
 }
 
@@ -240,12 +287,24 @@ function visibleMetadataChoices(area) {
     .filter(input => !input.closest("[data-metadata-index]")?.hidden);
 }
 
+function setNotionSyncChecks(area, checked) {
+  visibleNotionSyncChoices(area)
+    .forEach(input => { input.checked = checked; });
+}
+
 function updateNotionSyncSummary(area) {
   const choices = [...area.querySelectorAll("[data-notion-sync-choice]:not(:disabled)")];
-  const visibleChoices = choices.filter(input => !input.closest("[data-notion-sync-candidate]")?.hidden);
+  const visibleChoices = visibleNotionSyncChoices(area);
   const selected = choices.filter(input => input.checked).length;
+  const selectAll = area.querySelector("[data-notion-sync-select-all]");
   const selectedText = area.querySelector("[data-notion-sync-selected]");
   const button = area.querySelector("[data-flow-run-stage]");
+  if (selectAll) {
+    const visibleSelected = visibleChoices.filter(input => input.checked).length;
+    selectAll.checked = Boolean(visibleChoices.length && visibleSelected === visibleChoices.length);
+    selectAll.indeterminate = visibleSelected > 0 && visibleSelected < visibleChoices.length;
+    selectAll.disabled = visibleChoices.length === 0;
+  }
   if (selectedText) {
     selectedText.textContent = `${selected} ${selected === 1 ? "selecionada" : "selecionadas"}`;
   }
@@ -263,8 +322,71 @@ function filterNotionSyncCandidates(area, value) {
   const query = String(value || "").trim().toLocaleLowerCase("pt-BR");
   area.querySelectorAll("[data-notion-sync-candidate]").forEach(item => {
     const text = item.dataset.notionSyncSearchText || "";
-    item.hidden = Boolean(query) && !text.includes(query);
+    item.dataset.notionSyncFiltered = Boolean(query) && !text.includes(query) ? "true" : "false";
   });
+  const card = area.querySelector("[data-notion-sync-candidates]");
+  if (card) card.dataset.notionSyncPage = "1";
+  applyNotionSyncPagination(area);
+}
+
+function updateNotionSyncPage(area, button) {
+  const card = area.querySelector("[data-notion-sync-candidates]");
+  if (!card) return;
+  const current = Number(card.dataset.notionSyncPage || 1);
+  const pageSize = Number(card.dataset.notionSyncPageSize || 5);
+  const total = filteredNotionSyncItems(area).length;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const action = button.dataset.notionSyncPageAction;
+  const requested = Number(button.dataset.notionSyncPageNumber);
+  let next = current;
+  if (action === "prev") next -= 1;
+  else if (action === "next") next += 1;
+  else if (Number.isFinite(requested)) next = requested;
+  card.dataset.notionSyncPage = String(Math.min(Math.max(next, 1), pages));
+  applyNotionSyncPagination(area);
+  updateNotionSyncSummary(area);
+}
+
+function applyNotionSyncPagination(area) {
+  const card = area.querySelector("[data-notion-sync-candidates]");
+  if (!card) return;
+  const page = Number(card.dataset.notionSyncPage || 1);
+  const pageSize = Number(card.dataset.notionSyncPageSize || 5);
+  const items = filteredNotionSyncItems(area);
+  const pages = Math.max(1, Math.ceil(items.length / pageSize));
+  const safePage = Math.min(Math.max(page, 1), pages);
+  card.dataset.notionSyncPage = String(safePage);
+  const start = (safePage - 1) * pageSize;
+  const end = start + pageSize;
+  area.querySelectorAll("[data-notion-sync-candidate]").forEach(item => {
+    item.hidden = true;
+  });
+  items.forEach((item, index) => {
+    item.hidden = index < start || index >= end;
+  });
+  renderNotionSyncPager(area, safePage, pages);
+}
+
+function renderNotionSyncPager(area, page, pages) {
+  const pager = area.querySelector("[data-notion-sync-pager]");
+  if (!pager) return;
+  const nextPage = Math.min(page + 1, pages);
+  pager.innerHTML = `
+    <button class="flow-page-link" type="button" data-notion-sync-page-action="prev" ${page <= 1 ? "disabled" : ""} aria-label="Página anterior">‹</button>
+    <button class="flow-page-link active" type="button" data-notion-sync-page-number="${page}">${page}</button>
+    <button class="flow-page-link" type="button" data-notion-sync-page-number="${nextPage}" ${page >= pages ? "hidden" : ""}>${nextPage}</button>
+    <button class="flow-page-link" type="button" data-notion-sync-page-action="next" ${page >= pages ? "disabled" : ""} aria-label="Próxima página">›</button>
+  `;
+}
+
+function filteredNotionSyncItems(area) {
+  return [...area.querySelectorAll("[data-notion-sync-candidate]")]
+    .filter(item => item.dataset.notionSyncFiltered !== "true");
+}
+
+function visibleNotionSyncChoices(area) {
+  return [...area.querySelectorAll("[data-notion-sync-choice]:not(:disabled)")]
+    .filter(input => !input.closest("[data-notion-sync-candidate]")?.hidden);
 }
 
 function estimateMetadataTime(selected) {
