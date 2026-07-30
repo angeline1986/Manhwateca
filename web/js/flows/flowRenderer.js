@@ -93,7 +93,9 @@ function renderCurrentPanel(elements, context) {
   const content = elements.flowsCurrentTitle?.closest(".flows-journey-content");
   content?.classList.toggle("flows-apply-mode", context.activeSubtab === "decisoes");
   content?.classList.toggle("flows-metadata-mode", selectedStage.id === "update_metadata");
+  content?.classList.toggle("flows-review-mode", context.activeSubtab === "pendencias");
   content?.closest(".flows-journey-panel")?.classList.toggle("flows-journey-panel--metadata", selectedStage.id === "update_metadata");
+  content?.closest(".flows-journey-panel")?.classList.toggle("flows-journey-panel--review", context.activeSubtab === "pendencias");
   if (elements.flowsCurrentTitle) {
     elements.flowsCurrentTitle.textContent = journeyTitle(context.activeSubtab, selectedStage);
   }
@@ -104,6 +106,7 @@ function renderCurrentPanel(elements, context) {
   renderTopAction(elements, selectedStage, selectedStatus, visibleRunning);
   if (!elements.flowsCurrentCards) return;
   elements.flowsCurrentCards.classList.toggle("flow-detail-card--metadata", selectedStage.id === "update_metadata");
+  elements.flowsCurrentCards.classList.toggle("flow-detail-card--review", context.activeSubtab === "pendencias");
   if (selectedStage.id === "resolve_ids") {
     elements.flowsCurrentCards.innerHTML = renderResolveIdsPanel(context);
     return;

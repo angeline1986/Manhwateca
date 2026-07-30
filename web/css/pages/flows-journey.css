@@ -5,6 +5,19 @@
   min-width: 0;
   padding: 10px 0 0;
 }
+.flows-journey-content.flows-review-mode > .eyebrow,
+.flows-journey-content.flows-review-mode > h2 {
+  display: none;
+}
+.flows-journey-panel--review {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+#page-flows .flows-journey-panel--review {
+  padding: 0;
+}
 .flows-journey-content .lead {
   margin: 0 0 20px;
   color: var(--muted);
@@ -152,6 +165,38 @@
   background: #fff;
   padding: 16px;
 }
+.flow-detail-card--review {
+  display: grid;
+  gap: 18px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+.flow-review-main-card {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: #fff;
+  padding: 28px;
+}
+.flow-review-main-header {
+  margin-bottom: 24px;
+}
+.flow-review-main-header h2,
+.flow-review-main-header p {
+  margin: 0;
+}
+.flow-review-main-header h2 {
+  margin-top: 6px;
+  font-size: 30px;
+  line-height: 1.1;
+}
+.flow-review-main-header p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 700;
+}
 .flow-choice {
   margin-bottom: 12px;
 }
@@ -205,7 +250,6 @@
 .confirmed-id-correction {
   display: grid;
   gap: 14px;
-  margin-top: 18px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: #fff;
@@ -260,10 +304,19 @@
   text-align: left;
   color: var(--text);
   cursor: pointer;
+  transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+.confirmed-id-candidate:hover {
+  border-color: var(--rose-border);
+  background: var(--soft-2);
 }
 .confirmed-id-candidate.selected {
   border-color: var(--accent);
   background: var(--soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.confirmed-id-candidate strong {
+  color: var(--text);
 }
 .confirmed-id-candidate span,
 .confirmed-id-candidate small,

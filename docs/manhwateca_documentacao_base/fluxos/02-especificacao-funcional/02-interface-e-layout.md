@@ -332,6 +332,84 @@ O usuário deve reconhecer imediatamente qualquer etapa como parte do mesmo Work
 
 ---
 
+# Padrão de Blocos Independentes
+
+Telas novas ou novas seções dentro da página **Fluxos** devem seguir o padrão de blocos independentes.
+
+## Regra principal
+
+Quando uma etapa possuir uma área operacional principal e uma área auxiliar, elas devem ser renderizadas como blocos irmãos, cada um com sua própria borda externa.
+
+Exemplo:
+
+```html
+<section class="etapa-main-card">
+  Conteúdo principal da etapa.
+</section>
+
+<section class="etapa-info-card">
+  Conteúdo auxiliar, informativo ou de manutenção.
+</section>
+```
+
+Não deve existir um card pai com borda envolvendo os dois blocos.
+
+## Cabeçalho da etapa
+
+O título, a descrição e os indicadores principais da etapa devem ficar dentro do bloco principal.
+
+O conteúdo específico selecionado pela usuária não deve dominar o topo da página nem substituir visualmente o título da etapa.
+
+Exemplo correto:
+
+```text
+[Card principal]
+  Jornada operacional
+  Revisar pendências
+  Descrição curta da etapa
+
+  Conteúdo operacional
+
+[Card auxiliar]
+  Corrigir ID confirmado
+```
+
+## Áreas auxiliares
+
+Áreas de informação, exceção, manutenção ou diagnóstico devem aparecer abaixo do bloco principal como card independente.
+
+Exemplos:
+
+* `Informações da sincronização`;
+* `Corrigir ID confirmado`;
+* detalhes recolhíveis;
+* painéis de exceção.
+
+Essas áreas não devem ficar visualmente dentro do card operacional principal, salvo quando forem parte direta da ação principal da etapa.
+
+## Bordas e espaçamentos
+
+Deve existir:
+
+* uma borda externa no bloco principal;
+* uma borda externa no bloco auxiliar;
+* espaçamento claro entre blocos.
+
+Não deve existir:
+
+* borda externa envolvendo múltiplos blocos independentes;
+* card com borda dentro de outro card com borda sem necessidade funcional;
+* título da etapa fora do card principal quando a etapa já usa esse padrão.
+
+## Referências atuais
+
+As etapas abaixo devem ser usadas como referência de composição:
+
+* `Atualizar metadados`: bloco principal + bloco informativo;
+* `Revisar pendências`: bloco principal + bloco de manutenção `Corrigir ID confirmado`.
+
+---
+
 # Relação com outros documentos
 
 | Documento                        | Conteúdo relacionado               |

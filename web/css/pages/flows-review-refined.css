@@ -1,9 +1,7 @@
 .flow-review-workbench {
   grid-template-columns: 250px minmax(0, 720px);
   gap: 28px;
-}
-.flow-decision-panel {
-  margin-top: -65px;
+  justify-content: start;
 }
 .flow-queue-heading {
   margin-bottom: 12px;

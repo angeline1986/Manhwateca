@@ -4,7 +4,10 @@ export function pendingTab(review, selectedDecisions = {}, activeKey = "", optio
   const items = review?.items || [];
   const correction = options.idCorrection || {};
   if (!items.length) return `
-    <p class="empty">Não há correspondências pendentes.</p>
+    <section class="flow-review-main-card">
+      ${reviewMainHeader()}
+      <p class="empty">Não há correspondências pendentes.</p>
+    </section>
     ${confirmedIdCorrectionPanel(correction)}
   `;
   const savedKeys = new Set(options.savedKeys || []);
@@ -15,7 +18,10 @@ export function pendingTab(review, selectedDecisions = {}, activeKey = "", optio
   const pendingItems = filteredItems.filter(item => !savedKeys.has(itemKey(item)));
   if (!pendingItems.length && !showResolved && !searchQuery.trim()) {
     return `
-      ${reviewCompleted(savedKeys.size)}
+      <section class="flow-review-main-card">
+        ${reviewMainHeader()}
+        ${reviewCompleted(savedKeys.size)}
+      </section>
       ${confirmedIdCorrectionPanel(correction)}
     `;
   }
@@ -23,24 +29,37 @@ export function pendingTab(review, selectedDecisions = {}, activeKey = "", optio
   const selectedItem = visibleItems.find(item => itemKey(item) === activeKey) || visibleItems[0];
   const activeItemKey = selectedItem ? itemKey(selectedItem) : "";
   return `
-    <div class="flow-review-workbench">
-      <aside class="flow-review-queue" aria-label="Obras pendentes">
-        <div class="flow-queue-heading">
-          <strong>Fila de revisão</strong>
-          <span>${pendingItems.length} itens aguardando revisão</span>
-        </div>
-        <label class="flow-queue-search">
-          <span>Filtrar por nome</span>
-          <input type="search" placeholder="Filtrar por nome..." data-flow-review-search value="${escapeHtml(searchQuery)}">
-        </label>
-        <p>${reviewSummary(items, savedKeys)}</p>
-        ${visibleItems.length
-          ? visibleItems.map(item => queueItem(item, selectedDecisions, itemKey(item) === activeItemKey)).join("")
-          : '<p class="empty">Nenhuma pendência encontrada para esse filtro.</p>'}
-      </aside>
-      ${decisionPanel(selectedItem, selectedDecisions)}
-    </div>
+    <section class="flow-review-main-card">
+      ${reviewMainHeader()}
+      <div class="flow-review-workbench">
+        <aside class="flow-review-queue" aria-label="Obras pendentes">
+          <div class="flow-queue-heading">
+            <strong>Fila de revisão</strong>
+            <span>${pendingItems.length} itens aguardando revisão</span>
+          </div>
+          <label class="flow-queue-search">
+            <span>Filtrar por nome</span>
+            <input type="search" placeholder="Filtrar por nome..." data-flow-review-search value="${escapeHtml(searchQuery)}">
+          </label>
+          <p>${reviewSummary(items, savedKeys)}</p>
+          ${visibleItems.length
+            ? visibleItems.map(item => queueItem(item, selectedDecisions, itemKey(item) === activeItemKey)).join("")
+            : '<p class="empty">Nenhuma pendência encontrada para esse filtro.</p>'}
+        </aside>
+        ${decisionPanel(selectedItem, selectedDecisions)}
+      </div>
+    </section>
     ${confirmedIdCorrectionPanel(correction)}
+  `;
+}
+
+function reviewMainHeader() {
+  return `
+    <header class="flow-review-main-header">
+      <span class="eyebrow">Jornada operacional</span>
+      <h2>Revisar pendências</h2>
+      <p>Revise correspondências encontradas, resolva conflitos e prepare decisões para gravação.</p>
+    </header>
   `;
 }
 
