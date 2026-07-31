@@ -211,8 +211,8 @@ export function initFlowsPage(elements, options = {}) {
           ? metadataRunningMessage(metadataSelectionCount)
           : `${stage.title} em execução. Aguarde...`, "info");
         await refreshAfterStage(stage.id);
-        if (stage.id === "sync_notion" && notionStageSynced()) {
-          recentlySyncedNotionWorkIds = notionScopeIds;
+        if (stage.id === "sync_notion") {
+          rememberProcessedNotionWorkIds(completedNotionWorkIds(notionScopeIds));
           renderWorkflow(workflowState);
         }
         const finalFeedback = stageFinalFeedback(stage.id, metadataSelectionCount);
@@ -470,6 +470,9 @@ export function initFlowsPage(elements, options = {}) {
         tone: "success",
       };
     }
+    if (stageId === "sync_notion") {
+      return notionFinalFeedback();
+    }
     const result = workflowState?.run?.results?.[stageId] || {};
     if (result.status === "failed") {
       return {
@@ -485,6 +488,37 @@ export function initFlowsPage(elements, options = {}) {
     }
     return {
       message: `${selectedFlowStage(workflowState?.run)?.title || "Etapa"} finalizada.`,
+      tone: "success",
+    };
+  }
+
+  function notionFinalFeedback() {
+    const result = workflowState?.run?.results?.sync_notion || {};
+    const metrics = result.metrics || {};
+    if (result.status === "failed" || metrics.status === "error") {
+      return {
+        message: errorMessage(result),
+        tone: "error",
+      };
+    }
+    if (result.status === "completed_with_warnings" || metrics.status === "blocked") {
+      return {
+        message: stageWarningMessage(result),
+        tone: "warning",
+      };
+    }
+    const applied = Number(metrics.applied_count || metrics.updated_count || 0);
+    const remoteMatches = Number(metrics.remote_matches_local_count || metrics.unchanged_count || 0);
+    const failed = Number(metrics.failed_count || 0);
+    const checked = Number(metrics.checked_count || applied + remoteMatches + failed);
+    if (checked > 0) {
+      return {
+        message: `Verificação concluída: ${checked} obra(s), ${applied} alteração(ões), ${remoteMatches} equivalente(s) ao Notion, ${failed} falha(s).`,
+        tone: failed ? "warning" : "success",
+      };
+    }
+    return {
+      message: "Sincronização Notion concluída.",
       tone: "success",
     };
   }
@@ -532,14 +566,31 @@ export function initFlowsPage(elements, options = {}) {
     return payload.work_ids || [];
   }
 
+  function rememberProcessedNotionWorkIds(workIds) {
+    const current = new Set(recentlySyncedNotionWorkIds.map(Number));
+    workIds
+      .map(Number)
+      .filter(workId => Number.isFinite(workId) && workId > 0)
+      .forEach(workId => current.add(workId));
+    recentlySyncedNotionWorkIds = [...current];
+  }
+
+  function completedNotionWorkIds(fallbackWorkIds = []) {
+    const metrics = workflowState?.run?.results?.sync_notion?.metrics || {};
+    const successfulStatuses = new Set(["synced", "remote_matches_local"]);
+    const results = Array.isArray(metrics.results) ? metrics.results : [];
+    const explicit = results
+      .filter(item => successfulStatuses.has(String(item.status || "")))
+      .map(item => item.work_id || item.workId)
+      .filter(workId => Number.isFinite(Number(workId)) && Number(workId) > 0);
+    if (explicit.length) return explicit;
+    return metrics.status === "synced" ? fallbackWorkIds : [];
+  }
+
   function remainingJourneyNotionWorkIds() {
     const hidden = new Set(recentlySyncedNotionWorkIds.map(Number));
     return (workflowState?.run?.results?.update_metadata?.metrics?.processed_work_ids || [])
       .filter(workId => !hidden.has(Number(workId)));
-  }
-
-  function notionStageSynced() {
-    return workflowState?.run?.results?.sync_notion?.metrics?.status === "synced";
   }
 
   async function cancelWorkflow() {

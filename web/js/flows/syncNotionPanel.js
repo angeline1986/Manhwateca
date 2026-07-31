@@ -21,8 +21,9 @@ const BLOCKER_LABELS = {
 export function renderSyncNotionPanel(input = {}) {
   const context = normalizeContext(input);
   const state = officialState(context);
+  const showCandidatePicker = state.showCandidatePicker !== false;
   const actionDisabled = state.actionDisabled || (
-    !context.running && context.journeyWorkIds.length === 0
+    showCandidatePicker && !context.running && context.journeyWorkIds.length === 0
   );
   return `
     <section class="sync-notion-panel sync-notion-panel--${escapeHtml(state.tone)}">
@@ -53,6 +54,7 @@ function normalizeContext(input) {
       legacyMetadata: input.legacyMetadata || {},
       candidates: input.legacyMetadata?.candidates || { items: [], summary: {} },
       journeyWorkIds: Array.isArray(input.journeyWorkIds) ? input.journeyWorkIds : [],
+      hiddenWorkIds: Array.isArray(input.hiddenWorkIds) ? input.hiddenWorkIds : [],
       running: input.stageStatus === "running",
     };
   }
@@ -62,6 +64,7 @@ function normalizeContext(input) {
     legacyMetadata: input || {},
     candidates: input?.candidates || { items: [], summary: {} },
     journeyWorkIds: [],
+    hiddenWorkIds: [],
     running: false,
   };
 }
@@ -171,13 +174,17 @@ function officialState(context) {
   }
 
   if (metrics.status === "synced") {
+    const checkedCount = Number(
+      metrics.checked_count
+      || Number(metrics.applied_count || 0) + Number(metrics.remote_matches_local_count || metrics.unchanged_count || 0)
+    );
     return {
       title: "Sincronização oficial concluída.",
       lead: Number(metrics.applied_count || 0) > 0
         ? "As alterações técnicas foram aplicadas pelo fluxo oficial."
-        : "Nenhuma alteração técnica era necessária no Notion.",
+        : `Verificação concluída: ${checkedCount || 0} obra(s) equivalentes ao Notion.`,
       tone: "ok",
-      note: "Origem: Fluxo oficial.",
+      note: "As obras verificadas foram removidas desta fila da sessão. Selecione um novo lote para continuar.",
       metrics: syncedMetrics(metrics),
       blockers: blockers(metrics),
       nextAction: nextActionLabel(metrics.next_action || "none"),
@@ -217,8 +224,8 @@ function header(state) {
 
 function candidatePicker(context) {
   const candidates = context.candidates || { items: [], summary: {} };
-  const items = Array.isArray(candidates.items) ? candidates.items : [];
-  const summary = candidates.summary || {};
+  const items = visibleCandidateItems(candidates.items, context.hiddenWorkIds);
+  const summary = summaryFromItems(items);
   const journeyCount = context.journeyWorkIds.length;
   return `
     <section class="sync-notion-candidates" data-notion-sync-candidates>
@@ -250,6 +257,12 @@ function candidatePicker(context) {
   `;
 }
 
+function visibleCandidateItems(items, hiddenWorkIds) {
+  const hidden = new Set((hiddenWorkIds || []).map(Number));
+  return (Array.isArray(items) ? items : [])
+    .filter(item => !hidden.has(Number(item.workId)));
+}
+
 function candidateSummary(summary) {
   return [
     `Total: ${summary.total || 0}`,
@@ -260,7 +273,24 @@ function candidateSummary(summary) {
   ].map(item => `<span>${escapeHtml(item)}</span>`).join("");
 }
 
-function candidateItem(item) {
+function summaryFromItems(items) {
+  const result = {
+    total: items.length,
+    neverSynced: 0,
+    synced: 0,
+    pending: 0,
+    error: 0,
+    conflict: 0,
+  };
+  for (const item of items) {
+    const status = item.notionSyncStatus;
+    if (!status && !item.notionLastSyncedAt) result.neverSynced += 1;
+    else if (Object.prototype.hasOwnProperty.call(result, status)) result[status] += 1;
+  }
+  return result;
+}
+
+function candidateItem(item, index) {
   const workId = item.workId || "";
   const title = item.title || "Obra sem título";
   const status = item.displayStatus || "Estado local não informado";
@@ -298,9 +328,12 @@ function metricsGrid(items) {
 }
 
 function syncedMetrics(metrics) {
+  const applied = Number(metrics.applied_count || metrics.updated_count || 0);
+  const remoteMatches = Number(metrics.remote_matches_local_count || metrics.unchanged_count || 0);
   return [
-    { label: "Atualizações", value: metrics.applied_count || metrics.updated_count || 0 },
-    { label: "Sem alteração", value: metrics.unchanged_count || 0 },
+    { label: "Obras verificadas", value: Number(metrics.checked_count || applied + remoteMatches) },
+    { label: "Alterações aplicadas", value: applied },
+    { label: "Equivalentes ao Notion", value: remoteMatches },
     { label: "Falhas", value: metrics.failed_count || 0 },
   ];
 }

@@ -135,15 +135,51 @@ class OfficialNotionFlowIntegrationTests(unittest.TestCase):
             unchanged=(update_plan(work_id=1), update_plan(work_id=2),),
         )
         applier = FakeApplier()
+        repository = FakeRepository([
+            SimpleNamespace(id=1, title="Obra 1", work_code="1"),
+            SimpleNamespace(id=2, title="Obra 2", work_code="2"),
+        ])
 
-        result = integration(plan=plan, applier=applier).sync_page(work_ids=[1])
+        result = integration(plan=plan, applier=applier, repository=repository).sync_page(
+            work_ids=[1, 2]
+        )
 
         self.assertEqual(0, applier.calls)
         self.assertEqual(0, result.updated)
         self.assertEqual(0, result.failed)
         self.assertEqual("synced", result.metrics["status"])
+        self.assertEqual(0, result.metrics["synced_count"])
         self.assertEqual(2, result.metrics["unchanged_count"])
+        self.assertEqual(2, result.metrics["remote_matches_local_count"])
+        self.assertEqual(2, len(result.metrics["results"]))
+        self.assertEqual("remote_matches_local", result.metrics["results"][0]["status"])
+        self.assertEqual("page-1", repository.updated[0]["page_id"])
+        self.assertEqual("synced", repository.updated[0]["status"])
+        self.assertIsNone(repository.updated[0]["synced_at"])
+        self.assertEqual("notion_remote_match_confirmed", repository.events[0]["event_type"])
         self.assertEqual("Nenhuma alteração técnica necessária no Notion.", result.metrics["message"])
+
+    def test_remote_match_persistence_error_keeps_result_failed(self):
+        plan = OfficialNotionSyncPlan(
+            result=NotionSyncResult(
+                status=SyncStatus.SYNCED,
+                next_action=NextAction.NONE,
+                unchanged_count=1,
+            ),
+            unchanged=(update_plan(work_id=1),),
+        )
+        repository = FakeRepository(
+            [SimpleNamespace(id=1, title="Obra 1", work_code="1")],
+            fail_update=True,
+        )
+
+        result = integration(plan=plan, repository=repository).sync_page(work_ids=[1])
+
+        self.assertEqual("error", result.metrics["status"])
+        self.assertEqual(0, result.metrics["synced_count"])
+        self.assertEqual(1, result.failed)
+        self.assertEqual("local_persistence_error", result.metrics["blockers"][0]["code"])
+        self.assertEqual("failed", result.metrics["results"][0]["status"])
 
     def test_safe_plan_calls_applier_and_maps_success(self):
         plan = OfficialNotionSyncPlan(
@@ -164,8 +200,13 @@ class OfficialNotionFlowIntegrationTests(unittest.TestCase):
                 unchanged_count=1,
             )
         )
+        repository = FakeRepository([
+            SimpleNamespace(id=1, title="Obra 1", work_code="1"),
+        ])
 
-        result = integration(plan=plan, applier=applier).sync_page(work_ids=[1])
+        result = integration(plan=plan, applier=applier, repository=repository).sync_page(
+            work_ids=[1]
+        )
 
         self.assertEqual(1, applier.calls)
         self.assertIs(plan, applier.last_plan)
@@ -173,7 +214,13 @@ class OfficialNotionFlowIntegrationTests(unittest.TestCase):
         self.assertEqual(0, result.failed)
         self.assertEqual("synced", result.metrics["status"])
         self.assertEqual(1, result.metrics["applied_count"])
+        self.assertEqual(1, result.metrics["synced_count"])
         self.assertEqual(1, result.metrics["unchanged_count"])
+        self.assertEqual(1, result.metrics["remote_matches_local_count"])
+        self.assertEqual({"synced", "remote_matches_local"}, {
+            item["status"] for item in result.metrics["results"]
+        })
+        self.assertEqual("page-1", repository.updated[0]["page_id"])
         self.assertEqual("1 obra(s) atualizada(s) no Notion.", result.metrics["message"])
 
     def test_applier_partial_error_is_preserved(self):
@@ -258,21 +305,34 @@ class FakeApplier:
 
 
 class FakeRepository:
-    def __init__(self, records):
+    def __init__(self, records, *, fail_update=False):
         self.records = records
         self.list_by_ids_calls = []
+        self.fail_update = fail_update
+        self.updated = []
+        self.events = []
 
     def list_mangas_by_ids(self, work_ids):
         self.list_by_ids_calls.append(list(work_ids))
         wanted = {int(work_id) for work_id in work_ids}
         return [record for record in self.records if int(record.id) in wanted]
 
+    def update_notion_sync_fields_by_id(self, work_id, **kwargs):
+        if self.fail_update:
+            raise RuntimeError("DB unavailable")
+        self.updated.append({"work_id": work_id, **kwargs})
+        return True
 
-def integration(plan, applier=None):
+    def record_sync_event_by_id(self, work_id, **kwargs):
+        self.events.append({"work_id": work_id, **kwargs})
+        return True
+
+
+def integration(plan, applier=None, repository=None):
     return OfficialNotionFlowIntegration(
         object(),
         "database_id",
-        repository=object(),
+        repository=repository or object(),
         planner=FakePlanner(plan),
         applier=applier or FakeApplier(),
     )

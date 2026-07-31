@@ -11,6 +11,7 @@ from manhwateca.notion_sync.official_applier import (
     OfficialNotionSyncApplier,
 )
 from manhwateca.notion_sync.official_planner import OfficialNotionSyncPlanner
+from manhwateca.notion_sync import statuses
 from manhwateca.notion_sync.sync_plan import NotionBlocker, SyncStatus
 
 
@@ -88,7 +89,10 @@ class OfficialNotionFlowIntegration:
         if plan.result.status == SyncStatus.ERROR:
             return _planning_error_result(plan)
         if not plan.updates:
-            return _no_changes_result(plan)
+            return _no_changes_result(self.repository, plan)
+        remote_match_error = _persist_remote_matches(self.repository, plan)
+        if remote_match_error:
+            return remote_match_error
         apply_result = self.applier.apply(plan)
         return _apply_result(plan, apply_result)
 
@@ -158,14 +162,21 @@ def _planning_error_result(plan):
     )
 
 
-def _no_changes_result(plan):
+def _no_changes_result(repository, plan):
+    remote_match_error = _persist_remote_matches(repository, plan)
+    if remote_match_error:
+        return remote_match_error
     return FlowNotionSyncResult(
         metrics={
             **_result_metrics(plan),
             "status": SyncStatus.SYNCED.value,
             "message": "Nenhuma alteração técnica necessária no Notion.",
             "applied_count": 0,
+            "synced_count": 0,
             "failed_count": 0,
+            "checked_count": len(plan.unchanged),
+            "remote_matches_local_count": len(plan.unchanged),
+            "results": _remote_match_results(plan.unchanged),
         },
     )
 
@@ -176,10 +187,21 @@ def _apply_result(plan, apply_result: NotionApplyResult):
         "status": apply_result.status.value,
         "next_action": apply_result.next_action.value,
         "applied_count": apply_result.applied_count,
+        "synced_count": apply_result.applied_count,
         "unchanged_count": apply_result.unchanged_count,
+        "checked_count": (
+            apply_result.applied_count
+            + apply_result.unchanged_count
+            + apply_result.failed_count
+        ),
+        "remote_matches_local_count": apply_result.unchanged_count,
         "failed_count": apply_result.failed_count,
         "blocker_count": len(apply_result.blockers),
         "blockers": _blockers_to_dicts(apply_result.blockers),
+        "results": (
+            *_applied_results(plan.updates, apply_result.applied_count),
+            *_remote_match_results(plan.unchanged),
+        ),
     }
     if apply_result.status == SyncStatus.SYNCED:
         metrics["message"] = (
@@ -230,6 +252,89 @@ def _blockers_to_dicts(blockers: tuple[NotionBlocker, ...]):
             "next_action": blocker.next_action.value,
         }
         for blocker in blockers
+    )
+
+
+def _persist_remote_matches(repository, plan):
+    try:
+        for item in plan.unchanged:
+            repository.update_notion_sync_fields_by_id(
+                item.work_id,
+                page_id=item.page_id,
+                status=statuses.SYNCED,
+                synced_at=None,
+            )
+            repository.record_sync_event_by_id(
+                item.work_id,
+                event_type="notion_remote_match_confirmed",
+                status=statuses.SYNCED,
+                page_id=item.page_id,
+                message="Página do Notion verificada sem alterações técnicas.",
+                payload={
+                    "code": "remote_matches_local",
+                    "result": "remote_matches_local",
+                    "changed_properties": [],
+                    "source": "Sincronizar Notion",
+                },
+            )
+    except Exception as error:
+        blocker = NotionBlocker(
+            code="local_persistence_error",
+            message=str(error),
+        )
+        return FlowNotionSyncResult(
+            failed=1,
+            metrics={
+                **_result_metrics(plan),
+                "status": SyncStatus.ERROR.value,
+                "message": "Erro ao registrar verificação local do Notion.",
+                "applied_count": 0,
+                "synced_count": 0,
+                "failed_count": 1,
+                "blocker_count": 1,
+                "blockers": _blockers_to_dicts((blocker,)),
+                "results": _remote_match_results(
+                    plan.unchanged,
+                    status="failed",
+                    reason="local_persistence_error",
+                ),
+            },
+        )
+    return None
+
+
+def _remote_match_results(
+    items,
+    *,
+    status="remote_matches_local",
+    reason="no_changed_properties",
+):
+    return tuple(
+        {
+            "work_id": item.work_id,
+            "work_title": item.work_title,
+            "status": status,
+            "reason": reason,
+            "notion_page_found": True,
+            "notion_page_id": item.page_id,
+            "changed_properties": [],
+        }
+        for item in items
+    )
+
+
+def _applied_results(items, applied_count):
+    return tuple(
+        {
+            "work_id": item.work_id,
+            "work_title": item.work_title,
+            "status": "synced" if index < applied_count else "failed",
+            "reason": "notion_updated" if index < applied_count else "not_applied",
+            "notion_page_found": True,
+            "notion_page_id": item.page_id,
+            "changed_properties": sorted(item.properties),
+        }
+        for index, item in enumerate(items)
     )
 
 
