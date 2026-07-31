@@ -360,6 +360,15 @@ O título, a descrição e os indicadores principais da etapa devem ficar dentro
 
 O conteúdo específico selecionado pela usuária não deve dominar o topo da página nem substituir visualmente o título da etapa.
 
+Quando um bloco for expansível, o cabeçalho deve continuar usando a mesma hierarquia visual do bloco principal:
+
+* marcador contextual curto;
+* título da seção;
+* descrição objetiva;
+* ícone de expansão no canto direito.
+
+O estado recolhido deve ocupar pouco espaço, sem perder a identificação da seção.
+
 Exemplo correto:
 
 ```text
@@ -386,6 +395,8 @@ Exemplos:
 * painéis de exceção.
 
 Essas áreas não devem ficar visualmente dentro do card operacional principal, salvo quando forem parte direta da ação principal da etapa.
+
+Quando uma área auxiliar for expansível, ela deve manter o mesmo estilo de card e cabeçalho do bloco principal. A diferença deve estar no conteúdo, não na moldura visual.
 
 ## Bordas e espaçamentos
 

@@ -18,13 +18,13 @@ export function renderUpdateMetadataPanel(metadata = {}) {
   const page = 1;
   const pages = Math.max(1, Math.ceil(works.length / pageSize));
   const totalPendingFields = 0;
+  const description = "Selecione as obras que terão dados oficiais atualizados via MangaUpdates.";
 
   return `
     <section class="metadata-main-card" data-metadata-page="${page}" data-metadata-page-size="${pageSize}">
         <header class="metadata-header">
           <span class="eyebrow">Confirmação</span>
-          <h2>Atualizar metadados</h2>
-          <p>Selecione as obras que terão dados oficiais atualizados via MangaUpdates.</p>
+          <h2>${headingTooltip("Atualizar metadados", description)}</h2>
           <div class="metadata-summary-chips">
             <span><b data-metadata-total>${works.length}</b> ${works.length === 1 ? "obra pronta" : "obras prontas"}</span>
             <span data-metadata-selected>${selectedLabel(selected, "selecionada", "selecionadas")}</span>
@@ -53,7 +53,7 @@ export function renderUpdateMetadataPanel(metadata = {}) {
 
         <footer class="metadata-bottom-row">
           <div class="metadata-actions">
-            <button class="metadata-button-secondary" type="button" data-flow-subtab="decisoes">← Aplicar decisões</button>
+            <button class="metadata-button-secondary" type="button" data-flow-subtab="decisoes">Voltar para decisões</button>
             <button class="metadata-button-primary" type="button" data-flow-run-stage data-metadata-run disabled>
               Selecione obras
             </button>
@@ -88,6 +88,10 @@ export function renderUpdateMetadataPanel(metadata = {}) {
         </details>
     </section>
   `;
+}
+
+function headingTooltip(label, text) {
+  return `<span class="flow-heading-tooltip" tabindex="0" aria-label="${escapeHtml(text)}">${escapeHtml(label)}</span>`;
 }
 
 function readyWorks(metadata) {

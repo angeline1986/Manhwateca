@@ -27,15 +27,26 @@ export function renderSyncNotionPanel(input = {}) {
   );
   return `
     <section class="sync-notion-panel sync-notion-panel--${escapeHtml(state.tone)}">
-      ${header(state)}
-      ${candidatePicker(context)}
+      ${mainHeader()}
+      ${state.showHeader === false ? "" : header(state)}
+      ${showCandidatePicker ? candidatePicker(context) : ""}
       ${state.note ? note(state.note) : ""}
       ${state.metrics.length ? metricsGrid(state.metrics) : ""}
-      ${nextAction(state)}
+      ${state.showNextAction === false ? "" : nextAction(state)}
       ${state.blockers.length ? blockersList(state.blockers) : state.clearMessage ? note(state.clearMessage) : ""}
-      ${actionButton(state.actionLabel, actionDisabled)}
+      ${state.showActionButton === false ? "" : actionButton(state.actionLabel, actionDisabled)}
       ${legacySection(context.legacyMetadata, state.hasOfficialResult)}
     </section>
+  `;
+}
+
+function mainHeader() {
+  const description = "Reflete no Notion as alterações realizadas durante o Workflow.";
+  return `
+    <header class="sync-notion-main-header">
+      <span class="eyebrow">Jornada operacional</span>
+      <h2>${headingTooltip("Sincronizar Notion", description)}</h2>
+    </header>
   `;
 }
 
@@ -53,6 +64,7 @@ function normalizeContext(input) {
       stageStatus: input.stageStatus || input.stageResult?.status || "waiting",
       legacyMetadata: input.legacyMetadata || {},
       candidates: input.legacyMetadata?.candidates || { items: [], summary: {} },
+      candidateStatus: input.candidateStatus || input.legacyMetadata?.candidates?.filter || "default",
       journeyWorkIds: Array.isArray(input.journeyWorkIds) ? input.journeyWorkIds : [],
       hiddenWorkIds: Array.isArray(input.hiddenWorkIds) ? input.hiddenWorkIds : [],
       running: input.stageStatus === "running",
@@ -63,6 +75,7 @@ function normalizeContext(input) {
     stageStatus: "waiting",
     legacyMetadata: input || {},
     candidates: input?.candidates || { items: [], summary: {} },
+    candidateStatus: input?.candidates?.filter || "default",
     journeyWorkIds: [],
     hiddenWorkIds: [],
     running: false,
@@ -86,6 +99,8 @@ function officialState(context) {
       metrics: [],
       blockers: [],
       nextAction: "Etapa em processamento",
+      showNextAction: true,
+      showCandidatePicker: false,
       actionLabel: "Sincronizando...",
       actionDisabled: true,
       clearMessage: "",
@@ -102,6 +117,8 @@ function officialState(context) {
       metrics: [],
       blockers: [],
       nextAction: "Sincronizar quando estiver pronta",
+      showNextAction: true,
+      showCandidatePicker: true,
       actionLabel: "Sincronizar com o Notion",
       actionDisabled: context.journeyWorkIds.length === 0,
       clearMessage: "",
@@ -118,6 +135,8 @@ function officialState(context) {
       metrics: errorMetrics(metrics),
       blockers: blockers(metrics),
       nextAction: "Verificar configuração",
+      showNextAction: true,
+      showCandidatePicker: false,
       actionLabel: "Tentar novamente",
       actionDisabled: false,
       clearMessage: "",
@@ -134,6 +153,8 @@ function officialState(context) {
       metrics: blockedMetrics(result, metrics),
       blockers: blockers(metrics),
       nextAction: nextActionLabel(metrics.next_action),
+      showNextAction: true,
+      showCandidatePicker: false,
       actionLabel: "Tentar novamente",
       actionDisabled: false,
       clearMessage: "",
@@ -150,6 +171,8 @@ function officialState(context) {
       metrics: partialMetrics(metrics),
       blockers: blockers(metrics),
       nextAction: nextActionLabel(metrics.next_action || "retry"),
+      showNextAction: true,
+      showCandidatePicker: false,
       actionLabel: "Tentar novamente",
       actionDisabled: false,
       clearMessage: "",
@@ -166,6 +189,8 @@ function officialState(context) {
       metrics: errorMetrics(metrics),
       blockers: blockers(metrics),
       nextAction: nextActionLabel(metrics.next_action || "retry"),
+      showNextAction: true,
+      showCandidatePicker: isScopeSelectionError(metrics, messages),
       actionLabel: "Tentar novamente",
       actionDisabled: false,
       clearMessage: "",
@@ -188,9 +213,13 @@ function officialState(context) {
       metrics: syncedMetrics(metrics),
       blockers: blockers(metrics),
       nextAction: nextActionLabel(metrics.next_action || "none"),
-      actionLabel: "Sincronizar novamente",
-      actionDisabled: false,
-      clearMessage: blockers(metrics).length ? "" : "Nenhum bloqueio identificado na execução oficial.",
+      showNextAction: nextActionLabel(metrics.next_action || "none") !== NEXT_ACTION_LABELS.none,
+      showHeader: false,
+      showCandidatePicker: true,
+      showActionButton: true,
+      actionLabel: "Selecione obras",
+      actionDisabled: context.journeyWorkIds.length === 0,
+      clearMessage: "",
       hasOfficialResult,
     };
   }
@@ -203,11 +232,20 @@ function officialState(context) {
     metrics: [],
     blockers: [],
     nextAction: "Executar a etapa manualmente",
+    showNextAction: true,
+    showCandidatePicker: true,
     actionLabel: "Sincronizar com o Notion",
     actionDisabled: context.journeyWorkIds.length === 0,
     clearMessage: "",
     hasOfficialResult,
   };
+}
+
+function isScopeSelectionError(metrics, messages) {
+  if (metrics.scope_missing) return true;
+  return (messages || []).some(message =>
+    /selecione ao menos uma obra/i.test(String(message || ""))
+  );
 }
 
 function header(state) {
@@ -224,16 +262,19 @@ function header(state) {
 
 function candidatePicker(context) {
   const candidates = context.candidates || { items: [], summary: {} };
-  const items = visibleCandidateItems(candidates.items, context.hiddenWorkIds);
-  const summary = summaryFromItems(items);
+  const activeFilter = context.candidateStatus || candidates.filter || "default";
+  const hideSessionSynced = activeFilter === "default";
+  const items = hideSessionSynced
+    ? visibleCandidateItems(candidates.items, context.hiddenWorkIds)
+    : (Array.isArray(candidates.items) ? candidates.items : []);
+  const summary = candidates.summary || {};
   const journeyCount = context.journeyWorkIds.length;
+  const pageSize = 5;
+  const page = 1;
+  const pages = Math.max(1, Math.ceil(items.length / pageSize));
   return `
-    <section class="sync-notion-candidates" data-notion-sync-candidates>
+    <section class="sync-notion-candidates" data-notion-sync-candidates data-notion-sync-page="${page}" data-notion-sync-page-size="${pageSize}">
       <div class="sync-notion-candidate-header">
-        <div>
-          <h4>Selecionar obras para sincronização</h4>
-          <p>Escolha obras elegíveis do PostgreSQL. O planner oficial decide se há diferenças no Notion.</p>
-        </div>
         <span data-notion-sync-selected>0 selecionadas</span>
       </div>
       <div class="sync-notion-candidate-tools">
@@ -245,16 +286,66 @@ function candidatePicker(context) {
           ${candidateSummary(summary)}
         </div>
       </div>
-      ${journeyCount ? `
-        <div class="flow-panel-note sync-notion-inherited-scope">
-          ${escapeHtml(`${journeyCount} obra(s) processada(s) nesta jornada podem ser usadas se nenhuma seleção manual for feita.`)}
-        </div>
-      ` : ""}
+      <div class="sync-notion-selection-head">
+        <label class="sync-notion-select-all">
+          <input type="checkbox" data-notion-sync-select-all>
+          Selecionar todas visíveis
+        </label>
+        <label class="sync-notion-page-size">
+          <span>Mostrar</span>
+          <select data-notion-sync-status-filter>
+            ${candidateFilterOptions(activeFilter)}
+          </select>
+        </label>
+        <label class="sync-notion-page-size">
+          <span>Itens por página</span>
+          <select data-notion-sync-page-size-select>
+            ${[5, 10].map(size => `<option value="${size}" ${size === pageSize ? "selected" : ""}>${size}</option>`).join("")}
+          </select>
+        </label>
+      </div>
       <div class="sync-notion-candidate-list">
         ${items.length ? items.map(candidateItem).join("") : emptyCandidates()}
       </div>
+      <div class="sync-notion-candidate-footer">
+        ${journeyCount ? inheritedScope(context, items) : "<span></span>"}
+        ${notionSyncPager(page, pages)}
+      </div>
     </section>
   `;
+}
+
+function headingTooltip(label, text) {
+  return `<span class="flow-heading-tooltip" tabindex="0" aria-label="${escapeHtml(text)}">${escapeHtml(label)}</span>`;
+}
+
+function candidateFilterOptions(activeFilter) {
+  const options = [
+    ["default", "Pendentes"],
+    ["never_synced", "Nunca sincronizadas"],
+    ["error", "Com erro"],
+    ["synced", "Sincronizadas"],
+    ["all", "Todas"],
+  ];
+  return options.map(([value, label]) =>
+    `<option value="${escapeHtml(value)}" ${value === activeFilter ? "selected" : ""}>${escapeHtml(label)}</option>`
+  ).join("");
+}
+
+function filterDescription(activeFilter) {
+  if (activeFilter === "synced") {
+    return "Obras já sincronizadas ficam disponíveis apenas nesta visão explícita.";
+  }
+  if (activeFilter === "all") {
+    return "Mostra todas as obras elegíveis do PostgreSQL para consulta manual.";
+  }
+  if (activeFilter === "never_synced") {
+    return "Mostra obras com ID MangaUpdates que ainda não têm confirmação local de sync Notion.";
+  }
+  if (activeFilter === "error") {
+    return "Mostra obras com erro registrado na última tentativa de sincronização.";
+  }
+  return "Fila operacional: obras ainda não sincronizadas, pendentes ou com erro.";
 }
 
 function visibleCandidateItems(items, hiddenWorkIds) {
@@ -273,23 +364,6 @@ function candidateSummary(summary) {
   ].map(item => `<span>${escapeHtml(item)}</span>`).join("");
 }
 
-function summaryFromItems(items) {
-  const result = {
-    total: items.length,
-    neverSynced: 0,
-    synced: 0,
-    pending: 0,
-    error: 0,
-    conflict: 0,
-  };
-  for (const item of items) {
-    const status = item.notionSyncStatus;
-    if (!status && !item.notionLastSyncedAt) result.neverSynced += 1;
-    else if (Object.prototype.hasOwnProperty.call(result, status)) result[status] += 1;
-  }
-  return result;
-}
-
 function candidateItem(item, index) {
   const workId = item.workId || "";
   const title = item.title || "Obra sem título";
@@ -301,7 +375,7 @@ function candidateItem(item, index) {
     String(workId || ""),
   ].join(" ").toLocaleLowerCase("pt-BR");
   return `
-    <label class="sync-notion-candidate ${selectable ? "" : "is-disabled"}" data-notion-sync-candidate data-notion-sync-search-text="${escapeHtml(search)}">
+    <label class="sync-notion-candidate ${selectable ? "" : "is-disabled"}" data-notion-sync-candidate data-notion-sync-index="${index}" data-notion-sync-search-text="${escapeHtml(search)}" ${index >= 5 ? "hidden" : ""}>
       <input type="checkbox" data-notion-sync-choice data-notion-sync-work-id="${escapeHtml(String(workId))}" ${selectable ? "" : "disabled"}>
       <span>
         <strong>${escapeHtml(title)}</strong>
@@ -309,6 +383,53 @@ function candidateItem(item, index) {
       </span>
     </label>
   `;
+}
+
+function notionSyncPager(page, pages) {
+  const nextPage = Math.min(page + 1, pages);
+  return `
+    <nav class="sync-notion-pager" data-notion-sync-pager aria-label="Paginação de obras para sincronização">
+      <button class="flow-page-link" type="button" data-notion-sync-page-action="prev" ${page <= 1 ? "disabled" : ""} aria-label="Página anterior">‹</button>
+      <button class="flow-page-link active" type="button" data-notion-sync-page-number="${page}">${page}</button>
+      <button class="flow-page-link" type="button" data-notion-sync-page-number="${nextPage}" ${page >= pages ? "hidden" : ""}>${nextPage}</button>
+      <button class="flow-page-link" type="button" data-notion-sync-page-action="next" ${page >= pages ? "disabled" : ""} aria-label="Próxima página">›</button>
+    </nav>
+  `;
+}
+
+function inheritedScope(context, items) {
+  const works = journeyWorks(context.journeyWorkIds, items);
+  const count = works.length;
+  const message = count === 1
+    ? "Se nenhuma obra for selecionada, esta etapa usará a obra da jornada atual."
+    : "Se nenhuma obra for selecionada, esta etapa usará as obras da jornada atual.";
+  return `
+    <details class="sync-notion-inherited-scope">
+      <summary>
+        <span>${escapeHtml(message)}</span>
+        <span class="sync-notion-inherited-arrow" aria-hidden="true">▸</span>
+      </summary>
+      <div class="sync-notion-inherited-list">
+        ${works.map(work => `
+          <span>${escapeHtml(work.title)} · ID ${escapeHtml(String(work.workId))}</span>
+        `).join("")}
+      </div>
+    </details>
+  `;
+}
+
+function journeyWorks(workIds, items) {
+  const byId = new Map(items.map(item => [Number(item.workId), item]));
+  return workIds
+    .map(workId => {
+      const numericId = Number(workId);
+      const item = byId.get(numericId);
+      return {
+        workId: numericId,
+        title: item?.title || "Obra da jornada",
+      };
+    })
+    .filter(work => Number.isFinite(work.workId) && work.workId > 0);
 }
 
 function emptyCandidates() {
@@ -381,9 +502,10 @@ function actionButton(label, disabled = false) {
 }
 
 function legacySection(metadata, hasOfficialResult) {
+  if (hasOfficialResult) return "";
   if (!metadata?.sync && !metadata?.updated_at && !metadata?.summary) return "";
   const summary = metadata.summary || {};
-  const title = hasOfficialResult ? "Última simulação legada" : "Última simulação legada";
+  const title = "Última simulação legada";
   return `
     <aside class="sync-notion-legacy">
       <h4>${escapeHtml(title)}</h4>
@@ -441,10 +563,16 @@ function blockerItem(blocker) {
     blocker.work_id ? `ID ${blocker.work_id}` : "",
     blocker.message && blocker.message !== title ? blocker.message : "",
   ].filter(Boolean).join(" · ");
+  const action = blocker.code === "missing_page" && blocker.work_id
+    ? `<button class="secondary-action" type="button" data-notion-create-page data-notion-create-work-id="${escapeHtml(String(blocker.work_id))}">Criar página no Notion</button>`
+    : "";
   return `
     <article class="sync-notion-blocker">
-      <strong>${escapeHtml(title)}</strong>
-      <span>${escapeHtml(detail)}</span>
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(detail)}</span>
+      </div>
+      ${action}
     </article>
   `;
 }

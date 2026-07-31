@@ -7,12 +7,12 @@ export function decisionsTab(_review, selectedDecisions = {}) {
   const ready = decisions.length - blocked.length;
   const canApply = ready > 0 && !blocked.length;
   const selected = canApply ? ready : 0;
+  const description = "Escolha quais decisões prontas serão gravadas no PostgreSQL.";
   return `
     <article class="flow-apply-panel ${canApply ? "ready" : "blocked"}">
       <div class="flow-apply-header">
         <span class="eyebrow">Confirmação</span>
-        <h2>Aplicar decisões</h2>
-        <p>Escolha quais decisões prontas serão gravadas no PostgreSQL.</p>
+        <h2>${headingTooltip("Aplicar decisões", description)}</h2>
       </div>
       <section class="flow-apply-summary-row">
         <div class="flow-apply-hero" aria-label="Resumo da aplicação">
@@ -45,8 +45,7 @@ export function decisionsTab(_review, selectedDecisions = {}) {
       <p class="flow-apply-helper" data-flow-apply-helper>Você pode desmarcar obras que não deseja aplicar neste lote.</p>
       <footer class="flow-apply-actions">
         <button class="secondary-action btn" type="button" data-flow-subtab="pendencias">
-          ${backIcon()}
-          Revisão
+          Voltar para revisão
         </button>
         <button class="primary-action btn" type="button" data-flow-apply-decisions ${canApply ? "" : "disabled"}>
           ${canApply ? `Aplicar ${ready} ${plural(ready, "decisão", "decisões")}` : "Selecione decisões"}
@@ -57,12 +56,12 @@ export function decisionsTab(_review, selectedDecisions = {}) {
 }
 
 function emptyState() {
+  const description = "Escolha quais decisões prontas serão gravadas no PostgreSQL.";
   return `
     <article class="flow-apply-panel empty">
       <div class="flow-apply-header">
         <span class="eyebrow">Confirmação</span>
-        <h2>Aplicar decisões</h2>
-        <p>Escolha quais decisões prontas serão gravadas no PostgreSQL.</p>
+        <h2>${headingTooltip("Aplicar decisões", description)}</h2>
       </div>
       <div class="flow-apply-hero">
         <strong>Nenhuma decisão pronta</strong>
@@ -70,19 +69,22 @@ function emptyState() {
       </div>
       <footer class="flow-apply-actions">
         <button class="primary-action btn" type="button" data-flow-subtab="pendencias">
-          ${backIcon()}
-          Revisão
+          Voltar para revisão
         </button>
       </footer>
     </article>
   `;
 }
 
+function headingTooltip(label, text) {
+  return `<span class="flow-heading-tooltip" tabindex="0" aria-label="${escapeHtml(text)}">${escapeHtml(label)}</span>`;
+}
+
 function decisionItem(decision) {
   const title = decision.Nome || "Obra sem título";
   const origin = decision.Origem || "Candidato selecionado";
   const id = decision.ID || "--";
-  const ready = Boolean(Number(decision.ID));
+  const ready = isReadyDecision(decision);
   const queueId = decision.queueId || decision.Nome || title;
   return `
     <label class="flow-apply-item ${ready ? "ready" : "blocked"}">
@@ -90,7 +92,7 @@ function decisionItem(decision) {
       <span class="flow-apply-item-icon" aria-hidden="true">${ready ? "✓" : "!"}</span>
       <div class="flow-apply-item-copy">
         <strong>${escapeHtml(title)}</strong>
-        <small>ID ${escapeHtml(String(id))} · ${escapeHtml(originLabel(origin))}</small>
+        <small>${escapeHtml(decisionDescription(decision, id, origin))}</small>
       </div>
       <em>${ready ? "Pronto" : "Bloqueado"}</em>
     </label>
@@ -98,13 +100,23 @@ function decisionItem(decision) {
 }
 
 function validationBlocks(decisions) {
-  return decisions.filter(decision => !Number(decision.ID));
+  return decisions.filter(decision => !isReadyDecision(decision));
+}
+
+function isReadyDecision(decision) {
+  return decision?.Tipo === "sem_correspondencia" || Boolean(Number(decision.ID));
+}
+
+function decisionDescription(decision, id, origin) {
+  if (decision?.Tipo === "sem_correspondencia") return "Sem correspondência · revisão manual";
+  return `ID ${String(id)} · ${originLabel(origin)}`;
 }
 
 function originLabel(origin) {
-  return String(origin).toLowerCase().includes("manual")
-    ? "manual"
-    : "candidato";
+  const normalized = String(origin).toLowerCase();
+  if (normalized.includes("manual")) return "manual";
+  if (normalized.includes("atual")) return "ID atual";
+  return "candidato";
 }
 
 function plural(count, singular, pluralText) {

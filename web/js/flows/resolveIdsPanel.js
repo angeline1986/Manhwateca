@@ -8,6 +8,7 @@ export function renderResolveIdsPanel({
   showResolvedReview,
   review,
   reviewSearchQuery,
+  confirmedIdCorrection,
   run,
   selectedDecisions,
   savedReviewKeys,
@@ -21,6 +22,7 @@ export function renderResolveIdsPanel({
       savedKeys: savedReviewKeys,
       searchQuery: reviewSearchQuery,
       showResolved: showResolvedReview,
+      idCorrection: confirmedIdCorrection,
     }) : ""}
     ${activeSubtab === "decisoes" ? decisionsTab(review, selectedDecisions) : ""}
   `;
@@ -30,7 +32,6 @@ function searchTab(metrics, summary, review, works) {
   const rows = searchRows(metrics, summary, review, works);
   const kpis = works?.kpis || {};
   return `
-    <p class="lead">Localize candidatos no MangaUpdates para obras sem identificação.</p>
     <div class="flow-subgrid">
       ${metricCard("Sem ID", kpis.withoutId ?? unresolvedCount(metrics))}
       ${metricCard("Sugestões", kpis.candidatesFound ?? suggestionCount(metrics, summary))}

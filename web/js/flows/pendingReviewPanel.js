@@ -15,11 +15,12 @@ export function pendingTab(review, selectedDecisions = {}, activeKey = "", optio
     ${confirmedIdCorrectionPanel(correction)}
   `;
   const savedKeys = new Set(options.savedKeys || []);
+  const ignoredKeys = new Set(options.ignoredReviewKeys || []);
   const showResolved = Boolean(options.showResolved);
   const searchQuery = options.searchQuery || "";
   const sortedItems = [...items].sort(compareItemsByTitle);
   const filteredItems = sortedItems.filter(item => matchesSearch(item, searchQuery));
-  const pendingItems = filteredItems.filter(item => !savedKeys.has(itemKey(item)));
+  const pendingItems = filteredItems.filter(item => !savedKeys.has(itemKey(item)) && !ignoredKeys.has(itemKey(item)));
   if (!pendingItems.length && !showResolved && !searchQuery.trim()) {
     return `
       <section class="flow-review-main-card">
@@ -66,11 +67,11 @@ export function pendingTab(review, selectedDecisions = {}, activeKey = "", optio
 }
 
 function reviewMainSummary() {
+  const description = "Revise correspondências encontradas, resolva conflitos e prepare decisões para gravação.";
   return `
     <summary class="flow-section-summary">
       <span class="eyebrow">Jornada operacional</span>
-      <h2>Revisar pendências</h2>
-      <p>Revise correspondências encontradas, resolva conflitos e prepare decisões para gravação.</p>
+      <h2>${headingTooltip("Revisar pendências", description)}</h2>
     </summary>
   `;
 }
@@ -103,6 +104,8 @@ function decisionPanel(item, selectedDecisions) {
   const candidates = rankedCandidates(item.candidates || []);
   const normalizedTitle = item.normalizedTitle || item.searchedTitle || "Não informado";
   const aliases = aliasesText(item);
+  const currentId = currentCandidateId(item, candidates);
+  const currentTitle = currentCandidateTitle(item, candidates, normalizedTitle);
   return `
     <section class="flow-decision-panel">
       <header>
@@ -136,10 +139,21 @@ function decisionPanel(item, selectedDecisions) {
       </div>
       <footer class="flow-decision-actions">
         <div>
-          <button class="secondary-action" type="button">Ignorar</button>
-          <button class="secondary-action" type="button">Sem correspondência</button>
+          <button class="secondary-action" type="button"
+            data-flow-confirm-current-id="${escapeHtml(String(currentId || ""))}"
+            data-flow-work="${escapeHtml(key)}"
+            data-flow-local-title="${escapeHtml(title)}"
+            data-flow-title="${escapeHtml(currentTitle || "")}"
+            ${currentId ? "" : "disabled"}>Confirmar este ID</button>
+          <button class="secondary-action" type="button"
+            data-flow-no-match
+            data-flow-work="${escapeHtml(key)}"
+            data-flow-local-title="${escapeHtml(title)}">Sem correspondência</button>
+          <button class="secondary-action" type="button"
+            data-flow-ignore-review
+            data-flow-work="${escapeHtml(key)}">Ignorar por enquanto</button>
         </div>
-        <span>${selected ? `Selecionado: ID ${escapeHtml(String(selected.ID))}` : "Nenhuma decisão selecionada"}</span>
+        <span>${decisionSummary(selected)}</span>
         <button class="primary-action btn" type="button" data-flow-save-review ${selected ? "" : "disabled"}>
           ${boxIcon()}
           Preparar lote
@@ -149,30 +163,47 @@ function decisionPanel(item, selectedDecisions) {
   `;
 }
 
+function decisionSummary(selected) {
+  if (!selected) return "Nenhuma decisão selecionada";
+  if (selected.Tipo === "sem_correspondencia") return "Decisão: sem correspondência";
+  return `Selecionado: ID ${escapeHtml(String(selected.ID))}`;
+}
+
+function currentCandidateId(item, candidates) {
+  const candidate = candidates[0];
+  return candidate?.id || item?.conflict?.candidateExternalId || item?.selectedCandidateId || item?.manualMangaupdatesId || "";
+}
+
+function currentCandidateTitle(item, candidates, fallback) {
+  const candidate = candidates[0];
+  return candidate?.title || candidate?.titulo || item?.conflict?.candidateTitle || fallback || "";
+}
+
 function confirmedIdCorrectionPanel(state = {}) {
   const preview = state.preview || null;
   const loading = Boolean(state.loading);
   const selectedWork = state.selectedWork || null;
   const candidates = state.candidates || [];
+  const hasSearch = Boolean(String(state.search || "").trim());
   const pageSize = 5;
   const page = Math.max(1, Number(state.page || 1));
   const pages = Math.max(1, Math.ceil(candidates.length / pageSize));
   const safePage = Math.min(page, pages);
   const visibleCandidates = candidates.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const description = "Use quando uma obra já foi vinculada ao ID MangaUpdates errado.";
   return `
     <section class="confirmed-id-correction">
       <details class="flow-section-details" open>
         <summary class="flow-section-summary">
           <span class="eyebrow">Manutenção controlada</span>
-          <h2>Corrigir ID confirmado</h2>
-          <p>Use quando uma obra já foi vinculada ao ID MangaUpdates errado.</p>
+          <h2>${headingTooltip("Corrigir ID confirmado", description)}</h2>
         </summary>
         <div class="flow-section-body">
           <div class="confirmed-id-workbench">
             <aside class="confirmed-id-sidebar" aria-label="Obras confirmadas">
               <div class="flow-queue-heading">
                 <strong>Obras confirmadas</strong>
-                <span>${candidates.length} obras encontradas</span>
+                <span>${hasSearch ? `${candidates.length} obras encontradas` : "Busque para localizar uma obra"}</span>
               </div>
               <label class="flow-queue-search confirmed-id-search">
                 <span>Buscar obra confirmada</span>
@@ -180,9 +211,9 @@ function confirmedIdCorrectionPanel(state = {}) {
               </label>
               ${state.candidatesError ? `<p class="flow-review-warning">${escapeHtml(state.candidatesError)}</p>` : ""}
               <div class="confirmed-id-candidates">
-                ${state.candidatesLoading ? '<p class="empty">Carregando obras...</p>' : confirmedIdCandidates(visibleCandidates, selectedWork)}
+                ${state.candidatesLoading ? '<p class="empty">Carregando obras...</p>' : confirmedIdCandidates(visibleCandidates, selectedWork, hasSearch)}
               </div>
-              ${confirmedIdPager(safePage, pages)}
+              ${hasSearch && candidates.length ? confirmedIdPager(safePage, pages) : ""}
             </aside>
             <main class="confirmed-id-content">
               <div class="section-label">Obra selecionada</div>
@@ -220,6 +251,10 @@ function confirmedIdCorrectionPanel(state = {}) {
   `;
 }
 
+function headingTooltip(label, text) {
+  return `<span class="flow-heading-tooltip" tabindex="0" aria-label="${escapeHtml(text)}">${escapeHtml(label)}</span>`;
+}
+
 function confirmedIdPager(page, pages) {
   const nextPage = Math.min(page + 1, pages);
   return `
@@ -232,9 +267,11 @@ function confirmedIdPager(page, pages) {
   `;
 }
 
-function confirmedIdCandidates(candidates, selectedWork) {
+function confirmedIdCandidates(candidates, selectedWork, hasSearch) {
   if (!candidates.length) {
-    return '<p class="empty">Nenhuma obra com ID confirmado encontrada para esse filtro.</p>';
+    return hasSearch
+      ? '<p class="empty">Nenhuma obra com ID confirmado encontrada para esse filtro.</p>'
+      : '<p class="empty">Busque uma obra já vinculada para validar ou corrigir o ID MangaUpdates.</p>';
   }
   return candidates.map(item => {
     const selected = selectedWork && Number(selectedWork.id) === Number(item.id);

@@ -3,7 +3,7 @@ import {
   FLOW_STATUS_LABELS,
   RESOLVE_ID_STEPS,
 } from "./flowConstants.js";
-import { currentFlowStage, visibleFlowStatuses } from "./flowModel.js";
+import { currentFlowStage, flowStageStatus, visibleFlowStatuses } from "./flowModel.js";
 import { renderResolveIdsPanel } from "./resolveIdsPanel.js";
 import { renderSyncNotionPanel } from "./syncNotionPanel.js";
 import { renderUpdateMetadataPanel } from "./updateMetadataPanel.js";
@@ -40,8 +40,11 @@ export function renderFlowsOverview(elements, data, options = {}) {
     visibleStatuses,
     review: options.review,
     reviewSearchQuery: options.reviewSearchQuery || "",
+    confirmedIdCorrection: options.confirmedIdCorrection || {},
     metadata: options.metadata,
     notionMetadata: options.notionMetadata,
+    notionSyncCandidateStatus: options.notionSyncCandidateStatus || "default",
+    recentlySyncedNotionWorkIds: options.recentlySyncedNotionWorkIds || [],
     works: options.works,
   });
   return { activeStage, activeStatus, visibleRunning };
@@ -89,15 +92,20 @@ function renderCurrentPanel(elements, context) {
   const selectedStage = FLOW_STAGE_GROUPS.find(group =>
     group.id === context.activeSubtab
   ) || activeStage;
-  const selectedStatus = context.visibleStatuses[selectedStage.id] || "waiting";
+  const selectedStatus = flowStageStatus(selectedStage, run);
   const content = elements.flowsCurrentTitle?.closest(".flows-journey-content");
   content?.classList.toggle("flows-apply-mode", context.activeSubtab === "decisoes");
   content?.classList.toggle("flows-metadata-mode", selectedStage.id === "update_metadata");
   content?.classList.toggle("flows-review-mode", context.activeSubtab === "pendencias");
+  content?.classList.toggle("flows-sync-notion-mode", selectedStage.id === "sync_notion");
   content?.closest(".flows-journey-panel")?.classList.toggle("flows-journey-panel--metadata", selectedStage.id === "update_metadata");
   content?.closest(".flows-journey-panel")?.classList.toggle("flows-journey-panel--review", context.activeSubtab === "pendencias");
+  content?.closest(".flows-journey-panel")?.classList.toggle("flows-journey-panel--sync-notion", selectedStage.id === "sync_notion");
   if (elements.flowsCurrentTitle) {
-    elements.flowsCurrentTitle.textContent = journeyTitle(context.activeSubtab, selectedStage);
+    elements.flowsCurrentTitle.innerHTML = titleWithTooltip(
+      journeyTitle(context.activeSubtab, selectedStage),
+      selectedStage.description,
+    );
   }
   if (elements.flowsCurrentDescription) {
     elements.flowsCurrentDescription.textContent = "Jornada operacional";
@@ -107,6 +115,7 @@ function renderCurrentPanel(elements, context) {
   if (!elements.flowsCurrentCards) return;
   elements.flowsCurrentCards.classList.toggle("flow-detail-card--metadata", selectedStage.id === "update_metadata");
   elements.flowsCurrentCards.classList.toggle("flow-detail-card--review", context.activeSubtab === "pendencias");
+  elements.flowsCurrentCards.classList.toggle("flow-detail-card--sync-notion", selectedStage.id === "sync_notion");
   if (selectedStage.id === "resolve_ids") {
     elements.flowsCurrentCards.innerHTML = renderResolveIdsPanel(context);
     return;
@@ -116,15 +125,25 @@ function renderCurrentPanel(elements, context) {
     return;
   }
   if (selectedStage.id === "sync_notion") {
+    const hiddenWorkIds = context.recentlySyncedNotionWorkIds || [];
+    const journeyWorkIds = (run.results?.update_metadata?.metrics?.processed_work_ids || [])
+      .filter(workId => !hiddenWorkIds.map(Number).includes(Number(workId)));
     elements.flowsCurrentCards.innerHTML = renderSyncNotionPanel({
       stageResult: run.results?.sync_notion,
       stageStatus: selectedStatus,
       legacyMetadata: context.notionMetadata,
-      journeyWorkIds: run.results?.update_metadata?.metrics?.processed_work_ids || [],
+      journeyWorkIds,
+      hiddenWorkIds,
+      candidateStatus: context.notionSyncCandidateStatus,
     });
     return;
   }
   elements.flowsCurrentCards.innerHTML = defaultCards(selectedStage, data);
+}
+
+function titleWithTooltip(title, description) {
+  if (!description) return escapeHtml(title);
+  return `<span class="flow-heading-tooltip" tabindex="0" aria-label="${escapeHtml(description)}">${escapeHtml(title)}</span>`;
 }
 
 function journeyTitle(activeSubtab, selectedStage) {
