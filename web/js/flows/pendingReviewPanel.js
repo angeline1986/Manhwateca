@@ -5,8 +5,12 @@ export function pendingTab(review, selectedDecisions = {}, activeKey = "", optio
   const correction = options.idCorrection || {};
   if (!items.length) return `
     <section class="flow-review-main-card">
-      ${reviewMainHeader()}
-      <p class="empty">Não há correspondências pendentes.</p>
+      <details class="flow-section-details" open>
+        ${reviewMainSummary()}
+        <div class="flow-section-body">
+          <p class="empty">Não há correspondências pendentes.</p>
+        </div>
+      </details>
     </section>
     ${confirmedIdCorrectionPanel(correction)}
   `;
@@ -19,8 +23,12 @@ export function pendingTab(review, selectedDecisions = {}, activeKey = "", optio
   if (!pendingItems.length && !showResolved && !searchQuery.trim()) {
     return `
       <section class="flow-review-main-card">
-        ${reviewMainHeader()}
-        ${reviewCompleted(savedKeys.size)}
+        <details class="flow-section-details" open>
+          ${reviewMainSummary()}
+          <div class="flow-section-body">
+            ${reviewCompleted(savedKeys.size)}
+          </div>
+        </details>
       </section>
       ${confirmedIdCorrectionPanel(correction)}
     `;
@@ -30,36 +38,40 @@ export function pendingTab(review, selectedDecisions = {}, activeKey = "", optio
   const activeItemKey = selectedItem ? itemKey(selectedItem) : "";
   return `
     <section class="flow-review-main-card">
-      ${reviewMainHeader()}
-      <div class="flow-review-workbench">
-        <aside class="flow-review-queue" aria-label="Obras pendentes">
-          <div class="flow-queue-heading">
-            <strong>Fila de revisão</strong>
-            <span>${pendingItems.length} itens aguardando revisão</span>
+      <details class="flow-section-details" open>
+        ${reviewMainSummary()}
+        <div class="flow-section-body">
+          <div class="flow-review-workbench">
+            <aside class="flow-review-queue" aria-label="Obras pendentes">
+              <div class="flow-queue-heading">
+                <strong>Fila de revisão</strong>
+                <span>${pendingItems.length} itens aguardando revisão</span>
+              </div>
+              <label class="flow-queue-search">
+                <span>Filtrar por nome</span>
+                <input type="search" placeholder="Filtrar por nome..." data-flow-review-search value="${escapeHtml(searchQuery)}">
+              </label>
+              <p>${reviewSummary(items, savedKeys)}</p>
+              ${visibleItems.length
+                ? visibleItems.map(item => queueItem(item, selectedDecisions, itemKey(item) === activeItemKey)).join("")
+                : '<p class="empty">Nenhuma pendência encontrada para esse filtro.</p>'}
+            </aside>
+            ${decisionPanel(selectedItem, selectedDecisions)}
           </div>
-          <label class="flow-queue-search">
-            <span>Filtrar por nome</span>
-            <input type="search" placeholder="Filtrar por nome..." data-flow-review-search value="${escapeHtml(searchQuery)}">
-          </label>
-          <p>${reviewSummary(items, savedKeys)}</p>
-          ${visibleItems.length
-            ? visibleItems.map(item => queueItem(item, selectedDecisions, itemKey(item) === activeItemKey)).join("")
-            : '<p class="empty">Nenhuma pendência encontrada para esse filtro.</p>'}
-        </aside>
-        ${decisionPanel(selectedItem, selectedDecisions)}
-      </div>
+        </div>
+      </details>
     </section>
     ${confirmedIdCorrectionPanel(correction)}
   `;
 }
 
-function reviewMainHeader() {
+function reviewMainSummary() {
   return `
-    <header class="flow-review-main-header">
+    <summary class="flow-section-summary">
       <span class="eyebrow">Jornada operacional</span>
       <h2>Revisar pendências</h2>
       <p>Revise correspondências encontradas, resolva conflitos e prepare decisões para gravação.</p>
-    </header>
+    </summary>
   `;
 }
 
@@ -142,38 +154,81 @@ function confirmedIdCorrectionPanel(state = {}) {
   const loading = Boolean(state.loading);
   const selectedWork = state.selectedWork || null;
   const candidates = state.candidates || [];
+  const pageSize = 5;
+  const page = Math.max(1, Number(state.page || 1));
+  const pages = Math.max(1, Math.ceil(candidates.length / pageSize));
+  const safePage = Math.min(page, pages);
+  const visibleCandidates = candidates.slice((safePage - 1) * pageSize, safePage * pageSize);
   return `
     <section class="confirmed-id-correction">
-      <header>
-        <span class="eyebrow">Manutenção controlada</span>
-        <h3>Corrigir ID confirmado</h3>
-        <p>Use quando uma obra já foi vinculada ao ID MangaUpdates errado.</p>
-      </header>
-      <label class="confirmed-id-search">
-        <span>Buscar obra confirmada</span>
-        <input type="search" placeholder="Digite título, ID local ou ID MangaUpdates" data-confirmed-id-search value="${escapeHtml(state.search || "")}">
-      </label>
-      <div class="confirmed-id-candidates">
-        ${state.candidatesLoading ? '<p class="empty">Carregando obras...</p>' : confirmedIdCandidates(candidates, selectedWork)}
-      </div>
-      ${state.candidatesError ? `<p class="flow-review-warning">${escapeHtml(state.candidatesError)}</p>` : ""}
-      <div class="confirmed-id-form">
-        <div class="confirmed-id-selected">
-          <span>Obra selecionada</span>
-          <strong>${selectedWork ? escapeHtml(selectedWork.title) : "Nenhuma obra selecionada"}</strong>
-          <small>${selectedWork ? `ID ${escapeHtml(String(selectedWork.id))} · MangaUpdates ${escapeHtml(String(selectedWork.current_work_code || "--"))}` : "Busque e selecione a obra antes de validar."}</small>
+      <details class="flow-section-details" open>
+        <summary class="flow-section-summary">
+          <span class="eyebrow">Manutenção controlada</span>
+          <h2>Corrigir ID confirmado</h2>
+          <p>Use quando uma obra já foi vinculada ao ID MangaUpdates errado.</p>
+        </summary>
+        <div class="flow-section-body">
+          <div class="confirmed-id-workbench">
+            <aside class="confirmed-id-sidebar" aria-label="Obras confirmadas">
+              <div class="flow-queue-heading">
+                <strong>Obras confirmadas</strong>
+                <span>${candidates.length} obras encontradas</span>
+              </div>
+              <label class="flow-queue-search confirmed-id-search">
+                <span>Buscar obra confirmada</span>
+                <input type="search" placeholder="Filtrar por nome..." data-confirmed-id-search value="${escapeHtml(state.search || "")}">
+              </label>
+              ${state.candidatesError ? `<p class="flow-review-warning">${escapeHtml(state.candidatesError)}</p>` : ""}
+              <div class="confirmed-id-candidates">
+                ${state.candidatesLoading ? '<p class="empty">Carregando obras...</p>' : confirmedIdCandidates(visibleCandidates, selectedWork)}
+              </div>
+              ${confirmedIdPager(safePage, pages)}
+            </aside>
+            <main class="confirmed-id-content">
+              <div class="section-label">Obra selecionada</div>
+              <h3>${selectedWork ? escapeHtml(selectedWork.title) : "Nenhuma obra selecionada"}</h3>
+              <div class="confirmed-id-info-grid">
+                <article>
+                  <span>ID local</span>
+                  <strong>${selectedWork ? `ID ${escapeHtml(String(selectedWork.id))}` : "Não selecionado"}</strong>
+                </article>
+                <article>
+                  <span>ID MangaUpdates atual</span>
+                  <strong>${selectedWork ? escapeHtml(String(selectedWork.current_work_code || "--")) : "Não informado"}</strong>
+                </article>
+              </div>
+              <div class="flow-review-warning confirmed-id-warning">
+                <strong>Atenção ao alterar o ID</strong>
+                <p>A correção troca apenas o vínculo e invalida metadados derivados do ID antigo. A reconstrução deve ser feita depois em Atualizar metadados.</p>
+              </div>
+              <div class="confirmed-id-manual-row">
+                <label>
+                  <span>Deseja alterar para um novo ID?</span>
+                  <input type="number" min="1" placeholder="Ex.: 56302347523" data-confirmed-id-new value="${escapeHtml(state.newWorkCode || "")}">
+                </label>
+                <button class="secondary-action" type="button" data-confirmed-id-preview ${loading || !selectedWork ? "disabled" : ""}>
+                  ${loading ? "Validando..." : "Validar ID"}
+                </button>
+              </div>
+              ${state.error ? `<p class="flow-review-warning">${escapeHtml(state.error)}</p>` : ""}
+              ${preview ? confirmedIdPreview(preview, loading) : ""}
+            </main>
+          </div>
         </div>
-        <label>
-          <span>Novo ID MangaUpdates</span>
-          <input type="number" min="1" placeholder="Ex.: 56302347523" data-confirmed-id-new value="${escapeHtml(state.newWorkCode || "")}">
-        </label>
-        <button class="secondary-action" type="button" data-confirmed-id-preview ${loading || !selectedWork ? "disabled" : ""}>
-          ${loading ? "Validando..." : "Validar ID"}
-        </button>
-      </div>
-      ${state.error ? `<p class="flow-review-warning">${escapeHtml(state.error)}</p>` : ""}
-      ${preview ? confirmedIdPreview(preview, loading) : ""}
+      </details>
     </section>
+  `;
+}
+
+function confirmedIdPager(page, pages) {
+  const nextPage = Math.min(page + 1, pages);
+  return `
+    <nav class="confirmed-id-pager" aria-label="Paginação de obras confirmadas">
+      <button class="flow-page-link" type="button" data-confirmed-id-page-action="prev" ${page <= 1 ? "disabled" : ""} aria-label="Página anterior">‹</button>
+      <button class="flow-page-link active" type="button" data-confirmed-id-page-number="${page}">${page}</button>
+      <button class="flow-page-link" type="button" data-confirmed-id-page-number="${nextPage}" ${page >= pages ? "hidden" : ""}>${nextPage}</button>
+      <button class="flow-page-link" type="button" data-confirmed-id-page-action="next" ${page >= pages ? "disabled" : ""} aria-label="Próxima página">›</button>
+    </nav>
   `;
 }
 
@@ -187,8 +242,7 @@ function confirmedIdCandidates(candidates, selectedWork) {
       <button class="confirmed-id-candidate ${selected ? "selected" : ""}" type="button"
         data-confirmed-id-select-work="${escapeHtml(String(item.id))}">
         <strong>${escapeHtml(item.title || "Obra sem título")}</strong>
-        <span>ID ${escapeHtml(String(item.id))} · MangaUpdates ${escapeHtml(String(item.current_work_code || "--"))}</span>
-        ${item.alternative_title ? `<small>Alias: ${escapeHtml(item.alternative_title)}</small>` : ""}
+        <span><i></i>ID vinculado · ${escapeHtml(String(item.id))}</span>
       </button>
     `;
   }).join("");

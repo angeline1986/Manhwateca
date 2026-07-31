@@ -88,6 +88,19 @@ export function handleFlowsClick(event, context) {
     context.selectConfirmedIdCorrectionWork?.(Number(confirmedIdCandidate.dataset.confirmedIdSelectWork));
     return;
   }
+  const confirmedIdPageButton = event.target.closest("[data-confirmed-id-page-action], [data-confirmed-id-page-number]");
+  if (confirmedIdPageButton) {
+    event.preventDefault();
+    const current = Number(context.confirmedIdCorrection?.page || 1);
+    const action = confirmedIdPageButton.dataset.confirmedIdPageAction;
+    const requested = Number(confirmedIdPageButton.dataset.confirmedIdPageNumber);
+    let next = current;
+    if (action === "prev") next -= 1;
+    else if (action === "next") next += 1;
+    else if (Number.isFinite(requested)) next = requested;
+    context.setConfirmedIdCorrectionPage?.(next);
+    return;
+  }
   if (event.target.closest("[data-confirmed-id-apply]")) {
     event.preventDefault();
     context.applyConfirmedIdCorrection?.();

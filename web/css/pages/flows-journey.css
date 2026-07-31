@@ -173,29 +173,144 @@
   box-shadow: none;
   padding: 0;
 }
-.flow-review-main-card {
+.flow-review-main-card,
+.confirmed-id-correction {
   border: 1px solid var(--border);
   border-radius: 18px;
   background: #fff;
   padding: 28px;
 }
-.flow-review-main-header {
-  margin-bottom: 24px;
+.flow-section-details {
+  display: grid;
+  gap: 24px;
 }
-.flow-review-main-header h2,
-.flow-review-main-header p {
+.flow-section-details:not([open]) {
+  gap: 0;
+}
+.flow-section-summary {
+  position: relative;
+  display: block;
+  padding-right: 28px;
+  cursor: pointer;
+  list-style: none;
+}
+.flow-section-summary::-webkit-details-marker {
+  display: none;
+}
+.flow-section-summary::after {
+  content: "▾";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  color: #a94d6b;
+  font-size: 36px;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+.flow-section-details:not([open]) > .flow-section-summary::after {
+  content: "▸";
+}
+.flow-section-summary h2,
+.flow-section-summary p {
   margin: 0;
 }
-.flow-review-main-header h2 {
+.flow-section-summary h2 {
   margin-top: 6px;
   font-size: 30px;
   line-height: 1.1;
 }
-.flow-review-main-header p {
+.flow-section-summary p {
   margin-top: 8px;
   color: var(--muted);
   font-size: 15px;
   font-weight: 700;
+}
+.flow-section-body {
+  min-width: 0;
+}
+.confirmed-id-workbench {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: 0;
+}
+.confirmed-id-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-right: 1px solid var(--border);
+  padding: 0 22px 0 0;
+}
+.confirmed-id-content {
+  min-width: 0;
+  padding: 0 0 0 34px;
+}
+.section-label {
+  color: var(--rose);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.confirmed-id-content h3 {
+  margin: 8px 0 24px;
+  color: var(--text);
+  font-size: 30px;
+  line-height: 1.12;
+}
+.confirmed-id-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.confirmed-id-info-grid article {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 14px 16px;
+}
+.confirmed-id-info-grid span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.confirmed-id-info-grid strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+.confirmed-id-warning {
+  margin: 0 0 24px;
+}
+.confirmed-id-manual-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) max-content;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 24px;
+  border: 1px dashed #cfd8e3;
+  border-radius: 12px;
+  padding: 20px;
+}
+.confirmed-id-manual-row label {
+  display: grid;
+  gap: 10px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 850;
+}
+.confirmed-id-manual-row input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--text);
+  font: inherit;
+  font-weight: 750;
 }
 .flow-choice {
   margin-bottom: 12px;
@@ -247,24 +362,6 @@
   font-size: 13px;
   font-weight: 750;
 }
-.confirmed-id-correction {
-  display: grid;
-  gap: 14px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: #fff;
-  padding: 16px;
-}
-.confirmed-id-correction header h3,
-.confirmed-id-correction header p {
-  margin: 0;
-}
-.confirmed-id-correction header p {
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 700;
-}
 .confirmed-id-form {
   display: grid;
   grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 1fr) auto;
@@ -291,32 +388,39 @@
 }
 .confirmed-id-candidates {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+}
+.confirmed-id-pager {
+  margin-top: 14px;
 }
 .confirmed-id-candidate {
   display: grid;
-  gap: 3px;
+  gap: 5px;
   width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #fff;
-  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  padding: 12px;
   text-align: left;
   color: var(--text);
   cursor: pointer;
   transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
 }
 .confirmed-id-candidate:hover {
-  border-color: var(--rose-border);
+  border-color: #f1dce4;
   background: var(--soft-2);
 }
 .confirmed-id-candidate.selected {
-  border-color: var(--accent);
-  background: var(--soft);
-  box-shadow: inset 3px 0 0 var(--accent);
+  border-color: #f1dce4;
+  background: #fef4f6;
+  box-shadow: none;
 }
 .confirmed-id-candidate strong {
   color: var(--text);
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .confirmed-id-candidate span,
 .confirmed-id-candidate small,
@@ -325,6 +429,17 @@
   color: var(--muted);
   font-size: 12px;
   font-weight: 750;
+}
+.confirmed-id-candidate i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: #c7c1c4;
+}
+.confirmed-id-candidate.selected i {
+  background: #f59e0b;
 }
 .confirmed-id-selected {
   display: grid;
@@ -606,14 +721,16 @@
   color: var(--muted);
   font-weight: 750;
 }
-.sync-notion-pager {
+.sync-notion-pager,
+.confirmed-id-pager {
   display: flex;
   align-self: center;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
 }
-.sync-notion-pager .flow-page-link {
+.sync-notion-pager .flow-page-link,
+.confirmed-id-pager .flow-page-link {
   position: relative;
   min-width: 24px;
   border: 0;
@@ -624,10 +741,13 @@
   font-weight: 850;
 }
 .sync-notion-pager .flow-page-link.active,
-.sync-notion-pager .flow-page-link:hover {
+.sync-notion-pager .flow-page-link:hover,
+.confirmed-id-pager .flow-page-link.active,
+.confirmed-id-pager .flow-page-link:hover {
   color: var(--rose);
 }
-.sync-notion-pager .flow-page-link.active::after {
+.sync-notion-pager .flow-page-link.active::after,
+.confirmed-id-pager .flow-page-link.active::after {
   position: absolute;
   right: 6px;
   bottom: 0;
@@ -637,7 +757,8 @@
   background: var(--rose);
   content: "";
 }
-.sync-notion-pager .flow-page-link:disabled {
+.sync-notion-pager .flow-page-link:disabled,
+.confirmed-id-pager .flow-page-link:disabled {
   opacity: .35;
 }
 .sync-notion-actions {

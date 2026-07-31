@@ -2,6 +2,11 @@
   grid-template-columns: 250px minmax(0, 720px);
   gap: 28px;
   justify-content: start;
+  min-height: 0;
+}
+.flow-decision-panel {
+  min-height: 0;
+  padding-bottom: 0;
 }
 .flow-queue-heading {
   margin-bottom: 12px;

@@ -45,6 +45,7 @@ export function initFlowsPage(elements, options = {}) {
     newWorkCode: "",
     preview: null,
     error: "",
+    page: 1,
   };
   let confirmedIdSearchSequence = 0;
   let reviewState = { summary: {}, items: [] };
@@ -106,7 +107,7 @@ export function initFlowsPage(elements, options = {}) {
   async function refreshConfirmedIdCandidatesState(search = confirmedIdCorrection.search || "") {
     const { response, payload } = await getConfirmedMangaUpdatesIdCandidates({
       search,
-      limit: 8,
+      limit: 25,
     });
     confirmedIdCorrection = {
       ...confirmedIdCorrection,
@@ -114,6 +115,7 @@ export function initFlowsPage(elements, options = {}) {
       candidates: response.ok ? (payload.items || []) : [],
       candidatesError: response.ok ? "" : errorMessage(payload),
       candidatesLoading: false,
+      page: 1,
     };
   }
 
@@ -392,12 +394,13 @@ export function initFlowsPage(elements, options = {}) {
       newWorkCode: "",
       preview: null,
       error: "",
+      page: 1,
     };
     renderWorkflow(workflowState);
     try {
       const { response, payload } = await getConfirmedMangaUpdatesIdCandidates({
         search,
-        limit: 8,
+        limit: 25,
       });
       if (sequence !== confirmedIdSearchSequence) return;
       confirmedIdCorrection = {
@@ -405,6 +408,7 @@ export function initFlowsPage(elements, options = {}) {
         candidates: response.ok ? (payload.items || []) : [],
         candidatesError: response.ok ? "" : errorMessage(payload),
         candidatesLoading: false,
+        page: 1,
       };
     } catch (error) {
       if (sequence !== confirmedIdSearchSequence) return;
@@ -413,6 +417,7 @@ export function initFlowsPage(elements, options = {}) {
         candidates: [],
         candidatesError: `Falha ao buscar obras: ${error.message || "erro desconhecido"}.`,
         candidatesLoading: false,
+        page: 1,
       };
     }
     renderWorkflow(workflowState);
@@ -433,6 +438,17 @@ export function initFlowsPage(elements, options = {}) {
       const cursor = input.value.length;
       input.setSelectionRange(cursor, cursor);
     }
+  }
+
+  function setConfirmedIdCorrectionPage(page) {
+    const total = confirmedIdCorrection.candidates?.length || 0;
+    const pages = Math.max(1, Math.ceil(total / 5));
+    const nextPage = Math.min(Math.max(Number(page) || 1, 1), pages);
+    confirmedIdCorrection = {
+      ...confirmedIdCorrection,
+      page: nextPage,
+    };
+    renderWorkflow(workflowState);
   }
 
   function metadataRunningMessage(count) {
@@ -654,9 +670,11 @@ export function initFlowsPage(elements, options = {}) {
     reviewAgain,
     runCurrentFlowStage,
     createMissingNotionPage,
+    confirmedIdCorrection,
     previewConfirmedIdCorrection,
     applyConfirmedIdCorrection,
     selectConfirmedIdCorrectionWork,
+    setConfirmedIdCorrectionPage,
     saveCurrentReviewDecision,
     setActiveReviewKey: value => { activeReviewKey = value; },
     setReviewSearchQuery,
