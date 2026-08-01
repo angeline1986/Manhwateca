@@ -27,15 +27,21 @@ export function renderSyncNotionPanel(input = {}) {
   );
   return `
     <section class="sync-notion-panel sync-notion-panel--${escapeHtml(state.tone)}">
-      ${mainHeader()}
-      ${state.showHeader === false ? "" : header(state)}
-      ${showCandidatePicker ? candidatePicker(context) : ""}
-      ${state.note ? note(state.note) : ""}
-      ${state.metrics.length ? metricsGrid(state.metrics) : ""}
-      ${state.showNextAction === false ? "" : nextAction(state)}
-      ${state.blockers.length ? blockersList(state.blockers) : state.clearMessage ? note(state.clearMessage) : ""}
-      ${state.showActionButton === false ? "" : actionButton(state.actionLabel, actionDisabled)}
-      ${legacySection(context.legacyMetadata, state.hasOfficialResult)}
+      <details class="flow-section-details" open>
+        ${mainHeader()}
+        <div class="flow-section-body sync-notion-stage-body ${showCandidatePicker ? "" : "sync-notion-stage-body--detail-only"}">
+          ${showCandidatePicker ? candidatePicker(context) : ""}
+          <section class="sync-notion-detail-panel">
+            ${showCandidatePicker ? selectedCandidateDetail() : ""}
+            ${state.showHeader === false ? "" : header(state)}
+            ${state.note ? note(state.note) : ""}
+            ${state.metrics.length ? verificationPanel(state) : ""}
+            ${state.showNextAction === false && state.showActionButton === false ? "" : nextAction(state, actionDisabled)}
+            ${state.blockers.length ? blockersList(state.blockers) : state.clearMessage ? note(state.clearMessage) : ""}
+            ${legacySection(context.legacyMetadata, state.hasOfficialResult)}
+          </section>
+        </div>
+      </details>
     </section>
   `;
 }
@@ -43,10 +49,12 @@ export function renderSyncNotionPanel(input = {}) {
 function mainHeader() {
   const description = "Reflete no Notion as alterações realizadas durante o Workflow.";
   return `
-    <header class="sync-notion-main-header">
+    <summary class="flow-section-summary sync-notion-main-header">
       <span class="eyebrow">Jornada operacional</span>
-      <h2>${headingTooltip("Sincronizar Notion", description)}</h2>
-    </header>
+      <span class="sync-notion-title-row">
+        <h2>${headingTooltip("Sincronizar Notion", description)}</h2>
+      </span>
+    </summary>
   `;
 }
 
@@ -118,6 +126,7 @@ function officialState(context) {
       blockers: [],
       nextAction: "Sincronizar quando estiver pronta",
       showNextAction: true,
+      showHeader: false,
       showCandidatePicker: true,
       actionLabel: "Sincronizar com o Notion",
       actionDisabled: context.journeyWorkIds.length === 0,
@@ -274,41 +283,41 @@ function candidatePicker(context) {
   const pages = Math.max(1, Math.ceil(items.length / pageSize));
   return `
     <section class="sync-notion-candidates" data-notion-sync-candidates data-notion-sync-page="${page}" data-notion-sync-page-size="${pageSize}">
-      <div class="sync-notion-candidate-header">
-        <span data-notion-sync-selected>0 selecionadas</span>
+      <header class="sync-notion-queue-header">
+        <h3>${headingTooltip("Fila de sincronização", "Obras pendentes de verificação ou atualização no Notion.")}</h3>
+      </header>
+      <div class="sync-notion-candidate-summary">
+        ${candidateSummary(summary)}
       </div>
       <div class="sync-notion-candidate-tools">
         <label>
           <span>Buscar obra</span>
-          <input type="search" placeholder="Digite título ou ID" data-notion-sync-search>
+          <input type="search" placeholder="Nome, ID local ou MangaUpdates" data-notion-sync-search>
         </label>
-        <div class="sync-notion-candidate-summary">
-          ${candidateSummary(summary)}
-        </div>
       </div>
       <div class="sync-notion-selection-head">
-        <label class="sync-notion-select-all">
-          <input type="checkbox" data-notion-sync-select-all>
-          Selecionar todas visíveis
-        </label>
-        <label class="sync-notion-page-size">
+        <label class="sync-notion-page-size sync-notion-page-size--filter">
           <span>Mostrar</span>
           <select data-notion-sync-status-filter>
             ${candidateFilterOptions(activeFilter)}
           </select>
         </label>
-        <label class="sync-notion-page-size">
-          <span>Itens por página</span>
+        <label class="sync-notion-page-size sync-notion-page-size--size">
+          <span>Itens</span>
           <select data-notion-sync-page-size-select>
             ${[5, 10].map(size => `<option value="${size}" ${size === pageSize ? "selected" : ""}>${size}</option>`).join("")}
           </select>
+        </label>
+        <label class="sync-notion-select-all">
+          <input type="checkbox" data-notion-sync-select-all>
+          ${headingTooltip("Selecionar visíveis", inheritedScopeMessage(journeyCount))}
         </label>
       </div>
       <div class="sync-notion-candidate-list">
         ${items.length ? items.map(candidateItem).join("") : emptyCandidates()}
       </div>
       <div class="sync-notion-candidate-footer">
-        ${journeyCount ? inheritedScope(context, items) : "<span></span>"}
+        <span></span>
         ${notionSyncPager(page, pages)}
       </div>
     </section>
@@ -319,11 +328,44 @@ function headingTooltip(label, text) {
   return `<span class="flow-heading-tooltip" tabindex="0" aria-label="${escapeHtml(text)}">${escapeHtml(label)}</span>`;
 }
 
+function selectedCandidateDetail() {
+  return `
+    <section class="sync-notion-selected-detail" data-notion-sync-detail>
+      <div class="sync-notion-detail-topline">
+        <div>
+          <span class="eyebrow">Obra selecionada</span>
+          <h3 data-notion-sync-detail-title>Nenhuma obra selecionada</h3>
+        </div>
+        <span class="sync-notion-detail-status" data-notion-sync-detail-status hidden></span>
+      </div>
+      <div class="sync-notion-detail-grid">
+        <article>
+          <span>ID MangaUpdates</span>
+          <strong data-notion-sync-detail-work-code>Não informado</strong>
+        </article>
+        <article>
+          <span>Página no Notion</span>
+          <strong data-notion-sync-detail-page>Não associada</strong>
+        </article>
+        <article>
+          <span>Última sincronização</span>
+          <strong data-notion-sync-detail-synced>Não informada</strong>
+        </article>
+      </div>
+      <article class="sync-notion-planner-note">
+        <strong>O que acontecerá</strong>
+        <p>O planner oficial localizará a página correspondente no Notion, comparará os dados técnicos e só aplicará alterações quando encontrar diferenças.</p>
+      </article>
+    </section>
+  `;
+}
+
 function candidateFilterOptions(activeFilter) {
   const options = [
-    ["default", "Pendentes"],
-    ["never_synced", "Nunca sincronizadas"],
     ["error", "Com erro"],
+    ["default", "Fila padrão"],
+    ["never_synced", "Nunca sincronizadas"],
+    ["pending", "Pendentes"],
     ["synced", "Sincronizadas"],
     ["all", "Todas"],
   ];
@@ -345,7 +387,10 @@ function filterDescription(activeFilter) {
   if (activeFilter === "error") {
     return "Mostra obras com erro registrado na última tentativa de sincronização.";
   }
-  return "Fila operacional: obras ainda não sincronizadas, pendentes ou com erro.";
+  if (activeFilter === "pending") {
+    return "Mostra obras marcadas localmente como pendentes de sincronização.";
+  }
+  return "Fila operacional: obras nunca sincronizadas, pendentes ou com erro.";
 }
 
 function visibleCandidateItems(items, hiddenWorkIds) {
@@ -355,19 +400,25 @@ function visibleCandidateItems(items, hiddenWorkIds) {
 }
 
 function candidateSummary(summary) {
+  const pending = Number(summary.neverSynced || 0) + Number(summary.pending || 0);
   return [
-    `Total: ${summary.total || 0}`,
-    `Nunca sincronizadas: ${summary.neverSynced || 0}`,
-    `Sincronizadas: ${summary.synced || 0}`,
-    `Erro: ${summary.error || 0}`,
-    `Revisão: ${summary.conflict || 0}`,
-  ].map(item => `<span>${escapeHtml(item)}</span>`).join("");
+    ["Pendentes", pending],
+    ["Sincronizadas", summary.synced || 0],
+    ["Erros", summary.error || 0],
+  ].map(([label, value]) => `
+    <span>
+      <strong>${escapeHtml(String(value))}</strong>
+      <small>${escapeHtml(label)}</small>
+    </span>
+  `).join("");
 }
 
 function candidateItem(item, index) {
   const workId = item.workId || "";
   const title = item.title || "Obra sem título";
   const status = item.displayStatus || "Estado local não informado";
+  const pageLabel = item.notionPageId ? "Associada" : "Não associada";
+  const syncedLabel = item.notionLastSyncedAt ? formatTimestamp(item.notionLastSyncedAt) : "Nunca sincronizada";
   const selectable = item.selectable !== false;
   const search = [
     title,
@@ -375,11 +426,11 @@ function candidateItem(item, index) {
     String(workId || ""),
   ].join(" ").toLocaleLowerCase("pt-BR");
   return `
-    <label class="sync-notion-candidate ${selectable ? "" : "is-disabled"}" data-notion-sync-candidate data-notion-sync-index="${index}" data-notion-sync-search-text="${escapeHtml(search)}" ${index >= 5 ? "hidden" : ""}>
+    <label class="sync-notion-candidate ${selectable ? "" : "is-disabled"}" data-notion-sync-candidate data-notion-sync-index="${index}" data-notion-sync-search-text="${escapeHtml(search)}" data-notion-sync-title="${escapeHtml(title)}" data-notion-sync-status="${escapeHtml(status)}" data-notion-sync-work-code="${escapeHtml(item.workCode || "")}" data-notion-sync-page-label="${escapeHtml(pageLabel)}" data-notion-sync-synced-label="${escapeHtml(syncedLabel)}" ${index >= 5 ? "hidden" : ""}>
       <input type="checkbox" data-notion-sync-choice data-notion-sync-work-id="${escapeHtml(String(workId))}" ${selectable ? "" : "disabled"}>
       <span>
         <strong>${escapeHtml(title)}</strong>
-        <small>${escapeHtml(status)} · ID ${escapeHtml(String(workId || "--"))} · MangaUpdates ${escapeHtml(item.workCode || "--")}</small>
+        <small>${escapeHtml(status)} · ID ${escapeHtml(String(workId || "--"))}</small>
       </span>
     </label>
   `;
@@ -397,39 +448,10 @@ function notionSyncPager(page, pages) {
   `;
 }
 
-function inheritedScope(context, items) {
-  const works = journeyWorks(context.journeyWorkIds, items);
-  const count = works.length;
-  const message = count === 1
+function inheritedScopeMessage(count) {
+  return count === 1
     ? "Se nenhuma obra for selecionada, esta etapa usará a obra da jornada atual."
     : "Se nenhuma obra for selecionada, esta etapa usará as obras da jornada atual.";
-  return `
-    <details class="sync-notion-inherited-scope">
-      <summary>
-        <span>${escapeHtml(message)}</span>
-        <span class="sync-notion-inherited-arrow" aria-hidden="true">▸</span>
-      </summary>
-      <div class="sync-notion-inherited-list">
-        ${works.map(work => `
-          <span>${escapeHtml(work.title)} · ID ${escapeHtml(String(work.workId))}</span>
-        `).join("")}
-      </div>
-    </details>
-  `;
-}
-
-function journeyWorks(workIds, items) {
-  const byId = new Map(items.map(item => [Number(item.workId), item]));
-  return workIds
-    .map(workId => {
-      const numericId = Number(workId);
-      const item = byId.get(numericId);
-      return {
-        workId: numericId,
-        title: item?.title || "Obra da jornada",
-      };
-    })
-    .filter(work => Number.isFinite(work.workId) && work.workId > 0);
 }
 
 function emptyCandidates() {
@@ -437,6 +459,18 @@ function emptyCandidates() {
     <div class="flow-panel-note sync-notion-empty-candidates">
       Nenhuma obra elegível encontrada no PostgreSQL.
     </div>
+  `;
+}
+
+function verificationPanel(state) {
+  return `
+    <section class="sync-notion-verification">
+      <header>
+        <strong>Última verificação da etapa</strong>
+        ${state.checkedAt ? `<span>${escapeHtml(state.checkedAt)}</span>` : ""}
+      </header>
+      ${metricsGrid(state.metrics)}
+    </section>
   `;
 }
 
@@ -482,22 +516,19 @@ function errorMetrics(metrics) {
   ];
 }
 
-function nextAction(state) {
+function nextAction(state, disabled = false) {
   return `
     <article class="sync-notion-next-action">
-      <strong>Próxima ação</strong>
-      <span>${escapeHtml(state.nextAction)}</span>
+      <div>
+        <strong>Próxima ação</strong>
+        <span>${escapeHtml(state.nextAction)}</span>
+      </div>
+      ${state.showActionButton === false ? "" : `
+        <button class="primary-action" type="button" data-flow-run-stage ${disabled ? "disabled" : ""}>
+          ${escapeHtml(state.actionLabel)}
+        </button>
+      `}
     </article>
-  `;
-}
-
-function actionButton(label, disabled = false) {
-  return `
-    <div class="sync-notion-actions">
-      <button class="primary-action" type="button" data-flow-run-stage ${disabled ? "disabled" : ""}>
-        ${escapeHtml(label)}
-      </button>
-    </div>
   `;
 }
 
@@ -507,8 +538,8 @@ function legacySection(metadata, hasOfficialResult) {
   const summary = metadata.summary || {};
   const title = "Última simulação legada";
   return `
-    <aside class="sync-notion-legacy">
-      <h4>${escapeHtml(title)}</h4>
+    <details class="sync-notion-legacy">
+      <summary>${escapeHtml(title)}</summary>
       <p>Este relatório salvo não representa a execução oficial atual.</p>
       <div class="sync-notion-legacy-meta">
         <span>Data: ${escapeHtml(formatTimestamp(metadata.updated_at))}</span>
@@ -520,7 +551,7 @@ function legacySection(metadata, hasOfficialResult) {
         ${legacyMetric("Ausentes", summary.missing)}
         ${legacyMetric("Duplicadas", summary.duplicates)}
       </div>
-    </aside>
+    </details>
   `;
 }
 

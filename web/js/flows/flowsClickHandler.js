@@ -1,7 +1,9 @@
 import {
   applySelectedDecisions,
   selectCandidate,
+  selectCurrentId,
   selectManualId,
+  selectNoMatch,
 } from "./flowDecisionHandlers.js";
 
 export function handleFlowsClick(event, context) {
@@ -60,6 +62,35 @@ export function handleFlowsClick(event, context) {
       context.setFeedback("ID manual marcado para aplicação.", "info");
       context.renderWorkflow();
     }
+    return;
+  }
+  const currentIdDecision = event.target.closest("[data-flow-confirm-current-id]");
+  if (currentIdDecision) {
+    const result = selectCurrentId(
+      context.getSelectedDecisions(),
+      currentIdDecision,
+    );
+    if (result.error) context.setFeedback(result.error, "error");
+    else {
+      context.setSelectedDecisions(result.selectedDecisions);
+      context.setFeedback("ID atual marcado para confirmação.", "info");
+      context.renderWorkflow();
+    }
+    return;
+  }
+  const noMatchDecision = event.target.closest("[data-flow-no-match]");
+  if (noMatchDecision) {
+    context.setSelectedDecisions(selectNoMatch(
+      context.getSelectedDecisions(),
+      noMatchDecision,
+    ));
+    context.setFeedback("Sem correspondência marcado para aplicação.", "info");
+    context.renderWorkflow();
+    return;
+  }
+  const ignoreDecision = event.target.closest("[data-flow-ignore-review]");
+  if (ignoreDecision) {
+    context.ignoreCurrentReview?.(ignoreDecision.dataset.flowWork);
     return;
   }
   if (event.target.closest("[data-flow-apply-decisions]")) {
@@ -134,7 +165,7 @@ export function handleFlowsClick(event, context) {
   }
 }
 
-export function handleFlowsChange(event, area) {
+export function handleFlowsChange(event, area, context = {}) {
   if (event.target.matches("[data-flow-apply-choice]")) updateApplySummary(area);
   if (event.target.matches("[data-metadata-select-all]")) {
     setMetadataChecks(area, event.target.checked);
@@ -146,6 +177,9 @@ export function handleFlowsChange(event, area) {
     updateNotionSyncSummary(area);
   }
   if (event.target.matches("[data-notion-sync-choice]")) updateNotionSyncSummary(area);
+  if (event.target.matches("[data-notion-sync-status-filter]")) {
+    context.setNotionSyncCandidateStatus?.(event.target.value || "default");
+  }
   if (event.target.matches("[data-notion-sync-page-size-select]")) {
     const card = area.querySelector("[data-notion-sync-candidates]");
     if (card) {
@@ -325,9 +359,10 @@ function updateNotionSyncSummary(area) {
     const hasInheritedScope = Boolean(area.querySelector(".sync-notion-inherited-scope"));
     button.disabled = selected === 0 && !hasInheritedScope;
     button.textContent = selected
-      ? `Sincronizar ${selected} ${selected === 1 ? "obra" : "obras"}`
+      ? (selected === 1 ? "Sincronizar esta obra" : `Sincronizar ${selected} obras`)
       : (hasInheritedScope ? "Sincronizar escopo da jornada" : "Selecione obras");
   }
+  updateNotionSyncFocusedCandidate(area);
   return visibleChoices;
 }
 
@@ -340,6 +375,7 @@ function filterNotionSyncCandidates(area, value) {
   const card = area.querySelector("[data-notion-sync-candidates]");
   if (card) card.dataset.notionSyncPage = "1";
   applyNotionSyncPagination(area);
+  updateNotionSyncResults(area);
 }
 
 function updateNotionSyncPage(area, button) {
@@ -378,6 +414,7 @@ function applyNotionSyncPagination(area) {
     item.hidden = index < start || index >= end;
   });
   renderNotionSyncPager(area, safePage, pages);
+  updateNotionSyncResults(area);
 }
 
 function renderNotionSyncPager(area, page, pages) {
@@ -400,6 +437,49 @@ function filteredNotionSyncItems(area) {
 function visibleNotionSyncChoices(area) {
   return [...area.querySelectorAll("[data-notion-sync-choice]:not(:disabled)")]
     .filter(input => !input.closest("[data-notion-sync-candidate]")?.hidden);
+}
+
+function updateNotionSyncResults(area) {
+  const results = area.querySelector("[data-notion-sync-results]");
+  if (!results) return;
+  const count = filteredNotionSyncItems(area).length;
+  results.textContent = `${count} ${count === 1 ? "resultado" : "resultados"}`;
+}
+
+function updateNotionSyncFocusedCandidate(area) {
+  const checked = [...area.querySelectorAll("[data-notion-sync-choice]:checked")];
+  const focused = checked[0]?.closest("[data-notion-sync-candidate]") || null;
+  area.querySelectorAll("[data-notion-sync-candidate].is-selected")
+    .forEach(item => item.classList.remove("is-selected"));
+  if (focused) focused.classList.add("is-selected");
+
+  const title = area.querySelector("[data-notion-sync-detail-title]");
+  const status = area.querySelector("[data-notion-sync-detail-status]");
+  const workCode = area.querySelector("[data-notion-sync-detail-work-code]");
+  const page = area.querySelector("[data-notion-sync-detail-page]");
+  const synced = area.querySelector("[data-notion-sync-detail-synced]");
+  if (!title || !workCode || !page || !synced) return;
+
+  if (!focused) {
+    title.textContent = "Nenhuma obra selecionada";
+    workCode.textContent = "Não informado";
+    page.textContent = "Não associada";
+    synced.textContent = "Não informada";
+    if (status) {
+      status.textContent = "";
+      status.hidden = true;
+    }
+    return;
+  }
+
+  title.textContent = focused.dataset.notionSyncTitle || "Obra sem título";
+  workCode.textContent = focused.dataset.notionSyncWorkCode || "Não informado";
+  page.textContent = focused.dataset.notionSyncPageLabel || "Não associada";
+  synced.textContent = focused.dataset.notionSyncSyncedLabel || "Não informada";
+  if (status) {
+    status.textContent = focused.dataset.notionSyncStatus || "Estado local não informado";
+    status.hidden = false;
+  }
 }
 
 function estimateMetadataTime(selected) {
