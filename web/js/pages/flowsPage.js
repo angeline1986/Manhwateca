@@ -21,6 +21,7 @@ import {
   handleFlowsChange,
   handleFlowsClick,
   handleFlowsInput,
+  handleFlowsKeydown,
 } from "../flows/flowsClickHandler.js";
 import {
   currentFlowStage,
@@ -789,6 +790,7 @@ export function initFlowsPage(elements, options = {}) {
     searchConfirmedIdCorrectionWorks,
     setConfirmedIdCorrectionNewWorkCode,
   }));
+  area?.addEventListener("keydown", event => handleFlowsKeydown(event));
 
   return { loadWorkflow, stopWorkflowPolling };
 }

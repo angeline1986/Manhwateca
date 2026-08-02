@@ -367,7 +367,7 @@ function selectedCandidateDetail() {
         </article>
       </div>
       <div class="sync-notion-cover-note-row">
-        <div class="sync-notion-cover" data-notion-sync-detail-cover>
+        <div class="sync-notion-cover" data-notion-sync-detail-cover role="button" tabindex="0" aria-expanded="false" aria-label="Ampliar capa">
           <span>Sem capa</span>
         </div>
         <article class="sync-notion-planner-note">

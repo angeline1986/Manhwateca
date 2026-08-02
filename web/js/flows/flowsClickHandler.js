@@ -143,6 +143,12 @@ export function handleFlowsClick(event, context) {
     context.createMissingNotionPage?.(Number(createNotionPage.dataset.notionCreateWorkId));
     return;
   }
+  const notionSyncCover = event.target.closest("[data-notion-sync-detail-cover]");
+  if (notionSyncCover) {
+    event.preventDefault();
+    toggleNotionSyncCover(notionSyncCover);
+    return;
+  }
   const notionSyncPageButton = event.target.closest("[data-notion-sync-page-action], [data-notion-sync-page-number]");
   if (notionSyncPageButton) {
     event.preventDefault();
@@ -214,6 +220,20 @@ export function handleFlowsInput(event, area, context = {}) {
   if (event.target.matches("[data-confirmed-id-new]")) {
     context.setConfirmedIdCorrectionNewWorkCode?.(event.target.value || "");
   }
+}
+
+export function handleFlowsKeydown(event) {
+  const notionSyncCover = event.target.closest("[data-notion-sync-detail-cover]");
+  if (!notionSyncCover || !["Enter", " "].includes(event.key)) return;
+  event.preventDefault();
+  toggleNotionSyncCover(notionSyncCover);
+}
+
+function toggleNotionSyncCover(cover) {
+  const coverLayout = cover.closest(".sync-notion-cover-note-row");
+  const expanded = coverLayout?.classList.toggle("is-cover-expanded") || false;
+  cover.setAttribute("aria-expanded", String(expanded));
+  cover.setAttribute("aria-label", expanded ? "Reduzir capa" : "Ampliar capa");
 }
 
 function checkedDecisionIds(area) {
@@ -651,6 +671,9 @@ function notionSyncDetailCopy(state) {
 
 function setNotionSyncCover(target, url) {
   if (!target) return;
+  target.closest(".sync-notion-cover-note-row")?.classList.remove("is-cover-expanded");
+  target.setAttribute("aria-expanded", "false");
+  target.setAttribute("aria-label", "Ampliar capa");
   const source = String(url || "").trim();
   if (!source) {
     target.replaceChildren(document.createElement("span"));

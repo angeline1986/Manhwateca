@@ -11,7 +11,9 @@
   --muted: #827277;
   --border: #ece5e7;
   --success: #34765b;
+  --success-soft: #eaf7f0;
   --warning: #a66a23;
+  --warning-soft: #fff4e5;
   --danger: #b54b50;
   --shadow: 0 18px 55px rgba(91, 50, 65, .07);
 }
