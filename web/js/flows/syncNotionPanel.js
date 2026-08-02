@@ -38,7 +38,6 @@ export function renderSyncNotionPanel(input = {}) {
             ${state.metrics.length ? verificationPanel(state) : ""}
             ${state.showNextAction === false && state.showActionButton === false ? "" : nextAction(state, actionDisabled)}
             ${state.blockers.length ? blockersList(state.blockers) : state.clearMessage ? note(state.clearMessage) : ""}
-            ${legacySection(context.legacyMetadata, state.hasOfficialResult)}
           </section>
         </div>
       </details>
@@ -352,10 +351,15 @@ function selectedCandidateDetail() {
           <strong data-notion-sync-detail-synced>Não informada</strong>
         </article>
       </div>
-      <article class="sync-notion-planner-note">
-        <strong>O que acontecerá</strong>
-        <p>O planner oficial localizará a página correspondente no Notion, comparará os dados técnicos e só aplicará alterações quando encontrar diferenças.</p>
-      </article>
+      <div class="sync-notion-cover-note-row">
+        <div class="sync-notion-cover" data-notion-sync-detail-cover>
+          <span>Sem capa</span>
+        </div>
+        <article class="sync-notion-planner-note">
+          <strong>O que acontecerá</strong>
+          <p>O planner oficial localizará a página correspondente no Notion, comparará os dados técnicos e só aplicará alterações quando encontrar diferenças.</p>
+        </article>
+      </div>
     </section>
   `;
 }
@@ -426,7 +430,7 @@ function candidateItem(item, index) {
     String(workId || ""),
   ].join(" ").toLocaleLowerCase("pt-BR");
   return `
-    <label class="sync-notion-candidate ${selectable ? "" : "is-disabled"}" data-notion-sync-candidate data-notion-sync-index="${index}" data-notion-sync-search-text="${escapeHtml(search)}" data-notion-sync-title="${escapeHtml(title)}" data-notion-sync-status="${escapeHtml(status)}" data-notion-sync-work-code="${escapeHtml(item.workCode || "")}" data-notion-sync-page-label="${escapeHtml(pageLabel)}" data-notion-sync-synced-label="${escapeHtml(syncedLabel)}" ${index >= 5 ? "hidden" : ""}>
+    <label class="sync-notion-candidate ${selectable ? "" : "is-disabled"}" data-notion-sync-candidate data-notion-sync-index="${index}" data-notion-sync-search-text="${escapeHtml(search)}" data-notion-sync-title="${escapeHtml(title)}" data-notion-sync-status="${escapeHtml(status)}" data-notion-sync-work-code="${escapeHtml(item.workCode || "")}" data-notion-sync-page-label="${escapeHtml(pageLabel)}" data-notion-sync-synced-label="${escapeHtml(syncedLabel)}" data-notion-sync-cover-url="${escapeHtml(item.coverUrl || "")}" ${index >= 5 ? "hidden" : ""}>
       <input type="checkbox" data-notion-sync-choice data-notion-sync-work-id="${escapeHtml(String(workId))}" ${selectable ? "" : "disabled"}>
       <span>
         <strong>${escapeHtml(title)}</strong>

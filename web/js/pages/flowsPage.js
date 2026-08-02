@@ -51,10 +51,13 @@ export function initFlowsPage(elements, options = {}) {
   let reviewState = { summary: {}, items: [] };
   let selectedDecisions = {};
   let savedReviewKeys = new Set();
+  let ignoredReviewKeys = new Set();
   let worksState = { kpis: {}, items: [], pagination: {} };
   let metadataState = { kpis: {}, items: [], pagination: {} };
   let notionMetadataState = {};
+  let notionSyncCandidateStatus = "default";
   let recentlySyncedNotionWorkIds = [];
+  let flowSectionOpenState = {};
   const showPage = options.showPage || (() => {});
 
   async function loadWorkflow() {
@@ -103,7 +106,7 @@ export function initFlowsPage(elements, options = {}) {
   async function refreshReviewState() { reviewState = await fetchReviewState(); }
   async function refreshWorksState() { worksState = await fetchWorksState(worksPage); }
   async function refreshMetadataState() { metadataState = await fetchMetadataState(); }
-  async function refreshNotionMetadataState() { notionMetadataState = await fetchNotionMetadataState(); }
+  async function refreshNotionMetadataState() { notionMetadataState = await fetchNotionMetadataState(notionSyncCandidateStatus); }
   async function refreshConfirmedIdCandidatesState(search = confirmedIdCorrection.search || "") {
     const { response, payload } = await getConfirmedMangaUpdatesIdCandidates({
       search,
@@ -120,11 +123,13 @@ export function initFlowsPage(elements, options = {}) {
   }
 
   function renderWorkflow(data) {
+    captureFlowSectionOpenState();
     workflowState = data;
     renderFlowsOverview(elements, data, {
       activeSubtab,
       activeReviewKey,
       showResolvedReview,
+      ignoredReviewKeys: [...ignoredReviewKeys],
       review: reviewState,
       reviewSearchQuery,
       confirmedIdCorrection,
@@ -132,10 +137,24 @@ export function initFlowsPage(elements, options = {}) {
       savedReviewKeys: [...savedReviewKeys],
       metadata: metadataState,
       notionMetadata: notionMetadataState,
+      notionSyncCandidateStatus,
       recentlySyncedNotionWorkIds,
+      flowSectionOpenState,
       works: worksState,
     });
     renderLegacyWorkflow(data);
+  }
+
+  function captureFlowSectionOpenState() {
+    const sections = elements.flowsCurrentCards?.querySelectorAll("[data-flow-section]");
+    if (!sections?.length) return;
+    flowSectionOpenState = {
+      ...flowSectionOpenState,
+      ...Object.fromEntries([...sections].map(section => [
+        section.dataset.flowSection,
+        section.open,
+      ])),
+    };
   }
 
   function flowChanged(data) {
@@ -397,6 +416,7 @@ export function initFlowsPage(elements, options = {}) {
       page: 1,
     };
     renderWorkflow(workflowState);
+    focusConfirmedIdSearch();
     try {
       const { response, payload } = await getConfirmedMangaUpdatesIdCandidates({
         search,
@@ -421,6 +441,15 @@ export function initFlowsPage(elements, options = {}) {
       };
     }
     renderWorkflow(workflowState);
+    focusConfirmedIdSearch();
+  }
+
+  function focusConfirmedIdSearch() {
+    const input = elements.flowsCurrentCards?.querySelector("[data-confirmed-id-search]");
+    if (!input) return;
+    input.focus();
+    const cursor = input.value.length;
+    input.setSelectionRange(cursor, cursor);
   }
 
   function setConfirmedIdCorrectionNewWorkCode(newWorkCode) {
@@ -639,7 +668,7 @@ export function initFlowsPage(elements, options = {}) {
   function nextPendingKey(currentKey) {
     const pending = (reviewState.items || [])
       .map(itemKey)
-      .filter(key => key !== currentKey && !savedReviewKeys.has(key));
+      .filter(key => key !== currentKey && !savedReviewKeys.has(key) && !ignoredReviewKeys.has(key));
     return pending[0] || "";
   }
 
@@ -671,6 +700,22 @@ export function initFlowsPage(elements, options = {}) {
       const cursor = input.value.length;
       input.setSelectionRange(cursor, cursor);
     }
+  }
+
+  async function setNotionSyncCandidateStatus(value) {
+    notionSyncCandidateStatus = value || "default";
+    await refreshNotionMetadataState();
+    renderWorkflow(workflowState);
+  }
+
+  function ignoreCurrentReview(key) {
+    const reviewKey = key || activeReviewKey || itemKey(reviewState.items?.[0] || {});
+    if (!reviewKey) return;
+    ignoredReviewKeys.add(reviewKey);
+    delete selectedDecisions[reviewKey];
+    activeReviewKey = nextPendingKey(reviewKey);
+    setFeedback("Pendência ignorada nesta sessão.", "info");
+    renderWorkflow(workflowState);
   }
 
   function firstVisibleReviewKey(query) {
@@ -722,6 +767,7 @@ export function initFlowsPage(elements, options = {}) {
     runCurrentFlowStage,
     createMissingNotionPage,
     confirmedIdCorrection,
+    ignoreCurrentReview,
     previewConfirmedIdCorrection,
     applyConfirmedIdCorrection,
     selectConfirmedIdCorrectionWork,
@@ -735,7 +781,9 @@ export function initFlowsPage(elements, options = {}) {
     setWorksPage: value => { worksPage = value; },
     showPage,
   }));
-  area?.addEventListener("change", event => handleFlowsChange(event, area));
+  area?.addEventListener("change", event => handleFlowsChange(event, area, {
+    setNotionSyncCandidateStatus,
+  }));
   area?.addEventListener("input", event => handleFlowsInput(event, area, {
     setReviewSearchQuery,
     searchConfirmedIdCorrectionWorks,

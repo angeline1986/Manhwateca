@@ -45,6 +45,7 @@ export function renderFlowsOverview(elements, data, options = {}) {
     notionMetadata: options.notionMetadata,
     notionSyncCandidateStatus: options.notionSyncCandidateStatus || "default",
     recentlySyncedNotionWorkIds: options.recentlySyncedNotionWorkIds || [],
+    flowSectionOpenState: options.flowSectionOpenState || {},
     works: options.works,
   });
   return { activeStage, activeStatus, visibleRunning };
@@ -94,10 +95,12 @@ function renderCurrentPanel(elements, context) {
   ) || activeStage;
   const selectedStatus = flowStageStatus(selectedStage, run);
   const content = elements.flowsCurrentTitle?.closest(".flows-journey-content");
+  content?.classList.toggle("flows-resolve-mode", selectedStage.id === "resolve_ids");
   content?.classList.toggle("flows-apply-mode", context.activeSubtab === "decisoes");
   content?.classList.toggle("flows-metadata-mode", selectedStage.id === "update_metadata");
   content?.classList.toggle("flows-review-mode", context.activeSubtab === "pendencias");
   content?.classList.toggle("flows-sync-notion-mode", selectedStage.id === "sync_notion");
+  content?.closest(".flows-journey-panel")?.classList.toggle("flows-journey-panel--resolve", context.activeSubtab === "buscar");
   content?.closest(".flows-journey-panel")?.classList.toggle("flows-journey-panel--metadata", selectedStage.id === "update_metadata");
   content?.closest(".flows-journey-panel")?.classList.toggle("flows-journey-panel--review", context.activeSubtab === "pendencias");
   content?.closest(".flows-journey-panel")?.classList.toggle("flows-journey-panel--sync-notion", selectedStage.id === "sync_notion");
@@ -113,6 +116,7 @@ function renderCurrentPanel(elements, context) {
   renderMeta(elements, run, selectedStatus);
   renderTopAction(elements, selectedStage, selectedStatus, visibleRunning);
   if (!elements.flowsCurrentCards) return;
+  elements.flowsCurrentCards.classList.toggle("flow-detail-card--resolve", context.activeSubtab === "buscar");
   elements.flowsCurrentCards.classList.toggle("flow-detail-card--metadata", selectedStage.id === "update_metadata");
   elements.flowsCurrentCards.classList.toggle("flow-detail-card--review", context.activeSubtab === "pendencias");
   elements.flowsCurrentCards.classList.toggle("flow-detail-card--sync-notion", selectedStage.id === "sync_notion");

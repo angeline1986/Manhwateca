@@ -12,6 +12,7 @@ export function renderResolveIdsPanel({
   run,
   selectedDecisions,
   savedReviewKeys,
+  flowSectionOpenState,
   works,
 }) {
   const summary = review?.summary || {};
@@ -23,6 +24,7 @@ export function renderResolveIdsPanel({
       searchQuery: reviewSearchQuery,
       showResolved: showResolvedReview,
       idCorrection: confirmedIdCorrection,
+      openSections: flowSectionOpenState,
     }) : ""}
     ${activeSubtab === "decisoes" ? decisionsTab(review, selectedDecisions) : ""}
   `;
@@ -31,35 +33,50 @@ export function renderResolveIdsPanel({
 function searchTab(metrics, summary, review, works) {
   const rows = searchRows(metrics, summary, review, works);
   const kpis = works?.kpis || {};
+  const description = "Localize candidatos no MangaUpdates para obras sem identificação.";
   return `
-    <div class="flow-subgrid">
-      ${metricCard("Sem ID", kpis.withoutId ?? unresolvedCount(metrics))}
-      ${metricCard("Sugestões", kpis.candidatesFound ?? suggestionCount(metrics, summary))}
-      ${metricCard("Sem resultado", kpis.noResult ?? criticalCount(metrics))}
-      ${metricCard("Erros de API", kpis.apiErrors ?? 0)}
-    </div>
-    <table class="flow-table">
-      <thead>
-        <tr><th>Obra local</th><th>Situação</th><th>Ação sugerida</th></tr>
-      </thead>
-      <tbody>
-        ${rows.map(row => `
-          <tr>
-            <td>${escapeHtml(row.title)}</td>
-            <td><span class="flow-badge ${row.tone}">${escapeHtml(row.status)}</span></td>
-            <td>${escapeHtml(row.action)}</td>
-          </tr>
-        `).join("")}
-      </tbody>
-    </table>
-    <div class="flow-table-footer">
-      <div class="actions">
-        <button class="primary-action" type="button" data-flow-run-stage>Buscar candidatos</button>
-        <button class="secondary-action" type="button" data-flow-subtab="pendencias">Ver pendências</button>
-      </div>
-      ${searchPagination(works)}
-    </div>
+    <section class="flow-search-main-card">
+      <details class="flow-section-details" open>
+        <summary class="flow-section-summary">
+          <span class="eyebrow">Jornada operacional</span>
+          <h2>${headingTooltip("Buscar candidatos", description)}</h2>
+        </summary>
+        <div class="flow-section-body">
+          <div class="flow-subgrid">
+            ${metricCard("Sem ID", kpis.withoutId ?? unresolvedCount(metrics))}
+            ${metricCard("Sugestões", kpis.candidatesFound ?? suggestionCount(metrics, summary))}
+            ${metricCard("Sem resultado", kpis.noResult ?? criticalCount(metrics))}
+            ${metricCard("Erros de API", kpis.apiErrors ?? 0)}
+          </div>
+          <table class="flow-table">
+            <thead>
+              <tr><th>Obra local</th><th>Situação</th><th>Ação sugerida</th></tr>
+            </thead>
+            <tbody>
+              ${rows.map(row => `
+                <tr>
+                  <td>${escapeHtml(row.title)}</td>
+                  <td><span class="flow-badge ${row.tone}">${escapeHtml(row.status)}</span></td>
+                  <td>${escapeHtml(row.action)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+          <div class="flow-table-footer">
+            <div class="actions">
+              <button class="primary-action" type="button" data-flow-run-stage>Buscar candidatos</button>
+              <button class="secondary-action" type="button" data-flow-subtab="pendencias">Ver pendências</button>
+            </div>
+            ${searchPagination(works)}
+          </div>
+        </div>
+      </details>
+    </section>
   `;
+}
+
+function headingTooltip(label, text) {
+  return `<span class="flow-heading-tooltip" tabindex="0" aria-label="${escapeHtml(text)}">${escapeHtml(label)}</span>`;
 }
 
 function searchPagination(works) {

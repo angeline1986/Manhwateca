@@ -458,6 +458,7 @@ function updateNotionSyncFocusedCandidate(area) {
   const workCode = area.querySelector("[data-notion-sync-detail-work-code]");
   const page = area.querySelector("[data-notion-sync-detail-page]");
   const synced = area.querySelector("[data-notion-sync-detail-synced]");
+  const cover = area.querySelector("[data-notion-sync-detail-cover]");
   if (!title || !workCode || !page || !synced) return;
 
   if (!focused) {
@@ -465,6 +466,7 @@ function updateNotionSyncFocusedCandidate(area) {
     workCode.textContent = "Não informado";
     page.textContent = "Não associada";
     synced.textContent = "Não informada";
+    setNotionSyncCover(cover, "");
     if (status) {
       status.textContent = "";
       status.hidden = true;
@@ -476,10 +478,27 @@ function updateNotionSyncFocusedCandidate(area) {
   workCode.textContent = focused.dataset.notionSyncWorkCode || "Não informado";
   page.textContent = focused.dataset.notionSyncPageLabel || "Não associada";
   synced.textContent = focused.dataset.notionSyncSyncedLabel || "Não informada";
+  setNotionSyncCover(cover, focused.dataset.notionSyncCoverUrl || "");
   if (status) {
     status.textContent = focused.dataset.notionSyncStatus || "Estado local não informado";
     status.hidden = false;
   }
+}
+
+function setNotionSyncCover(target, url) {
+  if (!target) return;
+  const source = String(url || "").trim();
+  if (!source) {
+    target.replaceChildren(document.createElement("span"));
+    target.firstElementChild.textContent = "Sem capa";
+    target.classList.add("is-empty");
+    return;
+  }
+  const image = document.createElement("img");
+  image.src = source;
+  image.alt = "";
+  target.replaceChildren(image);
+  target.classList.remove("is-empty");
 }
 
 function estimateMetadataTime(selected) {

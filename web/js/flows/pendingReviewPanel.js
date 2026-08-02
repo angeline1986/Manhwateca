@@ -3,16 +3,17 @@ import { escapeHtml } from "../utils/html.js";
 export function pendingTab(review, selectedDecisions = {}, activeKey = "", options = {}) {
   const items = review?.items || [];
   const correction = options.idCorrection || {};
+  const openSections = options.openSections || {};
   if (!items.length) return `
     <section class="flow-review-main-card">
-      <details class="flow-section-details" open>
+      <details class="flow-section-details" data-flow-section="review" ${sectionOpen(openSections, "review")}>
         ${reviewMainSummary()}
         <div class="flow-section-body">
           <p class="empty">Não há correspondências pendentes.</p>
         </div>
       </details>
     </section>
-    ${confirmedIdCorrectionPanel(correction)}
+    ${confirmedIdCorrectionPanel(correction, openSections)}
   `;
   const savedKeys = new Set(options.savedKeys || []);
   const ignoredKeys = new Set(options.ignoredReviewKeys || []);
@@ -24,14 +25,14 @@ export function pendingTab(review, selectedDecisions = {}, activeKey = "", optio
   if (!pendingItems.length && !showResolved && !searchQuery.trim()) {
     return `
       <section class="flow-review-main-card">
-        <details class="flow-section-details" open>
+        <details class="flow-section-details" data-flow-section="review" ${sectionOpen(openSections, "review")}>
           ${reviewMainSummary()}
           <div class="flow-section-body">
             ${reviewCompleted(savedKeys.size)}
           </div>
         </details>
       </section>
-      ${confirmedIdCorrectionPanel(correction)}
+      ${confirmedIdCorrectionPanel(correction, openSections)}
     `;
   }
   const visibleItems = showResolved ? filteredItems : pendingItems;
@@ -39,7 +40,7 @@ export function pendingTab(review, selectedDecisions = {}, activeKey = "", optio
   const activeItemKey = selectedItem ? itemKey(selectedItem) : "";
   return `
     <section class="flow-review-main-card">
-      <details class="flow-section-details" open>
+      <details class="flow-section-details" data-flow-section="review" ${sectionOpen(openSections, "review")}>
         ${reviewMainSummary()}
         <div class="flow-section-body">
           <div class="flow-review-workbench">
@@ -62,8 +63,12 @@ export function pendingTab(review, selectedDecisions = {}, activeKey = "", optio
         </div>
       </details>
     </section>
-    ${confirmedIdCorrectionPanel(correction)}
+    ${confirmedIdCorrectionPanel(correction, openSections)}
   `;
+}
+
+function sectionOpen(openSections, key) {
+  return openSections[key] === false ? "" : "open";
 }
 
 function reviewMainSummary() {
@@ -179,7 +184,7 @@ function currentCandidateTitle(item, candidates, fallback) {
   return candidate?.title || candidate?.titulo || item?.conflict?.candidateTitle || fallback || "";
 }
 
-function confirmedIdCorrectionPanel(state = {}) {
+function confirmedIdCorrectionPanel(state = {}, openSections = {}) {
   const preview = state.preview || null;
   const loading = Boolean(state.loading);
   const selectedWork = state.selectedWork || null;
@@ -193,7 +198,7 @@ function confirmedIdCorrectionPanel(state = {}) {
   const description = "Use quando uma obra já foi vinculada ao ID MangaUpdates errado.";
   return `
     <section class="confirmed-id-correction">
-      <details class="flow-section-details" open>
+      <details class="flow-section-details" data-flow-section="confirmed-id" ${sectionOpen(openSections, "confirmed-id")}>
         <summary class="flow-section-summary">
           <span class="eyebrow">Manutenção controlada</span>
           <h2>${headingTooltip("Corrigir ID confirmado", description)}</h2>
