@@ -22,9 +22,13 @@ export function renderUpdateMetadataPanel(metadata = {}) {
 
   return `
     <section class="metadata-main-card" data-metadata-page="${page}" data-metadata-page-size="${pageSize}">
-        <header class="metadata-header">
+      <details class="flow-section-details" open>
+        <summary class="flow-section-summary">
           <span class="eyebrow">Confirmação</span>
           <h2>${headingTooltip("Atualizar metadados", description)}</h2>
+        </summary>
+        <div class="flow-section-body metadata-stage-body">
+        <header class="metadata-header">
           <div class="metadata-summary-chips">
             <span><b data-metadata-total>${works.length}</b> ${works.length === 1 ? "obra pronta" : "obras prontas"}</span>
             <span data-metadata-selected>${selectedLabel(selected, "selecionada", "selecionadas")}</span>
@@ -60,6 +64,8 @@ export function renderUpdateMetadataPanel(metadata = {}) {
           </div>
           ${metadataPager(page, pages)}
         </footer>
+        </div>
+      </details>
     </section>
     <section class="metadata-info-card">
         <details class="metadata-info">

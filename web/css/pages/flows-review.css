@@ -1,8 +1,8 @@
 .flow-review-workbench {
   display: grid;
-  grid-template-columns: 260px minmax(0, 760px);
-  gap: 34px; justify-content: center;
-  min-height: 640px;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 34px;
+  min-height: 0;
 }
 .flow-review-queue {
   display: flex;

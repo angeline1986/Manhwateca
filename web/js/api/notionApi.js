@@ -8,6 +8,6 @@ export function getMetadataStatus() {
   return getJson("/api/notion/metadata");
 }
 
-export function getSyncCandidates() {
-  return getJson("/api/notion/sync-candidates");
+export function getSyncCandidates(status = "default") {
+  return getJson(`/api/notion/sync-candidates?status=${encodeURIComponent(status)}`);
 }

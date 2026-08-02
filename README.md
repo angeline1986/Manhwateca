@@ -97,6 +97,7 @@ Para abrir automaticamente no navegador:
 ```bash
 python server.py --open
 ```
+./start_manhwateca.command
 
 No macOS, também é possível abrir `start_manhwateca.command`.
 

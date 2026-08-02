@@ -10,47 +10,48 @@ export function decisionsTab(_review, selectedDecisions = {}) {
   const description = "Escolha quais decisões prontas serão gravadas no PostgreSQL.";
   return `
     <article class="flow-apply-panel ${canApply ? "ready" : "blocked"}">
-      <div class="flow-apply-header">
-        <span class="eyebrow">Confirmação</span>
-        <h2>${headingTooltip("Aplicar decisões", description)}</h2>
-      </div>
-      <section class="flow-apply-summary-row">
-        <div class="flow-apply-hero" aria-label="Resumo da aplicação">
-          <strong>${ready} ${plural(ready, "obra pronta", "obras prontas")}</strong>
-          <span data-flow-apply-selected>${selected} ${plural(selected, "selecionada", "selecionadas")} para aplicar</span>
-          <span>${statusIcon(canApply)} ${blocked.length ? `${blocked.length} ${plural(blocked.length, "conflito encontrado", "conflitos encontrados")}` : "Nenhum conflito"}</span>
-          <span>${statusIcon(canApply)} ${canApply ? "IDs validados" : "Revise os bloqueios antes de gravar"}</span>
-        </div>
-        <div class="flow-apply-impact" aria-label="Impacto da aplicação">
-          <h4>Impacto da aplicação</h4>
-          <div class="flow-apply-impact-grid">
-            <div><span>Destino</span><strong>PostgreSQL</strong></div>
-            <div><span>Serão gravados</span><strong><b data-flow-impact-ids>${selected}</b> ID</strong></div>
-            <div><span>Não aplicadas</span><strong data-flow-impact-skipped>${ready - selected}</strong></div>
-            <div><span>Origem</span><strong>Revisão manual</strong></div>
+      <details class="flow-section-details" open>
+        ${applySummary(description)}
+        <div class="flow-section-body flow-apply-body">
+          <section class="flow-apply-summary-row">
+            <div class="flow-apply-hero" aria-label="Resumo da aplicação">
+              <strong>${ready} ${plural(ready, "obra pronta", "obras prontas")}</strong>
+              <span data-flow-apply-selected>${selected} ${plural(selected, "selecionada", "selecionadas")} para aplicar</span>
+              <span>${statusIcon(canApply)} ${blocked.length ? `${blocked.length} ${plural(blocked.length, "conflito encontrado", "conflitos encontrados")}` : "Nenhum conflito"}</span>
+              <span>${statusIcon(canApply)} ${canApply ? "IDs validados" : "Revise os bloqueios antes de gravar"}</span>
+            </div>
+            <div class="flow-apply-impact" aria-label="Impacto da aplicação">
+              <h4>Impacto da aplicação</h4>
+              <div class="flow-apply-impact-grid">
+                <div><span>Destino</span><strong>PostgreSQL</strong></div>
+                <div><span>Serão gravados</span><strong><b data-flow-impact-ids>${selected}</b> ID</strong></div>
+                <div><span>Não aplicadas</span><strong data-flow-impact-skipped>${ready - selected}</strong></div>
+                <div><span>Origem</span><strong>Revisão manual</strong></div>
+              </div>
+            </div>
+          </section>
+          <div class="flow-apply-list-head">
+            <strong>Decisões prontas</strong>
+            <span>
+              <a href="#" data-flow-select-all-decisions>Selecionar todos</a>
+              <b>·</b>
+              <a href="#" data-flow-clear-decisions>Limpar seleção</a>
+            </span>
           </div>
+          <section class="flow-apply-checklist" aria-label="Decisões prontas">
+            ${decisions.map(decisionItem).join("")}
+          </section>
+          <p class="flow-apply-helper" data-flow-apply-helper>Você pode desmarcar obras que não deseja aplicar neste lote.</p>
+          <footer class="flow-apply-actions">
+            <button class="secondary-action btn" type="button" data-flow-subtab="pendencias">
+              Voltar para revisão
+            </button>
+            <button class="primary-action btn" type="button" data-flow-apply-decisions ${canApply ? "" : "disabled"}>
+              ${canApply ? `Aplicar ${ready} ${plural(ready, "decisão", "decisões")}` : "Selecione decisões"}
+            </button>
+          </footer>
         </div>
-      </section>
-      <div class="flow-apply-list-head">
-        <strong>Decisões prontas</strong>
-        <span>
-          <a href="#" data-flow-select-all-decisions>Selecionar todos</a>
-          <b>·</b>
-          <a href="#" data-flow-clear-decisions>Limpar seleção</a>
-        </span>
-      </div>
-      <section class="flow-apply-checklist" aria-label="Decisões prontas">
-        ${decisions.map(decisionItem).join("")}
-      </section>
-      <p class="flow-apply-helper" data-flow-apply-helper>Você pode desmarcar obras que não deseja aplicar neste lote.</p>
-      <footer class="flow-apply-actions">
-        <button class="secondary-action btn" type="button" data-flow-subtab="pendencias">
-          Voltar para revisão
-        </button>
-        <button class="primary-action btn" type="button" data-flow-apply-decisions ${canApply ? "" : "disabled"}>
-          ${canApply ? `Aplicar ${ready} ${plural(ready, "decisão", "decisões")}` : "Selecione decisões"}
-        </button>
-      </footer>
+      </details>
     </article>
   `;
 }
@@ -59,20 +60,30 @@ function emptyState() {
   const description = "Escolha quais decisões prontas serão gravadas no PostgreSQL.";
   return `
     <article class="flow-apply-panel empty">
-      <div class="flow-apply-header">
-        <span class="eyebrow">Confirmação</span>
-        <h2>${headingTooltip("Aplicar decisões", description)}</h2>
-      </div>
-      <div class="flow-apply-hero">
-        <strong>Nenhuma decisão pronta</strong>
-        <span>Volte para a revisão antes de gravar.</span>
-      </div>
-      <footer class="flow-apply-actions">
-        <button class="primary-action btn" type="button" data-flow-subtab="pendencias">
-          Voltar para revisão
-        </button>
-      </footer>
+      <details class="flow-section-details" open>
+        ${applySummary(description)}
+        <div class="flow-section-body flow-apply-body">
+          <div class="flow-apply-hero">
+            <strong>Nenhuma decisão pronta</strong>
+            <span>Volte para a revisão antes de gravar.</span>
+          </div>
+          <footer class="flow-apply-actions">
+            <button class="primary-action btn" type="button" data-flow-subtab="pendencias">
+              Voltar para revisão
+            </button>
+          </footer>
+        </div>
+      </details>
     </article>
+  `;
+}
+
+function applySummary(description) {
+  return `
+    <summary class="flow-section-summary">
+      <span class="eyebrow">Confirmação</span>
+      <h2>${headingTooltip("Aplicar decisões", description)}</h2>
+    </summary>
   `;
 }
 

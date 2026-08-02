@@ -33,10 +33,10 @@ export async function loadMetadataState() {
   });
 }
 
-export async function loadNotionMetadataState() {
+export async function loadNotionMetadataState(syncCandidateStatus = "default") {
   const [metadata, candidates] = await Promise.all([
     loadNotionMetadataStatus(),
-    loadNotionSyncCandidates(),
+    loadNotionSyncCandidates(syncCandidateStatus),
   ]);
   return { ...metadata, candidates };
 }
@@ -50,9 +50,9 @@ async function loadNotionMetadataStatus() {
   }
 }
 
-async function loadNotionSyncCandidates() {
+async function loadNotionSyncCandidates(status) {
   try {
-    const { payload } = await getSyncCandidates();
+    const { payload } = await getSyncCandidates(status);
     return payload || { items: [], summary: {} };
   } catch {
     return { items: [], summary: {} };

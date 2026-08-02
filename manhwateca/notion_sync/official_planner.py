@@ -54,6 +54,10 @@ def plan_official_metadata_sync(notion, database_id, repository=None):
     ).plan_metadata_sync()
 
 
+def official_metadata_properties(record, page=None):
+    return _expected_metadata_properties(record, page or {"properties": {}})
+
+
 class OfficialNotionSyncPlanner:
     """Planeja o sync oficial PostgreSQL-first sem escrever no Notion."""
 

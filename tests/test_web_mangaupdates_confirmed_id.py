@@ -10,7 +10,7 @@ from manhwateca.webapp.mangaupdates_confirmed_id import (
 
 
 class ConfirmedIdCorrectionPayloadTests(unittest.TestCase):
-    def test_candidates_list_only_works_with_confirmed_id(self):
+    def test_candidates_without_search_do_not_guess_suspects(self):
         repository = FakeConfirmedIdRepository([
             work(254, "Mad for love", work_code="57487635157"),
             work(300, "Sem ID", work_code=None),
@@ -20,13 +20,15 @@ class ConfirmedIdCorrectionPayloadTests(unittest.TestCase):
         payload, status = confirmed_id_candidates_payload("", repository=repository)
 
         self.assertEqual(200, status)
-        self.assertEqual(2, payload["total"])
-        self.assertEqual([254, 301], [item["id"] for item in payload["items"]])
+        self.assertEqual("manual_search", payload["mode"])
+        self.assertEqual(0, payload["total"])
+        self.assertEqual(2, payload["confirmed_total"])
+        self.assertEqual([], payload["items"])
 
     def test_candidates_filter_by_title_local_id_or_work_code(self):
         repository = FakeConfirmedIdRepository([
             work(254, "Mad for love", work_code="57487635157"),
-            work(301, "Tuojiang", work_code="56302347523"),
+            work(301, "Tuojiang", work_code="56302347523", alternative_title="Tuojiang"),
         ])
 
         by_title, _ = confirmed_id_candidates_payload("search=mad", repository=repository)
@@ -36,6 +38,17 @@ class ConfirmedIdCorrectionPayloadTests(unittest.TestCase):
         self.assertEqual([254], [item["id"] for item in by_title["items"]])
         self.assertEqual([301], [item["id"] for item in by_local_id["items"]])
         self.assertEqual([301], [item["id"] for item in by_work_code["items"]])
+
+    def test_candidates_filter_by_local_alias(self):
+        repository = FakeConfirmedIdRepository([
+            work(254, "Mad for love", work_code="57487635157", alternative_title="Tuojiang"),
+            work(301, "Other", work_code="56302347523", alternative_title="Outro nome"),
+        ])
+
+        payload, status = confirmed_id_candidates_payload("search=tuojiang", repository=repository)
+
+        self.assertEqual(200, status)
+        self.assertEqual([254], [item["id"] for item in payload["items"]])
 
     def test_preview_validates_new_id_without_persisting(self):
         repository = FakeConfirmedIdRepository([
@@ -323,14 +336,14 @@ class FakeConfirmedIdRepository:
         )
 
 
-def work(work_id, title, *, work_code=None):
+def work(work_id, title, *, work_code=None, alternative_title="Record of Mad Love"):
     return SimpleNamespace(
         id=work_id,
         title=title,
         work_code=work_code,
         mangaupdates_url="https://example.test/current",
         cover_url="https://example.test/current.jpg",
-        alternative_title="Record of Mad Love",
+        alternative_title=alternative_title,
         notion_sync_status="synced",
     )
 

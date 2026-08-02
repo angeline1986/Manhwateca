@@ -1,8 +1,26 @@
 .page-container:has(#page-flows.active) {
   padding: 16px;
 }
+#page-flows {
+  --flow-stage-max-width: 1180px;
+  --flow-stage-card-padding: 28px;
+  --flow-stage-gap: 18px;
+}
 #page-flows .flows-journey-panel {
-  padding: 16px;
+  width: min(var(--flow-stage-max-width), 100%);
+  margin-right: auto;
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+#page-flows .flows-journey-panel:not(.flows-journey-panel--resolve):not(.flows-journey-panel--metadata):not(.flows-journey-panel--review):not(.flows-journey-panel--sync-notion) {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: var(--flow-stage-card-padding);
 }
 #page-flows > .panel + .panel {
   margin-top: 0;

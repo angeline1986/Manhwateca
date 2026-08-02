@@ -12,9 +12,7 @@
   padding: 0;
 }
 .flow-detail-card--metadata {
-  max-width: 1040px;
   min-height: auto;
-  margin-inline: auto;
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -22,9 +20,8 @@
 }
 .metadata-main-card,
 .metadata-info-card {
+  box-sizing: border-box;
   width: 100%;
-  max-width: 1040px;
-  margin-inline: auto;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: #fff;
@@ -32,10 +29,10 @@
 .metadata-main-card {
   display: grid;
   gap: 22px;
-  padding: 28px;
+  padding: var(--flow-stage-card-padding, 28px);
 }
 .metadata-info-card {
-  margin-top: 18px;
+  margin-top: var(--flow-stage-gap, 18px);
 }
 .metadata-header h2 {
   margin: 6px 0 8px;

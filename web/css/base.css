@@ -1,7 +1,11 @@
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  scrollbar-gutter: stable;
+}
 body {
   margin: 0;
+  overflow-y: scroll;
   background: var(--bg);
   color: var(--text);
   font: 16px/1.55 "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, sans-serif;
@@ -12,4 +16,3 @@ h1, h2, h3, p { margin-top: 0; }
 h1 { margin-bottom: 3px; font-size: clamp(27px, 4vw, 38px); line-height: 1.15; }
 h2 { margin-bottom: 8px; line-height: 1.25; }
 code { font-size: .9em; }
-

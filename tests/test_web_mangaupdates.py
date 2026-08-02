@@ -49,6 +49,7 @@ class FakeReviewRepository:
         self.confirmed = []
         self.resolved = []
         self.flow_applied = []
+        self.flow_ignored = []
         self.confirmation = confirmation
 
     def list_decisions(self, *, decision_type=None, status=None):
@@ -94,6 +95,10 @@ class FakeReviewRepository:
 
     def mark_flow_id_candidates_applied(self, **kwargs):
         self.flow_applied.append(kwargs)
+        return True
+
+    def mark_flow_id_candidates_ignored(self, **kwargs):
+        self.flow_ignored.append(kwargs)
         return True
 
 
@@ -349,6 +354,20 @@ class WebMangaUpdatesTests(unittest.TestCase):
         self.assertEqual(1, payload["ready"])
         self.assertEqual(1, payload["blocked"])
 
+    def test_validate_decisions_payload_accepts_no_match_decision(self):
+        payload = validate_decisions_payload([
+            {
+                "Nome": "Alpha",
+                "ID": None,
+                "Origem": "Sem correspondência",
+                "Tipo": "sem_correspondencia",
+            },
+        ])
+
+        self.assertTrue(payload["valid"])
+        self.assertEqual(1, payload["ready"])
+        self.assertEqual(0, payload["blocked"])
+
     def test_apply_decisions_payload_returns_job_contract(self):
         def apply_callback(_root, decisions):
             return [decision["Nome"] for decision in decisions], [], None
@@ -487,6 +506,34 @@ class WebMangaUpdatesTests(unittest.TestCase):
         self.assertIsNone(backup)
         self.assertEqual(("Boredom", 22961829567, "Boredom"), repository.confirmed[0])
         self.assertEqual(42, repository.flow_applied[0]["work_id"])
+
+    def test_apply_no_match_decision_marks_flow_candidate_ignored(self):
+        repository = FakeReviewRepository()
+        decision = {
+            "queueId": "flow_42",
+            "Nome": "Boredom",
+            "ID": None,
+            "Nome encontrado": None,
+            "Origem": "Sem correspondência",
+            "Tipo": "sem_correspondencia",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            applied, rejected, backup = apply_review_decisions(
+                self._project(directory, []),
+                [decision],
+                repository_factory=lambda: repository,
+            )
+
+        self.assertEqual(["Boredom"], applied)
+        self.assertEqual([], rejected)
+        self.assertIsNone(backup)
+        self.assertEqual([], repository.confirmed)
+        self.assertEqual([], repository.flow_applied)
+        self.assertEqual({
+            "work_id": 42,
+            "title": "Boredom",
+            "reason": "no_match",
+        }, repository.flow_ignored[0])
 
     def test_apply_decision_rejects_external_id_collision(self):
         repository = FakeReviewRepository(

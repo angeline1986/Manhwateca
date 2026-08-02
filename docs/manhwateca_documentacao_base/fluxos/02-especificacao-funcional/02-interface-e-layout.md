@@ -124,6 +124,31 @@ Cada cartão deve permanecer visível durante toda a execução.
 
 Todos os cartões seguem a mesma composição.
 
+## Padronização do Shell Visual dos Fluxos
+
+Todas as etapas do fluxo operacional devem começar a partir do mesmo shell visual.
+
+Regras obrigatórias:
+
+* o painel externo da jornada não deve ser usado como card visual;
+* o primeiro bloco visível da etapa deve ser um card próprio, alinhado ao centro e com a largura padrão definida por `--flow-stage-max-width`;
+* cards principais devem reutilizar o padding padrão `--flow-stage-card-padding`;
+* blocos auxiliares devem ser irmãos do card principal, separados por `--flow-stage-gap`;
+* novas etapas não devem criar margens superiores, larguras ou wrappers externos próprios;
+* descrições longas devem aparecer como tooltip no título, não como legenda fixa abaixo do cabeçalho;
+* se uma etapa precisar de layout interno específico, a customização deve ficar dentro do corpo do card, sem alterar a posição externa do bloco.
+
+Padrão de cabeçalho dos cards:
+
+* `eyebrow` acima do título com `11px`, linha de `14px` e altura estável;
+* título principal do card com `30px`, `line-height` de `1.1` e sem margem inferior própria;
+* cabeçalho do card em `summary.flow-section-summary`;
+* todo card principal de etapa deve usar `details.flow-section-details` aberto por padrão;
+* ícone de expansão no canto direito, `36px`, cor `#a94d6b`;
+* conteúdo interno deve ficar em `.flow-section-body`, abaixo do cabeçalho expansível.
+
+Essa regra evita que cada etapa comece em uma posição diferente no topo da página.
+
 ## Cabeçalho
 
 * número da etapa;

@@ -5,6 +5,7 @@ from manhwateca.notion_sync import statuses
 from manhwateca.notion_sync.official_planner import (
     OFFICIAL_METADATA_PROPERTIES,
     OfficialNotionSyncPlan,
+    official_metadata_properties,
 )
 from manhwateca.notion_sync.property_diff import changed_properties
 from manhwateca.notion_sync.sync_plan import (
@@ -127,6 +128,82 @@ class OfficialNotionSyncApplier:
             unchanged_count=len(plan.unchanged),
         )
 
+    def create_missing_page(self, record, database_id) -> NotionApplyResult:
+        properties = _create_page_properties(record)
+        property_blockers = _unsafe_property_blockers(
+            record.id,
+            record.title,
+            properties,
+            extra_allowed={"Nome"},
+        )
+        if property_blockers:
+            return NotionApplyResult(
+                status=SyncStatus.BLOCKED,
+                next_action=NextAction.REVIEW_BLOCKERS,
+                blockers=property_blockers,
+            )
+        try:
+            page = self.notion.pages.create(
+                parent={"database_id": database_id},
+                properties=properties,
+            )
+        except Exception as error:
+            return NotionApplyResult(
+                status=SyncStatus.ERROR,
+                next_action=NextAction.RETRY,
+                failed_count=1,
+                blockers=(
+                    NotionBlocker(
+                        code="api_error",
+                        work_id=record.id,
+                        work_title=record.title,
+                        message=str(error),
+                        next_action=NextAction.RETRY,
+                    ),
+                ),
+            )
+        page_id = page.get("id")
+        try:
+            synced_at = datetime.now().astimezone()
+            self.repository.update_notion_sync_fields_by_id(
+                record.id,
+                page_id=page_id,
+                status=statuses.SYNCED,
+                synced_at=synced_at,
+            )
+            self.repository.record_sync_event_by_id(
+                record.id,
+                event_type="notion_metadata_sync",
+                status=statuses.SYNCED,
+                page_id=page_id,
+                message="Página criada e metadados sincronizados no Notion.",
+                payload={
+                    "properties": sorted(properties),
+                    "code": "notion_metadata_page_created",
+                },
+            )
+        except Exception as error:
+            return NotionApplyResult(
+                status=SyncStatus.ERROR,
+                next_action=NextAction.RETRY,
+                applied_count=1,
+                failed_count=1,
+                blockers=(
+                    NotionBlocker(
+                        code="local_persistence_error",
+                        work_id=record.id,
+                        work_title=record.title,
+                        message=str(error),
+                        next_action=NextAction.RETRY,
+                    ),
+                ),
+            )
+        return NotionApplyResult(
+            status=SyncStatus.SYNCED,
+            next_action=NextAction.NONE,
+            applied_count=1,
+        )
+
     def _prevalidate(self, plan):
         blockers = []
         for item in plan.updates:
@@ -174,17 +251,35 @@ def _blocking_blockers(plan):
 def _property_blockers(plan):
     blockers = []
     for item in plan.updates:
-        forbidden = sorted(set(item.properties) - OFFICIAL_METADATA_PROPERTIES)
-        if forbidden:
-            blockers.append(
-                NotionBlocker(
-                    code="unsafe_property",
-                    work_id=item.work_id,
-                    work_title=item.work_title,
-                    message=", ".join(forbidden),
-                )
-            )
+        blockers.extend(_unsafe_property_blockers(
+            item.work_id,
+            item.work_title,
+            item.properties,
+        ))
     return tuple(blockers)
+
+
+def _unsafe_property_blockers(work_id, work_title, properties, *, extra_allowed=None):
+    allowed = set(OFFICIAL_METADATA_PROPERTIES)
+    allowed.update(extra_allowed or set())
+    forbidden = sorted(set(properties) - allowed)
+    if not forbidden:
+        return []
+    return [
+        NotionBlocker(
+            code="unsafe_property",
+            work_id=work_id,
+            work_title=work_title,
+            message=", ".join(forbidden),
+        )
+    ]
+
+
+def _create_page_properties(record):
+    return {
+        "Nome": {"title": [{"text": {"content": record.title}}]},
+        **official_metadata_properties(record),
+    }
 
 
 def _stale_blocker(item):

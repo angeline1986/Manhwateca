@@ -3,29 +3,12 @@
   display: none;
 }
 .flow-detail-card:has(.flow-apply-panel) {
-  max-width: 980px; min-height: auto; margin-inline: auto;
-  padding: 28px 40px 30px;
+  min-height: auto;
+  padding: var(--flow-stage-card-padding, 28px);
 }
 .flow-apply-panel {
   display: grid;
   gap: 14px;
-}
-.flow-apply-header {
-  display: grid;
-  gap: 5px;
-}
-.flow-apply-header h2 {
-  margin: 0;
-  color: #2e262a;
-  font-size: 28px;
-  font-weight: 850;
-  letter-spacing: -.02em;
-}
-.flow-apply-header p {
-  margin: 0;
-  color: #7a6f74;
-  font-size: 14px;
-  font-weight: 550;
 }
 .flow-apply-summary-row {
   display: grid;

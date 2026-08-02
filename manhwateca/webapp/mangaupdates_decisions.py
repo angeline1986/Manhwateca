@@ -63,6 +63,8 @@ def _queue_id_contract(decisions):
 def _valid_decision(decision):
     if isinstance(decision, str):
         return bool(decision.strip())
+    if decision.get("Tipo") == "sem_correspondencia":
+        return bool(_name(decision).strip())
     return _valid_id(decision.get("ID"))
 
 
@@ -75,6 +77,8 @@ def _name(decision):
 def _id(decision):
     if isinstance(decision, str):
         return decision
+    if decision.get("Tipo") == "sem_correspondencia":
+        return None
     return decision.get("ID")
 
 

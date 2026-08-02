@@ -21,23 +21,34 @@ def confirmed_id_candidates_payload(query_string="", *, repository=None):
     except (DatabaseConfigurationError, DatabaseConnectionError) as error:
         return {"success": False, "error": str(error), "items": []}, 503
 
-    items = [
+    confirmed_items = [
         _confirmed_candidate_payload(record)
         for record in records
         if _safe_work_code(getattr(record, "work_code", None))
     ]
-    if search:
-        normalized = _normalize_search(search)
-        items = [
-            item for item in items
-            if normalized in _normalize_search(item["title"])
-            or normalized in str(item["id"])
-            or normalized in str(item["current_work_code"])
-        ]
+    if not search:
+        return {
+            "success": True,
+            "items": [],
+            "total": 0,
+            "confirmed_total": len(confirmed_items),
+            "mode": "manual_search",
+        }, 200
+
+    normalized = _normalize_search(search)
+    items = [
+        item for item in confirmed_items
+        if normalized in _normalize_search(item["title"])
+        or normalized in str(item["id"])
+        or normalized in str(item["current_work_code"])
+        or normalized in _normalize_search(item.get("alternative_title"))
+    ]
     return {
         "success": True,
         "items": items[:limit],
         "total": len(items),
+        "confirmed_total": len(confirmed_items),
+        "mode": "manual_search",
     }, 200
 
 

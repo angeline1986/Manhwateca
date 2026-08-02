@@ -7,7 +7,6 @@ from unittest.mock import patch
 from manhwateca.flows.domain import (
     StageExecution,
     StageId,
-    StageStatus,
     WorkflowExecution,
     WorkflowStatus,
 )
@@ -58,7 +57,8 @@ class OfficialFlowBackendTests(unittest.TestCase):
         execution = backend.start()
 
         self.assertEqual(WorkflowStatus.RUNNING, execution.status)
-        self.assertEqual(StageStatus.RUNNING, execution.current_stage.status)
+        self.assertEqual("wf_", execution.execution_id[:3])
+        self.assertEqual(set(StageId), {stage.stage_id for stage in execution.stages})
 
     def test_default_integrations_without_notion_config_keeps_app_available(self):
         with patch.dict(os.environ, {}, clear=True):

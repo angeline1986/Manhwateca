@@ -55,6 +55,14 @@ def apply_decisions(decisions, items, ids_path=None, decision_repository=None):
     )
 
     for decision in decisions:
+        if _is_no_match_decision(decision):
+            applied_name, error = _apply_no_match_decision(decision, repository)
+            if error:
+                rejected.append(error)
+            else:
+                applied.append(applied_name)
+            continue
+
         validated, error = _validate_decision(
             decision,
             items,
@@ -105,6 +113,40 @@ def apply_decisions(decisions, items, ids_path=None, decision_repository=None):
         else None
     )
     return applied, rejected, backup
+
+
+def _is_no_match_decision(decision):
+    return isinstance(decision, dict) and decision.get("Tipo") == "sem_correspondencia"
+
+
+def _apply_no_match_decision(decision, repository):
+    name = str(decision.get("Nome") or "").strip()
+    if not name:
+        return None, "Decisão sem Nome."
+    if repository is None:
+        return None, f"{name}: repositório indisponível para marcar sem correspondência."
+    work_id = _work_id_from_queue(decision.get("queueId"))
+    try:
+        resolved = repository.mark_flow_id_candidates_ignored(
+            work_id=work_id,
+            title=name,
+            reason="no_match",
+        )
+    except AttributeError:
+        resolved = False
+    if not resolved:
+        return None, f"{name}: pendência não encontrada para marcar sem correspondência."
+    return name, None
+
+
+def _work_id_from_queue(queue_id):
+    value = str(queue_id or "")
+    if not value.startswith("flow_"):
+        return None
+    try:
+        return int(value.removeprefix("flow_"))
+    except ValueError:
+        return None
 
 
 def _index_items(items):

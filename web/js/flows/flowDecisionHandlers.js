@@ -62,6 +62,39 @@ export function selectManualId(selectedDecisions, button, area) {
   };
 }
 
+export function selectCurrentId(selectedDecisions, button) {
+  const id = Number(button.dataset.flowConfirmCurrentId || 0);
+  if (!id) return { selectedDecisions, error: "Não há ID atual para confirmar." };
+  const key = button.dataset.flowWork;
+  return {
+    selectedDecisions: {
+      ...selectedDecisions,
+      [key]: {
+        queueId: key,
+        Nome: button.dataset.flowLocalTitle || key,
+        ID: id,
+        "Nome encontrado": button.dataset.flowTitle || "",
+        Origem: "ID atual confirmado",
+      },
+    },
+  };
+}
+
+export function selectNoMatch(selectedDecisions, button) {
+  const key = button.dataset.flowWork;
+  return {
+    ...selectedDecisions,
+    [key]: {
+      queueId: key,
+      Nome: button.dataset.flowLocalTitle || key,
+      ID: null,
+      "Nome encontrado": null,
+      Origem: "Sem correspondência",
+      Tipo: "sem_correspondencia",
+    },
+  };
+}
+
 function remainingDecisions(selectedDecisions, appliedIds) {
   return Object.fromEntries(
     Object.entries(selectedDecisions).filter(([, decision]) =>

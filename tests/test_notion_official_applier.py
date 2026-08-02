@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 
 from manhwateca.notion_sync.official_applier import OfficialNotionSyncApplier
 from manhwateca.notion_sync.official_planner import (
@@ -188,6 +189,70 @@ class OfficialNotionSyncApplierTests(unittest.TestCase):
         self.assertEqual([], notion.pages.archived)
         self.assertEqual([], notion.pages.deleted)
 
+    def test_creates_missing_page_with_technical_properties_only(self):
+        repository = FakeRepository()
+        notion = fake_notion(created_page={"id": "page-new"})
+        record = SimpleNamespace(
+            id=7,
+            title="Work 7",
+            work_code="123",
+            alternative_title="Alias Real",
+            latest_mangaupdates_chapter=12,
+            mangaupdates_url="https://example.test/work",
+            themes=["Drama"],
+            format="Manhwa",
+            cover_url="https://cdn.example.test/capa.jpg",
+        )
+
+        result = OfficialNotionSyncApplier(notion, repository).create_missing_page(
+            record,
+            "database-id",
+        )
+
+        self.assertEqual(SyncStatus.SYNCED, result.status)
+        self.assertEqual(1, result.applied_count)
+        self.assertEqual(1, len(notion.pages.created))
+        create_payload = notion.pages.created[0]
+        self.assertEqual({"database_id": "database-id"}, create_payload["parent"])
+        properties = create_payload["properties"]
+        self.assertEqual({"title": [{"text": {"content": "Work 7"}}]}, properties["Nome"])
+        self.assertEqual({"number": 123}, properties["ID da obra"])
+        self.assertEqual(
+            {"rich_text": [{"text": {"content": "Alias Real"}}]},
+            properties["Alias"],
+        )
+        self.assertNotIn("Capa", properties)
+        self.assertNotIn("Interesse", properties)
+        self.assertEqual(7, repository.updated[0]["work_id"])
+        self.assertEqual("page-new", repository.updated[0]["page_id"])
+        self.assertEqual("synced", repository.updated[0]["status"])
+        self.assertEqual(1, len(repository.events))
+
+    def test_create_missing_page_reports_api_error_without_persistence(self):
+        repository = FakeRepository()
+        notion = fake_notion(create_error=RuntimeError("Rate limit"))
+        record = SimpleNamespace(
+            id=7,
+            title="Work 7",
+            work_code="123",
+            alternative_title=None,
+            latest_mangaupdates_chapter=None,
+            mangaupdates_url=None,
+            themes=[],
+            format=None,
+        )
+
+        result = OfficialNotionSyncApplier(notion, repository).create_missing_page(
+            record,
+            "database-id",
+        )
+
+        self.assertEqual(SyncStatus.ERROR, result.status)
+        self.assertEqual(1, result.failed_count)
+        self.assertEqual("api_error", result.blockers[0].code)
+        self.assertEqual([], repository.updated)
+        self.assertEqual([], repository.events)
+
 
 class FakeRepository:
     def __init__(self, fail_update=False):
@@ -207,9 +272,11 @@ class FakeRepository:
 
 
 class FakePages:
-    def __init__(self, pages=None, update_error_at=None):
+    def __init__(self, pages=None, update_error_at=None, created_page=None, create_error=None):
         self.pages = pages or {}
         self.update_error_at = update_error_at
+        self.created_page = created_page or {"id": "created-page"}
+        self.create_error = create_error
         self.retrieved = []
         self.updated = []
         self.created = []
@@ -230,7 +297,9 @@ class FakePages:
 
     def create(self, **kwargs):
         self.created.append(kwargs)
-        raise AssertionError("create must not be called")
+        if self.create_error:
+            raise self.create_error
+        return self.created_page
 
     def archive(self, **kwargs):
         self.archived.append(kwargs)
@@ -242,12 +311,22 @@ class FakePages:
 
 
 class FakeNotion:
-    def __init__(self, pages=None, update_error_at=None):
-        self.pages = FakePages(pages, update_error_at=update_error_at)
+    def __init__(self, pages=None, update_error_at=None, created_page=None, create_error=None):
+        self.pages = FakePages(
+            pages,
+            update_error_at=update_error_at,
+            created_page=created_page,
+            create_error=create_error,
+        )
 
 
-def fake_notion(pages=None, update_error_at=None):
-    return FakeNotion(pages, update_error_at=update_error_at)
+def fake_notion(pages=None, update_error_at=None, created_page=None, create_error=None):
+    return FakeNotion(
+        pages,
+        update_error_at=update_error_at,
+        created_page=created_page,
+        create_error=create_error,
+    )
 
 
 def sync_plan(updates=(), unchanged=(), blockers=()):

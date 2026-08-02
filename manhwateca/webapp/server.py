@@ -105,7 +105,7 @@ def create_handler(project_root, task_manager, workflow_manager=None):
                 self._send_json(metadata_status(project_root))
                 return
             if path == "/api/notion/sync-candidates":
-                self._send_json(sync_candidates_payload())
+                self._send_json(sync_candidates_payload(urlparse(self.path).query))
                 return
             if path == "/api/tasks":
                 self._send_json({"tasks": task_manager.list()})

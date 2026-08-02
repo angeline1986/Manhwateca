@@ -1,7 +1,6 @@
 .flow-review-workbench {
-  grid-template-columns: 250px minmax(0, 720px);
+  grid-template-columns: 250px minmax(0, 1fr);
   gap: 28px;
-  justify-content: start;
   min-height: 0;
 }
 .flow-decision-panel {

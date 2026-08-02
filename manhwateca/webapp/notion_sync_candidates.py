@@ -1,17 +1,37 @@
+from urllib.parse import parse_qs
+
 from manhwateca.database.manga_repository import MangaRepository
 from manhwateca.notion_sync import statuses
 
 
-def sync_candidates_payload(repository=None):
+DEFAULT_FILTER = "default"
+NEVER_SYNCED_FILTER = "never_synced"
+ALL_FILTER = "all"
+VALID_FILTERS = {
+    DEFAULT_FILTER,
+    NEVER_SYNCED_FILTER,
+    statuses.PENDING,
+    statuses.ERROR,
+    statuses.SYNCED,
+    ALL_FILTER,
+}
+
+
+def sync_candidates_payload(query="", repository=None):
     repository = repository or MangaRepository()
     records = [
         record for record in repository.list_mangas()
         if _has_work_code(record)
     ]
     items = [_candidate_item(record) for record in records]
+    status_filter = _status_filter(query)
     return {
-        "items": items,
+        "items": [
+            item for item in items
+            if _matches_filter(item, status_filter)
+        ],
         "summary": _summary(items),
+        "filter": status_filter,
     }
 
 
@@ -68,6 +88,32 @@ def _display_status(status, synced_at):
 
 def _selectable(status):
     return status not in {statuses.CONFLICT, statuses.IGNORED}
+
+
+def _status_filter(query):
+    params = parse_qs(query or "")
+    value = _string_or_none((params.get("status") or [""])[0])
+    if value in VALID_FILTERS:
+        return value
+    return DEFAULT_FILTER
+
+
+def _matches_filter(item, status_filter):
+    status = item["notionSyncStatus"]
+    if status_filter == ALL_FILTER:
+        return True
+    if status_filter == NEVER_SYNCED_FILTER:
+        return _is_never_synced(item)
+    if status_filter == DEFAULT_FILTER:
+        return _is_never_synced(item) or status in {
+            statuses.PENDING,
+            statuses.ERROR,
+        }
+    return status == status_filter
+
+
+def _is_never_synced(item):
+    return item["notionSyncStatus"] is None and item["notionLastSyncedAt"] is None
 
 
 def _has_work_code(record):
