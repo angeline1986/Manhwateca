@@ -459,6 +459,12 @@ function updateNotionSyncFocusedCandidate(area) {
   const page = area.querySelector("[data-notion-sync-detail-page]");
   const synced = area.querySelector("[data-notion-sync-detail-synced]");
   const cover = area.querySelector("[data-notion-sync-detail-cover]");
+  const noteTitle = area.querySelector("[data-notion-sync-note-title]");
+  const noteText = area.querySelector("[data-notion-sync-note-text]");
+  const completion = area.querySelector("[data-notion-sync-completion]");
+  const nextLabel = area.querySelector("[data-notion-sync-next-label]");
+  const nextHelper = area.querySelector("[data-notion-sync-next-helper]");
+  const action = area.querySelector("[data-notion-sync-action]");
   if (!title || !workCode || !page || !synced) return;
 
   if (!focused) {
@@ -471,18 +477,176 @@ function updateNotionSyncFocusedCandidate(area) {
       status.textContent = "";
       status.hidden = true;
     }
+    updateNotionSyncDetailCopy({
+      action,
+      completion,
+      nextHelper,
+      nextLabel,
+      noteText,
+      noteTitle,
+      state: "empty",
+    });
     return;
   }
 
   title.textContent = focused.dataset.notionSyncTitle || "Obra sem título";
   workCode.textContent = focused.dataset.notionSyncWorkCode || "Não informado";
-  page.textContent = focused.dataset.notionSyncPageLabel || "Não associada";
+  const detailState = notionSyncDetailState(focused);
+  page.textContent = detailState === "synced" && focused.dataset.notionSyncPageLabel === "Associada"
+    ? "✓ Associada"
+    : focused.dataset.notionSyncPageLabel || "Não associada";
   synced.textContent = focused.dataset.notionSyncSyncedLabel || "Não informada";
   setNotionSyncCover(cover, focused.dataset.notionSyncCoverUrl || "");
   if (status) {
-    status.textContent = focused.dataset.notionSyncStatus || "Estado local não informado";
+    renderNotionSyncStatusBadge(status, focused, detailState);
     status.hidden = false;
   }
+  updateNotionSyncDetailCopy({
+    action,
+    completion,
+    nextHelper,
+    nextLabel,
+    noteText,
+    noteTitle,
+    state: detailState,
+    message: focused.dataset.notionSyncResultMessage || "",
+    sessionDone: focused.dataset.notionSyncSessionDone === "true",
+  });
+}
+
+function notionSyncDetailState(item) {
+  const result = String(item.dataset.notionSyncResultStatus || "").trim();
+  const status = String(item.dataset.notionSyncRawStatus || "").trim();
+  if (["synced", "remote_matches_local"].includes(result) || status === "synced") return "synced";
+  if (["failed"].includes(result) || status === "error") return "error";
+  if (["missing_page"].includes(result)) return "missing";
+  if (["duplicate_page", "blocked"].includes(result) || status === "conflict") return "blocked";
+  if (status === "pending") return "pending";
+  if (!status) return "never";
+  return "default";
+}
+
+function renderNotionSyncStatusBadge(target, item, state) {
+  target.className = `sync-notion-detail-status sync-notion-detail-status--${state}`;
+  target.replaceChildren();
+  const label = document.createElement("strong");
+  label.textContent = notionSyncStatusLabel(item, state);
+  target.appendChild(label);
+  const syncedAt = String(item.dataset.notionSyncSyncedLabel || "").trim();
+  if (state === "synced" && syncedAt && syncedAt !== "Nunca sincronizada") {
+    const detail = document.createElement("span");
+    detail.textContent = syncedAt === "Equivalência confirmada"
+      ? "Equivalência confirmada com o Notion"
+      : syncedAt;
+    target.appendChild(detail);
+  }
+}
+
+function notionSyncStatusLabel(item, state) {
+  if (state === "synced") return "Sincronizada";
+  if (state === "pending") return "Pendente de sincronização";
+  if (state === "never") return "Nunca sincronizada";
+  if (state === "error") return "Erro na sincronização";
+  if (state === "missing") return "Página não encontrada";
+  if (state === "blocked") return "Revisão necessária";
+  return item.dataset.notionSyncStatus || "Estado local não informado";
+}
+
+function updateNotionSyncDetailCopy({
+  action,
+  completion,
+  nextHelper,
+  nextLabel,
+  noteText,
+  noteTitle,
+  state,
+  message = "",
+  sessionDone = false,
+}) {
+  const copy = notionSyncDetailCopy(state);
+  if (noteTitle) noteTitle.textContent = copy.noteTitle;
+  if (noteText) noteText.textContent = message && copy.prefersMessage ? message : copy.noteText;
+  if (nextLabel) nextLabel.textContent = copy.nextLabel;
+  if (nextHelper) nextHelper.textContent = copy.nextHelper;
+  if (action) {
+    action.textContent = copy.actionLabel;
+    action.disabled = copy.actionDisabled;
+    action.classList.toggle("primary-action", copy.actionTone === "primary");
+    action.classList.toggle("secondary-action", copy.actionTone !== "primary");
+  }
+  if (completion) {
+    completion.hidden = !(state === "synced" && sessionDone);
+  }
+}
+
+function notionSyncDetailCopy(state) {
+  if (state === "synced") {
+    return {
+      actionDisabled: false,
+      actionLabel: "Verificar novamente",
+      actionTone: "secondary",
+      nextHelper: "A obra está sincronizada. Faça uma nova comparação somente quando precisar.",
+      nextLabel: "Nenhuma ação necessária",
+      noteText: "Uma nova verificação comparará os dados locais com o Notion. Nenhuma alteração será enviada se os dados continuarem equivalentes.",
+      noteTitle: "A obra já está sincronizada",
+    };
+  }
+  if (state === "pending") {
+    return {
+      actionDisabled: false,
+      actionLabel: "Sincronizar esta obra",
+      actionTone: "primary",
+      nextHelper: "",
+      nextLabel: "Sincronização necessária",
+      noteText: "O planner comparará os dados locais com o Notion e aplicará somente as diferenças encontradas.",
+      noteTitle: "Existem dados pendentes de verificação",
+    };
+  }
+  if (state === "error") {
+    return {
+      actionDisabled: false,
+      actionLabel: "Tentar novamente",
+      actionTone: "primary",
+      nextHelper: "",
+      nextLabel: "Revisar erro",
+      noteText: "Revise o erro registrado e execute uma nova tentativa quando estiver pronto.",
+      noteTitle: "A última verificação encontrou um erro",
+      prefersMessage: true,
+    };
+  }
+  if (state === "missing") {
+    return {
+      actionDisabled: false,
+      actionLabel: "Criar página",
+      actionTone: "primary",
+      nextHelper: "",
+      nextLabel: "Criar ou associar página",
+      noteText: "Não foi possível localizar uma página correspondente no Notion.",
+      noteTitle: "Página não encontrada",
+      prefersMessage: true,
+    };
+  }
+  if (state === "blocked") {
+    return {
+      actionDisabled: true,
+      actionLabel: "Revisar bloqueio",
+      actionTone: "secondary",
+      nextHelper: "",
+      nextLabel: "Revisão necessária",
+      noteText: "Existe um bloqueio que precisa ser resolvido antes da sincronização direta.",
+      noteTitle: "Sincronização bloqueada",
+      prefersMessage: true,
+    };
+  }
+  return {
+    actionDisabled: state === "empty",
+    actionLabel: state === "empty" ? "Selecione obras" : "Sincronizar esta obra",
+    actionTone: "primary",
+    nextHelper: "",
+    nextLabel: "Sincronizar quando estiver pronta",
+    noteText: "O planner oficial localizará a página correspondente no Notion, comparará os dados técnicos e aplicará alterações quando encontrar diferenças.",
+    noteTitle: "O que acontecerá",
+  };
 }
 
 function setNotionSyncCover(target, url) {

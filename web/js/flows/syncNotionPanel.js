@@ -217,7 +217,7 @@ function officialState(context) {
         ? "As alterações técnicas foram aplicadas pelo fluxo oficial."
         : `Verificação concluída: ${checkedCount || 0} obra(s) equivalentes ao Notion.`,
       tone: "ok",
-      note: "As obras verificadas foram removidas desta fila da sessão. Selecione um novo lote para continuar.",
+      note: "",
       metrics: syncedMetrics(metrics),
       blockers: blockers(metrics),
       nextAction: nextActionLabel(metrics.next_action || "none"),
@@ -277,6 +277,8 @@ function candidatePicker(context) {
     : (Array.isArray(candidates.items) ? candidates.items : []);
   const summary = candidates.summary || {};
   const journeyCount = context.journeyWorkIds.length;
+  const resultByWorkId = latestResultByWorkId(context.stageResult?.metrics?.results);
+  const sessionWorkIds = new Set((context.hiddenWorkIds || []).map(Number));
   const pageSize = 5;
   const page = 1;
   const pages = Math.max(1, Math.ceil(items.length / pageSize));
@@ -313,7 +315,10 @@ function candidatePicker(context) {
         </label>
       </div>
       <div class="sync-notion-candidate-list">
-        ${items.length ? items.map(candidateItem).join("") : emptyCandidates()}
+        ${items.length ? items.map((item, index) => candidateItem(item, index, {
+          result: resultByWorkId.get(Number(item.workId)),
+          sessionDone: sessionWorkIds.has(Number(item.workId)),
+        })).join("") : emptyCandidates()}
       </div>
       <div class="sync-notion-candidate-footer">
         <span></span>
@@ -325,6 +330,16 @@ function candidatePicker(context) {
 
 function headingTooltip(label, text) {
   return `<span class="flow-heading-tooltip" tabindex="0" aria-label="${escapeHtml(text)}">${escapeHtml(label)}</span>`;
+}
+
+function latestResultByWorkId(results) {
+  const entries = new Map();
+  if (!Array.isArray(results)) return entries;
+  for (const result of results) {
+    const workId = Number(result?.work_id || result?.workId);
+    if (Number.isFinite(workId) && workId > 0) entries.set(workId, result);
+  }
+  return entries;
 }
 
 function selectedCandidateDetail() {
@@ -356,9 +371,13 @@ function selectedCandidateDetail() {
           <span>Sem capa</span>
         </div>
         <article class="sync-notion-planner-note">
-          <strong>O que acontecerá</strong>
-          <p>O planner oficial localizará a página correspondente no Notion, comparará os dados técnicos e só aplicará alterações quando encontrar diferenças.</p>
+          <strong data-notion-sync-note-title>O que acontecerá</strong>
+          <p data-notion-sync-note-text>O planner oficial localizará a página correspondente no Notion, comparará os dados técnicos e só aplicará alterações quando encontrar diferenças.</p>
         </article>
+      </div>
+      <div class="sync-notion-completion-note" data-notion-sync-completion hidden>
+        <strong>Verificação concluída</strong>
+        <span>Esta obra foi removida da fila da sessão. Selecione outro item para continuar.</span>
       </div>
     </section>
   `;
@@ -417,12 +436,17 @@ function candidateSummary(summary) {
   `).join("");
 }
 
-function candidateItem(item, index) {
+function candidateItem(item, index, options = {}) {
   const workId = item.workId || "";
   const title = item.title || "Obra sem título";
   const status = item.displayStatus || "Estado local não informado";
+  const listStatus = compactCandidateStatus(item, status);
   const pageLabel = item.notionPageId ? "Associada" : "Não associada";
-  const syncedLabel = item.notionLastSyncedAt ? formatTimestamp(item.notionLastSyncedAt) : "Nunca sincronizada";
+  const resultStatus = String(options.result?.status || "").trim();
+  const resultMessage = String(options.result?.message || options.result?.reason || options.result?.error || "").trim();
+  const syncedLabel = item.notionLastSyncedAt
+    ? formatTimestamp(item.notionLastSyncedAt)
+    : (item.notionSyncStatus === "synced" || resultStatus === "remote_matches_local" ? "Equivalência confirmada" : "Nunca sincronizada");
   const selectable = item.selectable !== false;
   const search = [
     title,
@@ -430,14 +454,24 @@ function candidateItem(item, index) {
     String(workId || ""),
   ].join(" ").toLocaleLowerCase("pt-BR");
   return `
-    <label class="sync-notion-candidate ${selectable ? "" : "is-disabled"}" data-notion-sync-candidate data-notion-sync-index="${index}" data-notion-sync-search-text="${escapeHtml(search)}" data-notion-sync-title="${escapeHtml(title)}" data-notion-sync-status="${escapeHtml(status)}" data-notion-sync-work-code="${escapeHtml(item.workCode || "")}" data-notion-sync-page-label="${escapeHtml(pageLabel)}" data-notion-sync-synced-label="${escapeHtml(syncedLabel)}" data-notion-sync-cover-url="${escapeHtml(item.coverUrl || "")}" ${index >= 5 ? "hidden" : ""}>
+    <label class="sync-notion-candidate ${selectable ? "" : "is-disabled"}" data-notion-sync-candidate data-notion-sync-index="${index}" data-notion-sync-search-text="${escapeHtml(search)}" data-notion-sync-title="${escapeHtml(title)}" data-notion-sync-status="${escapeHtml(status)}" data-notion-sync-raw-status="${escapeHtml(item.notionSyncStatus || "")}" data-notion-sync-result-status="${escapeHtml(resultStatus)}" data-notion-sync-result-message="${escapeHtml(resultMessage)}" data-notion-sync-session-done="${options.sessionDone ? "true" : "false"}" data-notion-sync-work-code="${escapeHtml(item.workCode || "")}" data-notion-sync-page-label="${escapeHtml(pageLabel)}" data-notion-sync-synced-label="${escapeHtml(syncedLabel)}" data-notion-sync-cover-url="${escapeHtml(item.coverUrl || "")}" ${index >= 5 ? "hidden" : ""}>
       <input type="checkbox" data-notion-sync-choice data-notion-sync-work-id="${escapeHtml(String(workId))}" ${selectable ? "" : "disabled"}>
       <span>
         <strong>${escapeHtml(title)}</strong>
-        <small>${escapeHtml(status)} · ID ${escapeHtml(String(workId || "--"))}</small>
+        <small>${escapeHtml(listStatus)} · ID ${escapeHtml(String(workId || "--"))}</small>
       </span>
     </label>
   `;
+}
+
+function compactCandidateStatus(item, fallback) {
+  const status = String(item?.notionSyncStatus || "").trim();
+  if (status === "synced") return "Sincronizada";
+  if (status === "pending") return "Pendente";
+  if (status === "error") return "Erro";
+  if (status === "conflict") return "Precisa de revisão";
+  if (status === "ignored") return "Ignorada";
+  return fallback;
 }
 
 function notionSyncPager(page, pages) {
@@ -525,10 +559,11 @@ function nextAction(state, disabled = false) {
     <article class="sync-notion-next-action">
       <div>
         <strong>Próxima ação</strong>
-        <span>${escapeHtml(state.nextAction)}</span>
+        <span data-notion-sync-next-label>${escapeHtml(state.nextAction)}</span>
+        <p data-notion-sync-next-helper></p>
       </div>
       ${state.showActionButton === false ? "" : `
-        <button class="primary-action" type="button" data-flow-run-stage ${disabled ? "disabled" : ""}>
+        <button class="primary-action" type="button" data-flow-run-stage data-notion-sync-action ${disabled ? "disabled" : ""}>
           ${escapeHtml(state.actionLabel)}
         </button>
       `}
