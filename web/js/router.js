@@ -8,12 +8,13 @@ export function initRouter(options = {}) {
 
   function showPage(pageName, updateHash = true) {
     const page = pageMeta[pageName] ? pageName : "overview";
+    const pageSection = page === "organization-v2" ? "organization" : page;
     const topbar = document.getElementById("topbar");
     topbar.classList.toggle("overview", page === "overview");
     topbar.classList.toggle("flows", page === "flows");
     document.getElementById("refresh").hidden = page !== "overview";
     document.querySelectorAll(".page").forEach(section =>
-      section.classList.toggle("active", section.id === `page-${page}`)
+      section.classList.toggle("active", section.id === `page-${pageSection}`)
     );
     document.querySelectorAll("[data-page]").forEach(button =>
       button.classList.toggle("active", button.dataset.page === page)

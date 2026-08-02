@@ -19,6 +19,11 @@ export const pageMeta = {
     title: "Organização",
     subtitle: "Revise e aplique padrões com segurança.",
   },
+  "organization-v2": {
+    eyebrow: "ORGANIZAÇÃO",
+    title: "Organização v2",
+    subtitle: "Fluxo guiado para rastrear, revisar e aplicar organização.",
+  },
   mangaupdates: {
     eyebrow: "ENRIQUECIMENTO",
     title: "MangaUpdates",
