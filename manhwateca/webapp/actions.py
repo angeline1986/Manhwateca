@@ -39,6 +39,14 @@ SAFE_ACTIONS = {
         "reports": [],
         "group": "tests",
     },
+    "release_check": {
+        "label": "Verificar lançamentos",
+        "description": "Consulta lançamentos recentes no MangaUpdates e atualiza o histórico local.",
+        "result": "Atualiza os cards e a lista de lançamentos do Dashboard.",
+        "command": ["scripts/check_releases.py"],
+        "reports": [],
+        "group": "release_monitor",
+    },
     "apply_organization": {
         "label": "Aplicar organização alfabética",
         "description": "Move as pastas para os grupos alfabéticos corretos.",

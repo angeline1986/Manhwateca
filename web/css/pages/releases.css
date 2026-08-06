@@ -1,0 +1,96 @@
+.releases-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.release-cards {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.release-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: inherit;
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  text-align: left;
+}
+
+.release-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent), transparent 75%);
+}
+
+.release-card span,
+.release-card small,
+.release-card em {
+  color: var(--muted);
+  font-style: normal;
+}
+
+.release-list-head,
+.release-filters {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.release-filters input[type="search"] {
+  min-width: 180px;
+}
+
+.filter-chip,
+.table-action {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: inherit;
+  cursor: pointer;
+  padding: 8px 10px;
+}
+
+.filter-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.release-feedback {
+  color: var(--muted);
+  min-height: 20px;
+}
+
+.release-table-wrap {
+  overflow-x: auto;
+}
+
+.release-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.release-table th,
+.release-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.checkbox-label {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+@media (max-width: 760px) {
+  .release-cards {
+    grid-template-columns: 1fr;
+  }
+}

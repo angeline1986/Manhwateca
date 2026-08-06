@@ -3,6 +3,7 @@ import random
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlencode
 
 
 API_BASE = "https://api.mangaupdates.com/v1"
@@ -58,3 +59,12 @@ def search_series(title, per_page=5, timeout=30, retries=4):
 
 def get_series(series_id):
     return request_json(f"{API_BASE}/series/{series_id}")
+
+
+def list_releases_by_day(page=1, per_page=100, timeout=30, retries=4):
+    query = urlencode({"page": page, "perpage": per_page})
+    return request_json(
+        f"{API_BASE}/releases/days?{query}",
+        timeout=timeout,
+        retries=retries,
+    )

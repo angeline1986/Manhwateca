@@ -18,6 +18,9 @@ const organizationCatalogPendingList = byId("organizationCatalogPendingList");
 const catalogPendingCount = byId("catalogPendingCount"), catalogPendingMeta = byId("catalogPendingMeta");
 const catalogAllPending = byId("catalogAllPending"), refreshCatalogPending = byId("refreshCatalogPending");
 const diagnosticGrid = byId("diagnosticGrid"), refreshDiagnostics = byId("refreshDiagnostics");
+const releaseCards = byId("releaseCards"), releaseList = byId("releaseList");
+const releaseFeedback = byId("releaseFeedback"), releaseCheckNow = byId("releaseCheckNow");
+const releaseSearch = byId("releaseSearch"), releaseUnseenOnly = byId("releaseUnseenOnly");
 const actionGrid = byId("actionGrid"), mangaActionGrid = byId("mangaActionGrid");
 const notionActionGrid = byId("notionActionGrid"), supportActionGrid = byId("supportActionGrid");
 const taskList = byId("taskList"), taskToast = byId("taskToast"), viewTaskProgress = byId("viewTaskProgress");
@@ -59,6 +62,12 @@ const overviewPage = initOverviewPage({
   organizationPendingList,
   diagnosticGrid,
   refreshDiagnostics,
+  releaseCards,
+  releaseList,
+  releaseFeedback,
+  releaseCheckNow,
+  releaseSearch,
+  releaseUnseenOnly,
 });
 const loadStatus = overviewPage.loadStatus;
 const loadDiagnostics = overviewPage.loadDiagnostics;

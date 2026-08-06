@@ -1,4 +1,5 @@
 import { getJson } from "../api/client.js";
+import { checkReleases, getReleases, getReleasesSummary, markViewed } from "../api/releasesApi.js";
 import { escapeHtml } from "../utils/html.js";
 
 function card(title, detail, available, label) {
@@ -23,6 +24,8 @@ function pendingKindLabel(kind) {
 }
 
 export function initOverviewPage(elements) {
+  let releasePeriod = "today";
+
   function setPendingLists(html) {
     if (elements.pendingList) elements.pendingList.innerHTML = html;
     if (elements.organizationPendingList) {
@@ -102,6 +105,7 @@ export function initOverviewPage(elements) {
         ),
       ].join("");
       await loadPendingActions();
+      await loadReleaseDashboard();
     } catch (error) {
       elements.grid.innerHTML = card(
         "Falha ao consultar status",
@@ -118,6 +122,67 @@ export function initOverviewPage(elements) {
     } finally {
       elements.refreshButton.disabled = false;
     }
+  }
+
+  async function loadReleaseDashboard() {
+    if (!elements.releaseCards) return;
+    elements.releaseCards.innerHTML = '<article class="release-card loading">Carregando lançamentos...</article>';
+    elements.releaseFeedback.textContent = "";
+    try {
+      const { response, payload } = await getReleasesSummary();
+      if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      elements.releaseCards.innerHTML = ["month", "week", "today"].map(period => releaseCard(period, payload)).join("");
+      setReleasePeriod(releasePeriod, false);
+      await loadReleaseList();
+    } catch (error) {
+      elements.releaseCards.innerHTML = "";
+      elements.releaseFeedback.textContent = `Não foi possível carregar lançamentos: ${error.message}`;
+    }
+  }
+
+  async function loadReleaseList() {
+    if (!elements.releaseList) return;
+    elements.releaseList.innerHTML = '<tr><td colspan="8">Carregando lançamentos...</td></tr>';
+    const search = elements.releaseSearch?.value || "";
+    const unseen = Boolean(elements.releaseUnseenOnly?.checked);
+    try {
+      const { response, payload } = await getReleases({
+        period: releasePeriod,
+        search,
+        unseen_only: unseen ? "true" : "",
+        per_page: 20,
+      });
+      if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      if (!payload.items.length) {
+        elements.releaseList.innerHTML = `<tr><td colspan="8">Nenhum lançamento encontrado ${periodLabel(releasePeriod).toLowerCase()}.</td></tr>`;
+        return;
+      }
+      elements.releaseList.innerHTML = payload.items.map(item => `
+        <tr>
+          <td>${escapeHtml(item.title || "")}</td>
+          <td>${escapeHtml(item.chapter || "")}</td>
+          <td>${escapeHtml(item.volume || "-")}</td>
+          <td>${escapeHtml(item.release_group || "-")}</td>
+          <td>${escapeHtml(dateOnly(item.release_date))}</td>
+          <td>${escapeHtml(dateTime(item.first_seen_at))}</td>
+          <td><span class="state ${item.viewed_at ? "ok" : "warn"}">${escapeHtml(item.status)}</span></td>
+          <td><button type="button" class="table-action" data-release-viewed="${item.id}" ${item.viewed_at ? "disabled" : ""}>Marcar</button></td>
+        </tr>
+      `).join("");
+    } catch (error) {
+      elements.releaseList.innerHTML = `<tr><td colspan="8">Erro ao carregar lançamentos: ${escapeHtml(error.message)}</td></tr>`;
+    }
+  }
+
+  function setReleasePeriod(period, reload = true) {
+    releasePeriod = period;
+    document.querySelectorAll("[data-release-period]").forEach(button => {
+      button.classList.toggle("active", button.dataset.releasePeriod === period);
+    });
+    document.querySelectorAll("[data-release-card]").forEach(button => {
+      button.classList.toggle("active", button.dataset.releaseCard === period);
+    });
+    if (reload) loadReleaseList();
   }
 
   async function loadDiagnostics() {
@@ -137,6 +202,72 @@ export function initOverviewPage(elements) {
 
   elements.refreshButton?.addEventListener("click", loadStatus);
   elements.refreshDiagnostics?.addEventListener("click", loadDiagnostics);
+  elements.releaseCards?.addEventListener("click", event => {
+    const button = event.target.closest("[data-release-card]");
+    if (button) setReleasePeriod(button.dataset.releaseCard);
+  });
+  document.querySelectorAll("[data-release-period]").forEach(button => {
+    button.addEventListener("click", () => setReleasePeriod(button.dataset.releasePeriod));
+  });
+  elements.releaseSearch?.addEventListener("input", () => loadReleaseList());
+  elements.releaseUnseenOnly?.addEventListener("change", () => loadReleaseList());
+  elements.releaseList?.addEventListener("click", async event => {
+    const button = event.target.closest("[data-release-viewed]");
+    if (!button) return;
+    button.disabled = true;
+    await markViewed({ release_id: button.dataset.releaseViewed });
+    await loadReleaseDashboard();
+  });
+  elements.releaseCheckNow?.addEventListener("click", async () => {
+    elements.releaseCheckNow.disabled = true;
+    elements.releaseFeedback.textContent = "Verificação em andamento...";
+    try {
+      const { payload } = await checkReleases();
+      elements.releaseFeedback.textContent = payload.id
+        ? "Verificação iniciada. Atualizando dados em instantes..."
+        : "Verificação iniciada.";
+      setTimeout(loadReleaseDashboard, 2500);
+    } catch (error) {
+      elements.releaseFeedback.textContent = `Não foi possível iniciar a verificação: ${error.message}`;
+    } finally {
+      elements.releaseCheckNow.disabled = false;
+    }
+  });
 
   return { loadStatus, loadDiagnostics, loadPendingActions };
+}
+
+function releaseCard(period, payload) {
+  const data = payload[period] || {};
+  const run = payload.last_monitor_run;
+  const last = run?.finished_at ? dateTime(run.finished_at) : "nunca executado";
+  return `
+    <button type="button" class="release-card ${period === "today" ? "active" : ""}" data-release-card="${period}">
+      <strong>${cardTitle(period)}</strong>
+      <span>${data.release_count || 0} lançamentos</span>
+      <span>em ${data.work_count || 0} obras</span>
+      <span>${data.unseen_count || 0} não visualizados</span>
+      <small>${dateOnly(data.start_date)} a ${dateOnly(data.end_date)}</small>
+      <em>Última verificação: ${escapeHtml(last)}</em>
+    </button>
+  `;
+}
+
+function cardTitle(period) {
+  return { month: "Lançamentos do mês", week: "Lançamentos da semana", today: "Lançamentos de hoje" }[period];
+}
+
+function periodLabel(period) {
+  return { month: "este mês", week: "esta semana", today: "hoje" }[period];
+}
+
+function dateOnly(value) {
+  return value ? String(value).slice(0, 10).split("-").reverse().join("/") : "-";
+}
+
+function dateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }

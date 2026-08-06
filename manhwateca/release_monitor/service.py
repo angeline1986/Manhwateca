@@ -1,0 +1,112 @@
+from calendar import monthrange
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+from manhwateca.mangaupdates_service.client import list_releases_by_day
+from manhwateca.release_monitor.models import (
+    TIMEZONE,
+    ReleaseMonitorPeriods,
+    ReleaseMonitorResult,
+)
+from manhwateca.release_monitor.parser import has_more_pages, parse_external_releases
+from manhwateca.release_monitor.repository import ReleaseMonitorRepository
+
+
+def current_periods(now=None, timezone=TIMEZONE):
+    tz = ZoneInfo(timezone)
+    current = (now or datetime.now(tz)).astimezone(tz).date()
+    week_start = current - timedelta(days=current.weekday())
+    last_day = monthrange(current.year, current.month)[1]
+    return ReleaseMonitorPeriods(
+        today_start=current,
+        today_end=current,
+        week_start=week_start,
+        week_end=week_start + timedelta(days=6),
+        month_start=current.replace(day=1),
+        month_end=current.replace(day=last_day),
+    )
+
+
+class ReleaseMonitorService:
+    def __init__(self, repository=None, client_func=None, now_func=None, timezone=TIMEZONE):
+        self.repository = repository or ReleaseMonitorRepository()
+        self.client_func = client_func or list_releases_by_day
+        self.now_func = now_func
+        self.timezone = timezone
+
+    def run(self, max_pages=10, per_page=100):
+        tz = ZoneInfo(self.timezone)
+        now = self.now_func() if self.now_func else datetime.now(tz)
+        periods = current_periods(now, self.timezone)
+        run_id = self.repository.start_run(periods.today_start, self.timezone)
+        if run_id is None:
+            active = self.repository.active_run() or {}
+            return ReleaseMonitorResult(
+                status="already_running",
+                run_id=active.get("id"),
+                started_at=active.get("started_at"),
+                finished_at=None,
+                error_message="Monitor de lançamentos já está em execução.",
+            )
+
+        metrics = {
+            "pages_requested": 0,
+            "releases_received": 0,
+            "releases_in_period": 0,
+            "releases_matched": 0,
+            "releases_inserted": 0,
+            "releases_already_known": 0,
+            "releases_unmatched": 0,
+        }
+        status = "success"
+        error_message = None
+        try:
+            subscriptions = self.repository.list_active_subscriptions()
+            by_series = {
+                int(str(row["work_code"]).strip()): row["manga_id"]
+                for row in subscriptions
+                if str(row.get("work_code") or "").strip().isdigit()
+            }
+            for page in range(1, max_pages + 1):
+                metrics["pages_requested"] += 1
+                payload = self.client_func(page=page, per_page=per_page)
+                releases = parse_external_releases(payload)
+                metrics["releases_received"] += len(releases)
+                page_dates = [release.release_date for release in releases]
+                for release in releases:
+                    if release.release_date < periods.earliest_start:
+                        continue
+                    metrics["releases_in_period"] += 1
+                    manga_id = by_series.get(release.series_id)
+                    if manga_id is None:
+                        metrics["releases_unmatched"] += 1
+                        continue
+                    metrics["releases_matched"] += 1
+                    if self.repository.upsert_release(release, manga_id):
+                        metrics["releases_inserted"] += 1
+                    else:
+                        metrics["releases_already_known"] += 1
+                if page_dates and max(page_dates) < periods.earliest_start:
+                    break
+                if not releases or not has_more_pages(payload, page):
+                    break
+        except Exception as error:
+            status = "failed" if metrics["releases_received"] == 0 else "partial_success"
+            error_message = _safe_error(error)
+        self.repository.finish_run(run_id, status, metrics, error_message)
+        latest = self.repository.latest_run() or {}
+        return ReleaseMonitorResult(
+            status=status,
+            run_id=run_id,
+            started_at=latest.get("started_at"),
+            finished_at=latest.get("finished_at"),
+            error_message=error_message,
+            **metrics,
+        )
+
+
+def _safe_error(error):
+    text = str(error).strip()
+    if not text:
+        return "Falha inesperada ao consultar lançamentos."
+    return text[:500]

@@ -170,6 +170,52 @@
             <article class="status-card loading">Consultando o ambiente...</article>
           </div>
 
+          <section class="panel releases-panel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">LANÇAMENTOS</span>
+                <h2>Lançamentos</h2>
+              </div>
+              <button class="secondary-action" id="releaseCheckNow" type="button">
+                Verificar agora
+              </button>
+            </div>
+            <div class="release-cards" id="releaseCards" aria-live="polite"></div>
+            <div class="release-list-head">
+              <h3>Lançamentos recentes</h3>
+              <div class="release-filters">
+                <button type="button" class="filter-chip active" data-release-period="today">Hoje</button>
+                <button type="button" class="filter-chip" data-release-period="week">Esta semana</button>
+                <button type="button" class="filter-chip" data-release-period="month">Este mês</button>
+                <label>
+                  <input id="releaseSearch" type="search" placeholder="Buscar título">
+                </label>
+                <label class="checkbox-label">
+                  <input id="releaseUnseenOnly" type="checkbox">
+                  Somente não visualizados
+                </label>
+              </div>
+            </div>
+            <div class="release-feedback" id="releaseFeedback"></div>
+            <div class="release-table-wrap">
+              <table class="release-table">
+                <thead>
+                  <tr>
+                    <th>Obra</th>
+                    <th>Capítulo</th>
+                    <th>Volume</th>
+                    <th>Grupo</th>
+                    <th>Data</th>
+                    <th>Detectado em</th>
+                    <th>Situação</th>
+                    <th>Ação</th>
+                  </tr>
+                </thead>
+                <tbody id="releaseList"></tbody>
+              </table>
+            </div>
+          </section>
+
           <section class="panel pending-panel">
             <div class="section-heading">
               <div>

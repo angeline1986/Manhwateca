@@ -25,6 +25,14 @@ from manhwateca.webapp.notion_metadata import metadata_status
 from manhwateca.webapp.notion_sync_candidates import sync_candidates_payload
 from manhwateca.webapp.pending_actions import pending_payload
 from manhwateca.webapp.post_routes import handle_direct_post
+from manhwateca.webapp.releases import (
+    dashboard_releases_summary,
+    mark_viewed_payload,
+    release_status_payload,
+    releases_payload,
+    subscriptions_payload,
+    update_subscription_payload,
+)
 from manhwateca.webapp.status import build_status
 from manhwateca.webapp.tasks import TaskManager
 from manhwateca.webapp.workflow import WorkflowManager
@@ -79,6 +87,18 @@ def create_handler(project_root, task_manager, workflow_manager=None):
                 return
             if path == "/api/editorial":
                 self._send_json(dashboard_payload(project_root))
+                return
+            if path == "/api/dashboard/releases-summary":
+                self._send_json(dashboard_releases_summary())
+                return
+            if path == "/api/releases":
+                self._send_json(releases_payload(urlparse(self.path).query))
+                return
+            if path == "/api/releases/subscriptions":
+                self._send_json(subscriptions_payload())
+                return
+            if path == "/api/releases/status":
+                self._send_json(release_status_payload())
                 return
             if path == "/api/mangaupdates/review":
                 try:
@@ -139,6 +159,20 @@ def create_handler(project_root, task_manager, workflow_manager=None):
             )
             if direct:
                 self._send_json(*direct)
+                return
+            if path == "/api/releases/check":
+                try:
+                    task = task_manager.start("release_check")
+                except RuntimeError:
+                    self._send_json({"status": "already_running"}, status=409)
+                else:
+                    self._send_json(task, status=202)
+                return
+            if path == "/api/releases/subscriptions/update":
+                self._send_json(*update_subscription_payload(payload))
+                return
+            if path == "/api/releases/mark-viewed":
+                self._send_json(mark_viewed_payload(payload))
                 return
             if not path.startswith("/api/tasks/"):
                 self._send_json({"error": "Rota não encontrada."}, status=404)
