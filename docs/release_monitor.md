@@ -1,6 +1,6 @@
 # Monitor de lançamentos MangaUpdates
 
-O monitor consulta lançamentos recentes do MangaUpdates, associa cada release a uma obra local pelo ID confirmado (`release.series_id -> mangas.work_code -> mangas.id`) e mantém histórico em PostgreSQL. A página `Dashboard > Visão geral` consome esse histórico para os cards e a lista de lançamentos.
+O monitor consulta lançamentos recentes do MangaUpdates, associa cada release a uma obra local pelo ID confirmado (`release.series_id -> mangas.work_code -> mangas.id`) e mantém histórico em PostgreSQL. A página `Dashboard > Visão geral` consome esse histórico para os cards e a lista de capítulos disponíveis.
 
 Obras com `mangas.work_code` confirmado são monitoradas automaticamente. A tabela `release_monitor_subscriptions` funciona como override: registro ausente usa a regra automática, `enabled=true` força monitoramento e `enabled=false` exclui explicitamente a obra.
 
@@ -21,6 +21,8 @@ Contrato validado em 2026-08-06:
 
 A resposta externa é convertida para `ExternalRelease` antes de chegar ao serviço. O parser aceita variações comuns de campo (`series_id`/`seriesId`, `release_date`/`date`, `group_name`/`group`) para isolar o restante do sistema do JSON bruto.
 
+O MangaUpdates registra releases presentes na base dele. Isso ajuda a descobrir capítulos disponíveis, mas não garante cobertura completa de todos os capítulos oficiais publicados nas plataformas originais.
+
 ## Tabelas
 
 - `release_monitor_subscriptions`: override por obra, com `enabled`, modo e datas de última verificação/sucesso/erro. Ausência de registro não impede monitoramento quando a obra possui `work_code`.
@@ -35,7 +37,9 @@ O fuso é sempre `America/Sao_Paulo`.
 - Semana: segunda-feira a domingo da semana corrente.
 - Mês: primeiro ao último dia do mês corrente.
 
-`release_date` é a data informada pelo MangaUpdates. `first_seen_at` é quando a Manhwateca detectou a release pela primeira vez. Uma release publicada ontem e detectada hoje mantém `release_date` de ontem e `first_seen_at` de hoje.
+`chapter_count` representa registros de capítulos persistidos em `mangaupdates_releases` para o período. `release_count` é mantido no contrato com o mesmo valor para compatibilidade.
+
+`release_date` é a data de lançamento informada pelo MangaUpdates. `first_seen_at` é quando a Manhwateca detectou a release pela primeira vez. `last_seen_at` é atualizado quando a mesma release reaparece em nova execução. Uma release publicada ontem e detectada hoje mantém `release_date` de ontem e `first_seen_at` de hoje.
 
 ## Deduplicação
 
@@ -63,6 +67,12 @@ O upsert preserva `first_seen_at` e `viewed_at`, atualiza `last_seen_at` e pode 
 
 ## Execução Manual
 
+Antes da primeira execução em um banco novo, aplique as migrations pelo runner oficial:
+
+```bash
+python -m manhwateca.database.migrate
+```
+
 Pelo terminal:
 
 ```bash
@@ -80,6 +90,27 @@ Use um agendador externo, sem loop permanente no servidor web. Exemplos:
 ```
 
 Em `launchd`, configure o mesmo comando com `WorkingDirectory` apontando para o repositório e `DATABASE_URL` disponível no ambiente.
+
+## Validação no Dashboard
+
+Abra `Dashboard > Visão geral` e confira a seção `Capítulos disponíveis`.
+
+- O cabeçalho mostra a última verificação ou `Verificação em andamento...`.
+- Os cards `Capítulos disponíveis no mês`, `Capítulos disponíveis na semana` e `Capítulos disponíveis hoje` refletem os contadores do endpoint `GET /api/dashboard/releases-summary`.
+- Hoje é o período inicial. Clicar nos cards ou nos filtros `Hoje`, `Esta semana` e `Este mês` atualiza a lista via `GET /api/releases?period=...`.
+- A busca por título e o filtro `Somente não visualizados` atuam sobre a lista do período selecionado.
+
+## Exclusão de Obras
+
+Para remover uma obra específica do monitoramento sem apagar o `work_code`, registre ou atualize a assinatura com `enabled=false` em `release_monitor_subscriptions`. Pela API:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/releases/subscriptions/update \
+  -H 'Content-Type: application/json' \
+  -d '{"manga_id": 123, "enabled": false, "monitor_mode": "releases"}'
+```
+
+Para voltar ao monitoramento explícito, use `enabled=true`. Para voltar ao modo automático, remova a assinatura da obra.
 
 ## Limitações
 

@@ -6,6 +6,9 @@ from manhwateca.release_monitor.parser import (
     parse_external_releases,
     parse_external_releases_with_stats,
 )
+from manhwateca.release_monitor import repository as repository_module
+from manhwateca.release_monitor.models import ExternalRelease
+from manhwateca.release_monitor.repository import ReleaseMonitorRepository
 from manhwateca.release_monitor.service import ReleaseMonitorService, current_periods
 
 
@@ -44,6 +47,34 @@ class FakeRepository:
         inserted = key not in self.rows
         self.rows[key] = release
         return inserted
+
+
+class CapturingCursor:
+    def __init__(self):
+        self.params = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, _sql, params=None):
+        self.params = params
+
+    def fetchone(self):
+        return {"id": 1, "inserted": True}
+
+
+class CapturingConnection:
+    def __init__(self):
+        self.cursor_instance = CapturingCursor()
+
+    def cursor(self):
+        return self.cursor_instance
+
+    def commit(self):
+        pass
 
 
 class ReleaseMonitorTests(unittest.TestCase):
@@ -156,6 +187,33 @@ class ReleaseMonitorTests(unittest.TestCase):
         repository.running = True
         result = ReleaseMonitorService(repository=repository).run()
         self.assertEqual(result.status, "already_running")
+
+    def test_repository_wraps_source_payload_for_jsonb(self):
+        class JsonbSentinel:
+            def __init__(self, value):
+                self.value = value
+
+        connection = CapturingConnection()
+        original_jsonb = repository_module.Jsonb
+        repository_module.Jsonb = JsonbSentinel
+        try:
+            release = ExternalRelease(
+                series_id=123,
+                external_release_id="rel-1",
+                chapter="1",
+                volume=None,
+                release_date=date(2026, 8, 6),
+                group_name="Grupo",
+                source_url=None,
+                raw_payload={"record": {"chapter": "1"}},
+            )
+            ReleaseMonitorRepository(connection=connection).upsert_release(release, 10)
+        finally:
+            repository_module.Jsonb = original_jsonb
+
+        payload_param = connection.cursor_instance.params[-1]
+        self.assertIsInstance(payload_param, JsonbSentinel)
+        self.assertEqual(payload_param.value["record"]["chapter"], "1")
 
 
 if __name__ == "__main__":
