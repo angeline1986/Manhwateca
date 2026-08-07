@@ -3,17 +3,34 @@ from datetime import date, datetime
 from manhwateca.release_monitor.models import ExternalRelease
 
 
-def parse_external_releases(payload) -> list[ExternalRelease]:
+def parse_external_releases_with_stats(payload):
     rows = _rows(payload)
     releases = []
-    for row in rows:
-        if not isinstance(row, dict):
+    stats = {
+        "releases_received": len(rows),
+        "releases_parsed": 0,
+        "releases_with_series_metadata": 0,
+        "releases_missing_series_metadata": 0,
+        "releases_invalid": 0,
+    }
+    for item in rows:
+        if not isinstance(item, dict):
+            stats["releases_invalid"] += 1
             continue
-        if isinstance(row.get("record"), dict):
-            row = row["record"]
-        release = _parse_release(row)
+        release, reason = _parse_release_item(item)
         if release:
             releases.append(release)
+            stats["releases_parsed"] += 1
+            stats["releases_with_series_metadata"] += 1
+        elif reason == "missing_series_metadata":
+            stats["releases_missing_series_metadata"] += 1
+        else:
+            stats["releases_invalid"] += 1
+    return releases, stats
+
+
+def parse_external_releases(payload) -> list[ExternalRelease]:
+    releases, _stats = parse_external_releases_with_stats(payload)
     return releases
 
 
@@ -30,31 +47,44 @@ def has_more_pages(payload, page: int) -> bool:
         return bool(payload.get("has_more"))
     if payload.get("next_page") or payload.get("nextPage"):
         return True
+    total_hits = payload.get("total_hits") or payload.get("totalHits")
+    per_page = payload.get("per_page") or payload.get("perPage")
+    if total_hits is not None and per_page:
+        try:
+            return page * int(per_page) < int(total_hits)
+        except (TypeError, ValueError):
+            return False
     rows = _rows(payload)
     return bool(rows)
 
 
-def _parse_release(row: dict) -> ExternalRelease | None:
-    series_id = _series_id(row)
-    chapter = _first_text(row, "chapter", "chapter_number", "chapterNumber", "chap")
+def _parse_release_item(item: dict):
+    record = item.get("record") if isinstance(item.get("record"), dict) else item
+    metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+    series = metadata.get("series") if isinstance(metadata.get("series"), dict) else {}
+
+    series_id = _series_id(record, series)
+    chapter = _first_text(record, "chapter", "chapter_number", "chapterNumber", "chap")
     release_date = _date_value(
-        row.get("release_date")
-        or row.get("releaseDate")
-        or row.get("date")
-        or row.get("timestamp")
+        record.get("release_date")
+        or record.get("releaseDate")
+        or record.get("date")
+        or record.get("timestamp")
     )
-    if series_id is None or not chapter or release_date is None:
-        return None
+    if series_id is None:
+        return None, "missing_series_metadata"
+    if not chapter or release_date is None:
+        return None, "invalid"
     return ExternalRelease(
         series_id=series_id,
         chapter=chapter,
         release_date=release_date,
-        volume=_first_text(row, "volume", "vol"),
-        group_name=_group_name(row),
-        external_release_id=_first_text(row, "id", "release_id", "releaseId"),
-        source_url=_first_text(row, "url", "source_url", "sourceUrl"),
-        raw_payload=row,
-    )
+        volume=_first_text(record, "volume", "vol"),
+        group_name=_group_name(record),
+        external_release_id=_first_text(record, "id", "release_id", "releaseId"),
+        source_url=_first_text(series, "url") or _first_text(record, "url", "source_url", "sourceUrl"),
+        raw_payload=item,
+    ), None
 
 
 def _rows(payload):
@@ -69,11 +99,18 @@ def _rows(payload):
     return []
 
 
-def _series_id(row):
-    value = row.get("series_id") or row.get("seriesId")
-    series = row.get("series")
-    if value is None and isinstance(series, dict):
-        value = series.get("id") or series.get("series_id")
+def _series_id(record, series=None):
+    series = series or {}
+    value = (
+        series.get("series_id")
+        or series.get("seriesId")
+        or series.get("id")
+        or record.get("series_id")
+        or record.get("seriesId")
+    )
+    record_series = record.get("series")
+    if value is None and isinstance(record_series, dict):
+        value = record_series.get("id") or record_series.get("series_id")
     try:
         return int(str(value).strip())
     except (TypeError, ValueError):
@@ -88,8 +125,12 @@ def _group_name(row):
     if isinstance(group, dict):
         return _first_text(group, "name", "title")
     if isinstance(group, list) and group:
-        first = group[0]
-        return _first_text(first, "name", "title") if isinstance(first, dict) else str(first)
+        names = []
+        for item in group:
+            name = _first_text(item, "name", "title") if isinstance(item, dict) else str(item).strip()
+            if name:
+                names.append(name)
+        return ", ".join(sorted(set(names), key=str.casefold)) if names else None
     return None
 
 

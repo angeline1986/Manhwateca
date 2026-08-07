@@ -74,7 +74,7 @@ class ReleaseMonitorRepository:
             """
             SELECT *
             FROM release_monitor_runs
-            ORDER BY started_at DESC
+            ORDER BY COALESCE(finished_at, started_at) DESC, id DESC
             LIMIT 1
             """
         )
@@ -167,12 +167,15 @@ class ReleaseMonitorRepository:
         row = self._fetch_one(
             """
             SELECT
+                count(*) FILTER (WHERE release_date BETWEEN %(today_start)s AND %(today_end)s) AS today_chapters,
                 count(*) FILTER (WHERE release_date BETWEEN %(today_start)s AND %(today_end)s) AS today_releases,
                 count(DISTINCT manga_id) FILTER (WHERE release_date BETWEEN %(today_start)s AND %(today_end)s) AS today_works,
                 count(*) FILTER (WHERE viewed_at IS NULL AND release_date BETWEEN %(today_start)s AND %(today_end)s) AS today_unseen,
+                count(*) FILTER (WHERE release_date BETWEEN %(week_start)s AND %(week_end)s) AS week_chapters,
                 count(*) FILTER (WHERE release_date BETWEEN %(week_start)s AND %(week_end)s) AS week_releases,
                 count(DISTINCT manga_id) FILTER (WHERE release_date BETWEEN %(week_start)s AND %(week_end)s) AS week_works,
                 count(*) FILTER (WHERE viewed_at IS NULL AND release_date BETWEEN %(week_start)s AND %(week_end)s) AS week_unseen,
+                count(*) FILTER (WHERE release_date BETWEEN %(month_start)s AND %(month_end)s) AS month_chapters,
                 count(*) FILTER (WHERE release_date BETWEEN %(month_start)s AND %(month_end)s) AS month_releases,
                 count(DISTINCT manga_id) FILTER (WHERE release_date BETWEEN %(month_start)s AND %(month_end)s) AS month_works,
                 count(*) FILTER (WHERE viewed_at IS NULL AND release_date BETWEEN %(month_start)s AND %(month_end)s) AS month_unseen

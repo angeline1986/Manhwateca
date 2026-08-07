@@ -132,17 +132,24 @@ export function initOverviewPage(elements) {
       const { response, payload } = await getReleasesSummary();
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
       elements.releaseCards.innerHTML = ["month", "week", "today"].map(period => releaseCard(period, payload)).join("");
+      setMonitorStatus(payload.last_monitor_run);
+      elements.releaseFeedback.textContent = releaseWarningMessage(payload.warning);
       setReleasePeriod(releasePeriod, false);
-      await loadReleaseList();
     } catch (error) {
-      elements.releaseCards.innerHTML = "";
-      elements.releaseFeedback.textContent = `Não foi possível carregar lançamentos: ${error.message}`;
+      elements.releaseCards.innerHTML = ["month", "week", "today"]
+        .map(period => releaseCard(period, fallbackSummary()))
+        .join("");
+      setMonitorStatus(null);
+      setReleasePeriod(releasePeriod, false);
+      elements.releaseFeedback.textContent = releaseErrorMessage(error);
+      return;
     }
+    await loadReleaseList();
   }
 
   async function loadReleaseList() {
     if (!elements.releaseList) return;
-    elements.releaseList.innerHTML = '<tr><td colspan="8">Carregando lançamentos...</td></tr>';
+    elements.releaseList.innerHTML = '<tr><td colspan="7">Carregando capítulos...</td></tr>';
     const search = elements.releaseSearch?.value || "";
     const unseen = Boolean(elements.releaseUnseenOnly?.checked);
     try {
@@ -153,8 +160,11 @@ export function initOverviewPage(elements) {
         per_page: 20,
       });
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      if (payload.warning) {
+        elements.releaseFeedback.textContent = releaseWarningMessage(payload.warning);
+      }
       if (!payload.items.length) {
-        elements.releaseList.innerHTML = `<tr><td colspan="8">Nenhum lançamento encontrado ${periodLabel(releasePeriod).toLowerCase()}.</td></tr>`;
+        elements.releaseList.innerHTML = `<tr><td colspan="7">Nenhum capítulo disponível ${periodLabel(releasePeriod).toLowerCase()}.</td></tr>`;
         return;
       }
       elements.releaseList.innerHTML = payload.items.map(item => `
@@ -162,15 +172,14 @@ export function initOverviewPage(elements) {
           <td>${escapeHtml(item.title || "")}</td>
           <td>${escapeHtml(item.chapter || "")}</td>
           <td>${escapeHtml(item.volume || "-")}</td>
-          <td>${escapeHtml(item.release_group || "-")}</td>
           <td>${escapeHtml(dateOnly(item.release_date))}</td>
+          <td>${escapeHtml(item.release_group || "-")}</td>
           <td>${escapeHtml(dateTime(item.first_seen_at))}</td>
           <td><span class="state ${item.viewed_at ? "ok" : "warn"}">${escapeHtml(item.status)}</span></td>
-          <td><button type="button" class="table-action" data-release-viewed="${item.id}" ${item.viewed_at ? "disabled" : ""}>Marcar</button></td>
         </tr>
       `).join("");
     } catch (error) {
-      elements.releaseList.innerHTML = `<tr><td colspan="8">Erro ao carregar lançamentos: ${escapeHtml(error.message)}</td></tr>`;
+      elements.releaseList.innerHTML = `<tr><td colspan="7">${escapeHtml(releaseErrorMessage(error))}</td></tr>`;
     }
   }
 
@@ -183,6 +192,12 @@ export function initOverviewPage(elements) {
       button.classList.toggle("active", button.dataset.releaseCard === period);
     });
     if (reload) loadReleaseList();
+  }
+
+  function setMonitorStatus(run, overrideStatus = null) {
+    if (elements.releaseMonitorStatus) {
+      elements.releaseMonitorStatus.textContent = monitorRunLabel(run, overrideStatus);
+    }
   }
 
   async function loadDiagnostics() {
@@ -220,15 +235,16 @@ export function initOverviewPage(elements) {
   });
   elements.releaseCheckNow?.addEventListener("click", async () => {
     elements.releaseCheckNow.disabled = true;
-    elements.releaseFeedback.textContent = "Verificação em andamento...";
+    setMonitorStatus(null, "running");
+    elements.releaseFeedback.textContent = "";
     try {
       const { payload } = await checkReleases();
-      elements.releaseFeedback.textContent = payload.id
-        ? "Verificação iniciada. Atualizando dados em instantes..."
-        : "Verificação iniciada.";
-      setTimeout(loadReleaseDashboard, 2500);
+      if (payload.id) {
+        await waitForReleaseTask(payload.id);
+      }
+      await loadReleaseDashboard();
     } catch (error) {
-      elements.releaseFeedback.textContent = `Não foi possível iniciar a verificação: ${error.message}`;
+      elements.releaseFeedback.textContent = releaseErrorMessage(error);
     } finally {
       elements.releaseCheckNow.disabled = false;
     }
@@ -239,22 +255,56 @@ export function initOverviewPage(elements) {
 
 function releaseCard(period, payload) {
   const data = payload[period] || {};
-  const run = payload.last_monitor_run;
-  const last = run?.finished_at ? dateTime(run.finished_at) : "nunca executado";
+  const chapterCount = Number(data.chapter_count ?? data.release_count ?? 0);
   return `
     <button type="button" class="release-card ${period === "today" ? "active" : ""}" data-release-card="${period}">
       <strong>${cardTitle(period)}</strong>
-      <span>${data.release_count || 0} lançamentos</span>
-      <span>em ${data.work_count || 0} obras</span>
-      <span>${data.unseen_count || 0} não visualizados</span>
-      <small>${dateOnly(data.start_date)} a ${dateOnly(data.end_date)}</small>
-      <em>Última verificação: ${escapeHtml(last)}</em>
+      <span class="release-card-count">${chapterLabel(chapterCount)}</span>
+      <small>${periodDateLabel(period, data)}</small>
     </button>
   `;
 }
 
+function fallbackSummary() {
+  return {
+    today: { chapter_count: 0, release_count: 0 },
+    week: { chapter_count: 0, release_count: 0 },
+    month: { chapter_count: 0, release_count: 0 },
+    last_monitor_run: null,
+  };
+}
+
+function releaseErrorMessage(error) {
+  const message = error?.message || "";
+  if (error?.response?.status === 404) {
+    return "A rota de lançamentos não foi encontrada no servidor da Manhwateca.";
+  }
+  if (error?.response?.status >= 500) {
+    return "O servidor da Manhwateca não conseguiu carregar os lançamentos agora.";
+  }
+  if (message.includes("JSON inválido") || message.includes("resposta vazia")) {
+    return message;
+  }
+  if (message.includes("servidor da Manhwateca")) {
+    return message;
+  }
+  return "Não foi possível carregar os lançamentos agora.";
+}
+
+function releaseWarningMessage(warning) {
+  if (!warning) return "";
+  if (String(warning).includes("tabelas do monitor")) {
+    return "O monitor ainda não foi inicializado no banco de dados. Aplique as migrations para começar a registrar lançamentos.";
+  }
+  return String(warning);
+}
+
 function cardTitle(period) {
-  return { month: "Lançamentos do mês", week: "Lançamentos da semana", today: "Lançamentos de hoje" }[period];
+  return {
+    month: "Capítulos disponíveis no mês",
+    week: "Capítulos disponíveis na semana",
+    today: "Capítulos disponíveis hoje",
+  }[period];
 }
 
 function periodLabel(period) {
@@ -270,4 +320,45 @@ function dateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function monitorRunLabel(run, overrideStatus = null) {
+  if (overrideStatus === "running") return "Verificação em andamento...";
+  if (!run) return "Monitor ainda não executado";
+  const when = run.finished_at || run.started_at;
+  const label = when ? `Última verificação: ${dateTime(when)}` : "Última verificação registrada";
+  if (!run.status || run.status === "success") return label;
+  return `${label}. Status: ${statusLabel(run.status)}`;
+}
+
+function statusLabel(status) {
+  return {
+    failed: "falha",
+    partial_success: "sucesso parcial",
+    running: "em execução",
+  }[status] || status;
+}
+
+async function waitForReleaseTask(taskId) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const { response, payload } = await getJson(`/api/tasks/${taskId}`);
+    if (!response.ok) break;
+    if (!["queued", "running"].includes(payload.status)) return payload;
+    await delay(1000);
+  }
+  return null;
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function chapterLabel(count) {
+  return `${count} ${count === 1 ? "capítulo" : "capítulos"}`;
+}
+
+function periodDateLabel(period, data) {
+  if (!data.start_date) return "-";
+  if (period === "today") return dateOnly(data.start_date);
+  return `${dateOnly(data.start_date)} a ${dateOnly(data.end_date)}`;
 }

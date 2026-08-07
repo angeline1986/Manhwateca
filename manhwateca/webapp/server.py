@@ -28,6 +28,7 @@ from manhwateca.webapp.post_routes import handle_direct_post
 from manhwateca.webapp.releases import (
     dashboard_releases_summary,
     mark_viewed_payload,
+    ReleaseMonitorRouteError,
     release_status_payload,
     releases_payload,
     subscriptions_payload,
@@ -89,10 +90,16 @@ def create_handler(project_root, task_manager, workflow_manager=None):
                 self._send_json(dashboard_payload(project_root))
                 return
             if path == "/api/dashboard/releases-summary":
-                self._send_json(dashboard_releases_summary())
+                try:
+                    self._send_json(dashboard_releases_summary())
+                except ReleaseMonitorRouteError as error:
+                    self._send_json({"error": str(error)}, status=error.status)
                 return
             if path == "/api/releases":
-                self._send_json(releases_payload(urlparse(self.path).query))
+                try:
+                    self._send_json(releases_payload(urlparse(self.path).query))
+                except ReleaseMonitorRouteError as error:
+                    self._send_json({"error": str(error)}, status=error.status)
                 return
             if path == "/api/releases/subscriptions":
                 self._send_json(subscriptions_payload())

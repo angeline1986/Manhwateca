@@ -175,6 +175,9 @@
               <div>
                 <span class="eyebrow">LANÇAMENTOS</span>
                 <h2>Lançamentos</h2>
+                <p class="release-monitor-status" id="releaseMonitorStatus">
+                  Monitor ainda não executado
+                </p>
               </div>
               <button class="secondary-action" id="releaseCheckNow" type="button">
                 Verificar agora
@@ -182,7 +185,7 @@
             </div>
             <div class="release-cards" id="releaseCards" aria-live="polite"></div>
             <div class="release-list-head">
-              <h3>Lançamentos recentes</h3>
+              <h3>Capítulos disponíveis</h3>
               <div class="release-filters">
                 <button type="button" class="filter-chip active" data-release-period="today">Hoje</button>
                 <button type="button" class="filter-chip" data-release-period="week">Esta semana</button>
@@ -204,11 +207,10 @@
                     <th>Obra</th>
                     <th>Capítulo</th>
                     <th>Volume</th>
+                    <th>Data de lançamento</th>
                     <th>Grupo</th>
-                    <th>Data</th>
                     <th>Detectado em</th>
                     <th>Situação</th>
-                    <th>Ação</th>
                   </tr>
                 </thead>
                 <tbody id="releaseList"></tbody>

@@ -10,19 +10,31 @@
 }
 
 .release-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--panel) !important;
+  border: 1px solid var(--rose-border) !important;
   border-radius: 8px;
-  color: inherit;
+  color: var(--text) !important;
   display: grid;
-  gap: 5px;
-  padding: 14px;
+  gap: 7px;
+  line-height: 1.35;
+  padding: 14px 16px;
   text-align: left;
+  transform: none !important;
 }
 
 .release-card.active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent), transparent 75%);
+  background: var(--soft-2) !important;
+  border-color: var(--rose) !important;
+  box-shadow: 0 0 0 2px rgba(169, 77, 107, .16);
+}
+
+.release-card:hover {
+  background: var(--soft-2) !important;
+}
+
+.release-card strong {
+  color: var(--text);
+  font-size: 15px;
 }
 
 .release-card span,
@@ -30,6 +42,25 @@
 .release-card em {
   color: var(--muted);
   font-style: normal;
+  font-weight: 700;
+}
+
+.release-card span:first-of-type {
+  color: var(--rose-dark);
+}
+
+.release-card-count {
+  color: var(--rose-dark) !important;
+  font-size: 24px;
+  font-weight: 900 !important;
+  line-height: 1.15;
+}
+
+.release-monitor-status {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+  margin: 4px 0 0;
 }
 
 .release-list-head,
@@ -49,21 +80,32 @@
 .table-action {
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--surface);
+  background: var(--panel);
   color: inherit;
   cursor: pointer;
   padding: 8px 10px;
 }
 
 .filter-chip.active {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--rose);
+  border-color: var(--rose);
   color: white;
 }
 
 .release-feedback {
-  color: var(--muted);
+  background: var(--warning-soft);
+  border: 1px solid color-mix(in srgb, var(--warning), transparent 70%);
+  border-radius: 8px;
+  color: var(--warning);
+  font-weight: 750;
   min-height: 20px;
+  padding: 10px 12px;
+}
+
+.release-feedback:empty {
+  background: transparent;
+  border: 0;
+  padding: 0;
 }
 
 .release-table-wrap {

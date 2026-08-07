@@ -9,7 +9,9 @@ Contrato validado em 2026-08-06:
 - Base oficial: `https://api.mangaupdates.com/v1`.
 - Endpoint de releases: `GET /releases/days`, descrito como `ListReleasesByDay`.
 - Validação real controlada retornou `total_hits`, `page`, `per_page` e `results`; cada item veio encapsulado em `record`.
-- Na listagem diária pública validada, o item contém `id`, `title`, `volume`, `chapter`, `groups`, `release_date` e `time_added`, mas não expõe `series_id`. `GET /releases/{id}` respondeu `401 Unauthorized` sem autenticação, então o monitor persiste apenas releases que possam ser normalizadas com `series_id` por contrato/autenticação disponível e contabiliza as demais como não correspondentes/fora do modelo interno.
+- Use `include_metadata=true` em `GET /releases/days?page=1&include_metadata=true`. Com esse parâmetro, a resposta pública validada trouxe `record.chapter`, `record.release_date`, `record.id` e `metadata.series.series_id`, que é usado para o matching com `mangas.work_code`.
+- `POST /releases/search` também respondeu sem autenticação na validação controlada e retornou `record` + `metadata.series.series_id` com `include_metadata=true`, mas o monitor continua usando `/releases/days` como caminho principal.
+- `GET /series/{series_id}/rss` retornou XML para a série testada, mas o feed estava sem itens de release naquele momento; RSS permanece apenas diagnóstico, não solução principal.
 - Endpoints auxiliares já usados pelo projeto: `POST /series/search` e `GET /series/{id}`.
 - Paginação: parâmetros `page` e `perpage`, seguindo o padrão já usado no cliente do projeto.
 - Autenticação: o cliente atual não injeta token; a API pública pode impor limites por origem.

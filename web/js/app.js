@@ -20,6 +20,7 @@ const catalogAllPending = byId("catalogAllPending"), refreshCatalogPending = byI
 const diagnosticGrid = byId("diagnosticGrid"), refreshDiagnostics = byId("refreshDiagnostics");
 const releaseCards = byId("releaseCards"), releaseList = byId("releaseList");
 const releaseFeedback = byId("releaseFeedback"), releaseCheckNow = byId("releaseCheckNow");
+const releaseMonitorStatus = byId("releaseMonitorStatus");
 const releaseSearch = byId("releaseSearch"), releaseUnseenOnly = byId("releaseUnseenOnly");
 const actionGrid = byId("actionGrid"), mangaActionGrid = byId("mangaActionGrid");
 const notionActionGrid = byId("notionActionGrid"), supportActionGrid = byId("supportActionGrid");
@@ -66,6 +67,7 @@ const overviewPage = initOverviewPage({
   releaseList,
   releaseFeedback,
   releaseCheckNow,
+  releaseMonitorStatus,
   releaseSearch,
   releaseUnseenOnly,
 });

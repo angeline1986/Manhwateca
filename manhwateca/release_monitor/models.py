@@ -39,11 +39,15 @@ class ReleaseMonitorResult:
     finished_at: datetime | None
     pages_requested: int = 0
     releases_received: int = 0
+    releases_parsed: int = 0
     releases_in_period: int = 0
+    releases_with_series_metadata: int = 0
+    releases_missing_series_metadata: int = 0
     releases_matched: int = 0
     releases_inserted: int = 0
     releases_already_known: int = 0
     releases_unmatched: int = 0
+    releases_invalid: int = 0
     error_message: str | None = None
 
     @property

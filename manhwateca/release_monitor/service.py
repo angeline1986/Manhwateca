@@ -8,7 +8,10 @@ from manhwateca.release_monitor.models import (
     ReleaseMonitorPeriods,
     ReleaseMonitorResult,
 )
-from manhwateca.release_monitor.parser import has_more_pages, parse_external_releases
+from manhwateca.release_monitor.parser import (
+    has_more_pages,
+    parse_external_releases_with_stats,
+)
 from manhwateca.release_monitor.repository import ReleaseMonitorRepository
 
 
@@ -52,11 +55,15 @@ class ReleaseMonitorService:
         metrics = {
             "pages_requested": 0,
             "releases_received": 0,
+            "releases_parsed": 0,
             "releases_in_period": 0,
+            "releases_with_series_metadata": 0,
+            "releases_missing_series_metadata": 0,
             "releases_matched": 0,
             "releases_inserted": 0,
             "releases_already_known": 0,
             "releases_unmatched": 0,
+            "releases_invalid": 0,
         }
         status = "success"
         error_message = None
@@ -69,9 +76,10 @@ class ReleaseMonitorService:
             }
             for page in range(1, max_pages + 1):
                 metrics["pages_requested"] += 1
-                payload = self.client_func(page=page, per_page=per_page)
-                releases = parse_external_releases(payload)
-                metrics["releases_received"] += len(releases)
+                payload = self.client_func(page=page, include_metadata=True)
+                releases, parse_stats = parse_external_releases_with_stats(payload)
+                for key, value in parse_stats.items():
+                    metrics[key] += value
                 page_dates = [release.release_date for release in releases]
                 for release in releases:
                     if release.release_date < periods.earliest_start:
@@ -88,8 +96,14 @@ class ReleaseMonitorService:
                         metrics["releases_already_known"] += 1
                 if page_dates and max(page_dates) < periods.earliest_start:
                     break
-                if not releases or not has_more_pages(payload, page):
+                if not parse_stats["releases_received"] or not has_more_pages(payload, page):
                     break
+            if metrics["releases_received"] and not metrics["releases_parsed"]:
+                status = "partial_success"
+                error_message = "A API retornou itens, mas nenhum release pôde ser convertido com series_id e data válidos."
+            elif metrics["releases_received"] and not metrics["releases_with_series_metadata"]:
+                status = "partial_success"
+                error_message = "A API retornou itens sem metadata.series.series_id."
         except Exception as error:
             status = "failed" if metrics["releases_received"] == 0 else "partial_success"
             error_message = _safe_error(error)

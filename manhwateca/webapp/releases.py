@@ -7,11 +7,27 @@ from manhwateca.release_monitor.repository import ReleaseMonitorRepository
 from manhwateca.release_monitor.service import current_periods
 
 
+class ReleaseMonitorRouteError(RuntimeError):
+    def __init__(self, message, status=503):
+        super().__init__(message)
+        self.status = status
+
+
 def dashboard_releases_summary():
     periods = current_periods()
     repository = ReleaseMonitorRepository()
-    counts, latest = repository.release_summary(periods, TIMEZONE)
-    return {
+    warning = None
+    try:
+        counts, latest = repository.release_summary(periods, TIMEZONE)
+    except Exception as error:
+        if _is_missing_monitor_table(error):
+            counts, latest = {}, None
+            warning = "As tabelas do monitor de lançamentos ainda não foram criadas. Execute as migrations."
+        else:
+            raise ReleaseMonitorRouteError(
+                "Não foi possível carregar o resumo de lançamentos."
+            ) from error
+    payload = {
         "generated_at": datetime.now(ZoneInfo(TIMEZONE)).isoformat(timespec="seconds"),
         "timezone": TIMEZONE,
         "today": _period_payload(periods.today_start, periods.today_end, counts, "today"),
@@ -19,6 +35,9 @@ def dashboard_releases_summary():
         "month": _period_payload(periods.month_start, periods.month_end, counts, "month"),
         "last_monitor_run": _run_payload(latest),
     }
+    if warning:
+        payload["warning"] = warning
+    return payload
 
 
 def releases_payload(query):
@@ -28,16 +47,26 @@ def releases_payload(query):
     start, end = _range_for(periods, period)
     page = _int(args.get("page", ["1"])[0], 1)
     per_page = min(100, max(1, _int(args.get("per_page", ["20"])[0], 20)))
-    result = ReleaseMonitorRepository().list_releases(
-        start,
-        end,
-        search=(args.get("search", [""])[0] or "").strip() or None,
-        unseen_only=args.get("unseen_only", ["false"])[0] in {"1", "true", "sim"},
-        manga_id=_int(args.get("manga_id", ["0"])[0], 0) or None,
-        page=page,
-        per_page=per_page,
-    )
-    return {
+    warning = None
+    try:
+        result = ReleaseMonitorRepository().list_releases(
+            start,
+            end,
+            search=(args.get("search", [""])[0] or "").strip() or None,
+            unseen_only=args.get("unseen_only", ["false"])[0] in {"1", "true", "sim"},
+            manga_id=_int(args.get("manga_id", ["0"])[0], 0) or None,
+            page=page,
+            per_page=per_page,
+        )
+    except Exception as error:
+        if _is_missing_monitor_table(error):
+            result = {"items": [], "total": 0}
+            warning = "As tabelas do monitor de lançamentos ainda não foram criadas. Execute as migrations."
+        else:
+            raise ReleaseMonitorRouteError(
+                "Não foi possível carregar a lista de lançamentos."
+            ) from error
+    payload = {
         "period": period,
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
@@ -46,6 +75,9 @@ def releases_payload(query):
         "total": result["total"],
         "items": [_release_item(row) for row in result["items"]],
     }
+    if warning:
+        payload["warning"] = warning
+    return payload
 
 
 def release_status_payload():
@@ -68,7 +100,7 @@ def update_subscription_payload(payload):
         bool(payload.get("enabled")),
         payload.get("monitor_mode") or "releases",
     )
-    return {"subscription": dict(row)}, 200
+    return {"subscription": _subscription_payload(row)}, 200
 
 
 def mark_viewed_payload(payload):
@@ -85,10 +117,12 @@ def mark_viewed_payload(payload):
 
 
 def _period_payload(start, end, counts, prefix):
+    chapter_count = int(counts.get(f"{prefix}_chapters") or counts.get(f"{prefix}_releases") or 0)
     return {
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
-        "release_count": int(counts.get(f"{prefix}_releases") or 0),
+        "chapter_count": chapter_count,
+        "release_count": chapter_count,
         "work_count": int(counts.get(f"{prefix}_works") or 0),
         "unseen_count": int(counts.get(f"{prefix}_unseen") or 0),
     }
@@ -122,6 +156,13 @@ def _release_item(row):
     }
 
 
+def _subscription_payload(row):
+    return {
+        key: _iso(value)
+        for key, value in dict(row).items()
+    }
+
+
 def _range_for(periods, period):
     return {
         "today": (periods.today_start, periods.today_end),
@@ -143,3 +184,14 @@ def _int(value, default):
 
 def _iso(value):
     return value.isoformat() if hasattr(value, "isoformat") else value
+
+
+def _is_missing_monitor_table(error):
+    if error.__class__.__name__ == "UndefinedTable":
+        return True
+    text = str(error).casefold()
+    return (
+        "mangaupdates_releases" in text
+        or "release_monitor_runs" in text
+        or "release_monitor_subscriptions" in text
+    ) and ("does not exist" in text or "undefinedtable" in text)

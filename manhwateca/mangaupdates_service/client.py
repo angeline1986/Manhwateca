@@ -61,8 +61,13 @@ def get_series(series_id):
     return request_json(f"{API_BASE}/series/{series_id}")
 
 
-def list_releases_by_day(page=1, per_page=100, timeout=30, retries=4):
-    query = urlencode({"page": page, "perpage": per_page})
+def list_releases_by_day(page=1, include_metadata=True, timeout=30, retries=4):
+    query = urlencode(
+        {
+            "page": page,
+            "include_metadata": str(bool(include_metadata)).lower(),
+        }
+    )
     return request_json(
         f"{API_BASE}/releases/days?{query}",
         timeout=timeout,
