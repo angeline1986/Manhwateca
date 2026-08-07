@@ -54,6 +54,7 @@ class ReleaseMonitorService:
 
         metrics = {
             "pages_requested": 0,
+            "monitored_series_count": 0,
             "releases_received": 0,
             "releases_parsed": 0,
             "releases_in_period": 0,
@@ -74,6 +75,7 @@ class ReleaseMonitorService:
                 for row in subscriptions
                 if str(row.get("work_code") or "").strip().isdigit()
             }
+            metrics["monitored_series_count"] = len(by_series)
             for page in range(1, max_pages + 1):
                 metrics["pages_requested"] += 1
                 payload = self.client_func(page=page, include_metadata=True)
@@ -104,6 +106,9 @@ class ReleaseMonitorService:
             elif metrics["releases_received"] and not metrics["releases_with_series_metadata"]:
                 status = "partial_success"
                 error_message = "A API retornou itens sem metadata.series.series_id."
+            elif not metrics["monitored_series_count"]:
+                status = "partial_success"
+                error_message = "Nenhuma obra com ID MangaUpdates confirmado está habilitada para monitoramento."
         except Exception as error:
             status = "failed" if metrics["releases_received"] == 0 else "partial_success"
             error_message = _safe_error(error)

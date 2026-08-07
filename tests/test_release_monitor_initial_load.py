@@ -11,6 +11,9 @@ class EmptyRepository:
     def release_summary(self, periods, timezone):
         return {}, None
 
+    def monitoring_overview(self):
+        return {}
+
     def list_releases(self, *args, **kwargs):
         return {"items": [], "total": 0}
 
@@ -45,6 +48,15 @@ class ChapterCountRepository:
             "month_unseen": 7,
         }, None
 
+    def monitoring_overview(self):
+        return {
+            "eligible_count": 147,
+            "monitored_count": 146,
+            "forced_count": 1,
+            "disabled_count": 1,
+            "auto_count": 145,
+        }
+
 
 class ExistingRunRepository:
     def release_summary(self, periods, timezone):
@@ -55,6 +67,9 @@ class ExistingRunRepository:
             "finished_at": datetime(2026, 8, 6, 23, 21, tzinfo=ZoneInfo("America/Sao_Paulo")),
             "error_message": None,
         }
+
+    def monitoring_overview(self):
+        return {"eligible_count": 1, "monitored_count": 1}
 
 
 class SubscriptionRepository:
@@ -81,6 +96,7 @@ class ReleaseMonitorInitialLoadTests(unittest.TestCase):
         self.assertEqual(payload["week"]["work_count"], 0)
         self.assertEqual(payload["month"]["unseen_count"], 0)
         self.assertEqual(payload["timezone"], "America/Sao_Paulo")
+        self.assertEqual(payload["monitoring"]["monitored_count"], 0)
 
     def test_summary_returns_latest_monitor_run_when_it_exists(self):
         with patch.object(releases, "ReleaseMonitorRepository", ExistingRunRepository):
@@ -98,6 +114,8 @@ class ReleaseMonitorInitialLoadTests(unittest.TestCase):
         self.assertEqual(payload["today"]["chapter_count"], 3)
         self.assertEqual(payload["today"]["release_count"], 3)
         self.assertEqual(payload["today"]["work_count"], 2)
+        self.assertEqual(payload["monitoring"]["eligible_count"], 147)
+        self.assertEqual(payload["monitoring"]["monitored_count"], 146)
 
     def test_missing_tables_return_zero_summary(self):
         with patch.object(releases, "ReleaseMonitorRepository", MissingTableRepository):
@@ -142,15 +160,18 @@ class ReleaseMonitorInitialLoadTests(unittest.TestCase):
         self.assertIn("chapter_count", page)
         self.assertNotIn("em ${data.work_count", page)
         self.assertNotIn("${data.unseen_count", page)
-        self.assertIn('if (!run) return "Monitor ainda não executado"', page)
+        self.assertIn('joinMonitorParts("Monitor ainda não executado", suffix)', page)
         self.assertIn("Última verificação:", page)
+        self.assertIn("obras monitoradas", page)
 
     def test_frontend_list_title_and_columns_are_chapter_focused(self):
         html = Path("web/index.html").read_text(encoding="utf-8")
         self.assertIn("<h3>Capítulos disponíveis</h3>", html)
-        self.assertIn("<th>Data de lançamento</th>", html)
+        self.assertIn("<th>Lançamento</th>", html)
         self.assertNotIn("<h3>Lançamentos recentes</h3>", html)
         self.assertNotIn("<th>Ação</th>", html)
+        self.assertNotIn("<th>Volume</th>", html)
+        self.assertNotIn("<th>Detectado em</th>", html)
 
 
 if __name__ == "__main__":

@@ -3,9 +3,18 @@ from datetime import datetime
 
 from manhwateca.database.connection import connect
 
+try:
+    from psycopg.types.json import Jsonb
+except ModuleNotFoundError:
+    Jsonb = None
+
 
 def normalize_key(value) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip()).casefold()
+
+
+def jsonb_payload(value):
+    return Jsonb(value) if Jsonb is not None else value
 
 
 class ReleaseMonitorRepository:
@@ -82,15 +91,74 @@ class ReleaseMonitorRepository:
     def list_active_subscriptions(self):
         return self._fetch_all(
             """
-            SELECT s.*, m.work_code, m.title
-            FROM release_monitor_subscriptions s
-            JOIN mangas m ON m.id = s.manga_id
-            WHERE s.enabled = TRUE
+            SELECT
+                s.id,
+                m.id AS manga_id,
+                COALESCE(s.enabled, TRUE) AS enabled,
+                COALESCE(s.monitor_mode, 'auto') AS monitor_mode,
+                s.last_checked_at,
+                s.last_success_at,
+                s.last_error_at,
+                s.last_error_message,
+                s.created_at,
+                s.updated_at,
+                m.work_code,
+                m.title
+            FROM mangas m
+            LEFT JOIN release_monitor_subscriptions s
+                ON s.manga_id = m.id
+            WHERE COALESCE(s.enabled, TRUE) = TRUE
               AND m.work_code IS NOT NULL
               AND btrim(m.work_code) <> ''
             ORDER BY m.title
             """
         )
+
+    def list_subscription_overview(self):
+        return self._fetch_all(
+            """
+            SELECT
+                m.id AS manga_id,
+                m.title,
+                m.work_code,
+                s.id AS subscription_id,
+                s.enabled AS explicit_enabled,
+                COALESCE(s.enabled, TRUE) AS monitored,
+                COALESCE(s.monitor_mode, 'auto') AS monitor_mode,
+                s.created_at,
+                s.updated_at
+            FROM mangas m
+            LEFT JOIN release_monitor_subscriptions s
+                ON s.manga_id = m.id
+            WHERE m.work_code IS NOT NULL
+              AND btrim(m.work_code) <> ''
+            ORDER BY m.title
+            """
+        )
+
+    def monitoring_overview(self):
+        row = self._fetch_one(
+            """
+            SELECT
+                count(*) AS eligible_count,
+                count(*) FILTER (WHERE COALESCE(s.enabled, TRUE) = TRUE) AS monitored_count,
+                count(*) FILTER (WHERE s.enabled = TRUE) AS forced_count,
+                count(*) FILTER (WHERE s.enabled = FALSE) AS disabled_count,
+                count(*) FILTER (WHERE s.id IS NULL) AS auto_count
+            FROM mangas m
+            LEFT JOIN release_monitor_subscriptions s
+                ON s.manga_id = m.id
+            WHERE m.work_code IS NOT NULL
+              AND btrim(m.work_code) <> ''
+            """
+        )
+        return row or {
+            "eligible_count": 0,
+            "monitored_count": 0,
+            "forced_count": 0,
+            "disabled_count": 0,
+            "auto_count": 0,
+        }
 
     def update_subscription(self, manga_id, enabled, monitor_mode="releases"):
         row = self._fetch_one(
@@ -120,7 +188,7 @@ class ReleaseMonitorRepository:
             release.group_name,
             normalize_key(release.group_name),
             release.source_url,
-            release.raw_payload or {},
+            jsonb_payload(release.raw_payload or {}),
         )
         row = self._fetch_one(
             """

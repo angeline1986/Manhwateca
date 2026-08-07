@@ -19,9 +19,10 @@ def dashboard_releases_summary():
     warning = None
     try:
         counts, latest = repository.release_summary(periods, TIMEZONE)
+        monitoring = repository.monitoring_overview()
     except Exception as error:
         if _is_missing_monitor_table(error):
-            counts, latest = {}, None
+            counts, latest, monitoring = {}, None, {}
             warning = "As tabelas do monitor de lançamentos ainda não foram criadas. Execute as migrations."
         else:
             raise ReleaseMonitorRouteError(
@@ -34,6 +35,7 @@ def dashboard_releases_summary():
         "week": _period_payload(periods.week_start, periods.week_end, counts, "week"),
         "month": _period_payload(periods.month_start, periods.month_end, counts, "month"),
         "last_monitor_run": _run_payload(latest),
+        "monitoring": _monitoring_payload(monitoring),
     }
     if warning:
         payload["warning"] = warning
@@ -88,7 +90,12 @@ def release_status_payload():
 
 
 def subscriptions_payload():
-    return {"items": [dict(row) for row in ReleaseMonitorRepository().list_active_subscriptions()]}
+    return {
+        "items": [
+            _subscription_overview_payload(row)
+            for row in ReleaseMonitorRepository().list_subscription_overview()
+        ]
+    }
 
 
 def update_subscription_payload(payload):
@@ -160,6 +167,23 @@ def _subscription_payload(row):
     return {
         key: _iso(value)
         for key, value in dict(row).items()
+    }
+
+
+def _subscription_overview_payload(row):
+    return {
+        key: _iso(value)
+        for key, value in dict(row).items()
+    }
+
+
+def _monitoring_payload(row):
+    return {
+        "eligible_count": int(row.get("eligible_count") or 0),
+        "monitored_count": int(row.get("monitored_count") or 0),
+        "forced_count": int(row.get("forced_count") or 0),
+        "disabled_count": int(row.get("disabled_count") or 0),
+        "auto_count": int(row.get("auto_count") or 0),
     }
 
 

@@ -38,6 +38,7 @@ class ReleaseMonitorResult:
     started_at: datetime | None
     finished_at: datetime | None
     pages_requested: int = 0
+    monitored_series_count: int = 0
     releases_received: int = 0
     releases_parsed: int = 0
     releases_in_period: int = 0

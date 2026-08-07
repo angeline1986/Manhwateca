@@ -132,7 +132,7 @@ export function initOverviewPage(elements) {
       const { response, payload } = await getReleasesSummary();
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
       elements.releaseCards.innerHTML = ["month", "week", "today"].map(period => releaseCard(period, payload)).join("");
-      setMonitorStatus(payload.last_monitor_run);
+      setMonitorStatus(payload.last_monitor_run, null, payload.monitoring);
       elements.releaseFeedback.textContent = releaseWarningMessage(payload.warning);
       setReleasePeriod(releasePeriod, false);
     } catch (error) {
@@ -149,7 +149,7 @@ export function initOverviewPage(elements) {
 
   async function loadReleaseList() {
     if (!elements.releaseList) return;
-    elements.releaseList.innerHTML = '<tr><td colspan="7">Carregando capítulos...</td></tr>';
+    elements.releaseList.innerHTML = '<tr><td colspan="5">Carregando capítulos...</td></tr>';
     const search = elements.releaseSearch?.value || "";
     const unseen = Boolean(elements.releaseUnseenOnly?.checked);
     try {
@@ -164,22 +164,20 @@ export function initOverviewPage(elements) {
         elements.releaseFeedback.textContent = releaseWarningMessage(payload.warning);
       }
       if (!payload.items.length) {
-        elements.releaseList.innerHTML = `<tr><td colspan="7">Nenhum capítulo disponível ${periodLabel(releasePeriod).toLowerCase()}.</td></tr>`;
+        elements.releaseList.innerHTML = `<tr><td colspan="5">Nenhum capítulo disponível ${periodLabel(releasePeriod).toLowerCase()}.</td></tr>`;
         return;
       }
       elements.releaseList.innerHTML = payload.items.map(item => `
         <tr>
           <td>${escapeHtml(item.title || "")}</td>
           <td>${escapeHtml(item.chapter || "")}</td>
-          <td>${escapeHtml(item.volume || "-")}</td>
           <td>${escapeHtml(dateOnly(item.release_date))}</td>
           <td>${escapeHtml(item.release_group || "-")}</td>
-          <td>${escapeHtml(dateTime(item.first_seen_at))}</td>
           <td><span class="state ${item.viewed_at ? "ok" : "warn"}">${escapeHtml(item.status)}</span></td>
         </tr>
       `).join("");
     } catch (error) {
-      elements.releaseList.innerHTML = `<tr><td colspan="7">${escapeHtml(releaseErrorMessage(error))}</td></tr>`;
+      elements.releaseList.innerHTML = `<tr><td colspan="5">${escapeHtml(releaseErrorMessage(error))}</td></tr>`;
     }
   }
 
@@ -194,9 +192,9 @@ export function initOverviewPage(elements) {
     if (reload) loadReleaseList();
   }
 
-  function setMonitorStatus(run, overrideStatus = null) {
+  function setMonitorStatus(run, overrideStatus = null, monitoring = null) {
     if (elements.releaseMonitorStatus) {
-      elements.releaseMonitorStatus.textContent = monitorRunLabel(run, overrideStatus);
+      elements.releaseMonitorStatus.textContent = monitorRunLabel(run, overrideStatus, monitoring);
     }
   }
 
@@ -322,13 +320,14 @@ function dateTime(value) {
   return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
-function monitorRunLabel(run, overrideStatus = null) {
+function monitorRunLabel(run, overrideStatus = null, monitoring = null) {
   if (overrideStatus === "running") return "Verificação em andamento...";
-  if (!run) return "Monitor ainda não executado";
+  const suffix = monitoringLabel(monitoring);
+  if (!run) return joinMonitorParts("Monitor ainda não executado", suffix);
   const when = run.finished_at || run.started_at;
   const label = when ? `Última verificação: ${dateTime(when)}` : "Última verificação registrada";
-  if (!run.status || run.status === "success") return label;
-  return `${label}. Status: ${statusLabel(run.status)}`;
+  if (!run.status || run.status === "success") return joinMonitorParts(label, suffix);
+  return joinMonitorParts(`${label}. Status: ${statusLabel(run.status)}`, suffix);
 }
 
 function statusLabel(status) {
@@ -337,6 +336,16 @@ function statusLabel(status) {
     partial_success: "sucesso parcial",
     running: "em execução",
   }[status] || status;
+}
+
+function monitoringLabel(monitoring) {
+  const count = Number(monitoring?.monitored_count ?? 0);
+  if (!count) return "";
+  return `${count} ${count === 1 ? "obra monitorada" : "obras monitoradas"}`;
+}
+
+function joinMonitorParts(...parts) {
+  return parts.filter(Boolean).join(" · ");
 }
 
 async function waitForReleaseTask(taskId) {

@@ -2,6 +2,8 @@
 
 O monitor consulta lançamentos recentes do MangaUpdates, associa cada release a uma obra local pelo ID confirmado (`release.series_id -> mangas.work_code -> mangas.id`) e mantém histórico em PostgreSQL. A página `Dashboard > Visão geral` consome esse histórico para os cards e a lista de lançamentos.
 
+Obras com `mangas.work_code` confirmado são monitoradas automaticamente. A tabela `release_monitor_subscriptions` funciona como override: registro ausente usa a regra automática, `enabled=true` força monitoramento e `enabled=false` exclui explicitamente a obra.
+
 ## API MangaUpdates
 
 Contrato validado em 2026-08-06:
@@ -21,7 +23,7 @@ A resposta externa é convertida para `ExternalRelease` antes de chegar ao servi
 
 ## Tabelas
 
-- `release_monitor_subscriptions`: assinatura explícita por obra, com `enabled`, modo e datas de última verificação/sucesso/erro.
+- `release_monitor_subscriptions`: override por obra, com `enabled`, modo e datas de última verificação/sucesso/erro. Ausência de registro não impede monitoramento quando a obra possui `work_code`.
 - `mangaupdates_releases`: histórico de releases, com capítulo e volume textuais, `source_payload` em JSONB, `first_seen_at`, `last_seen_at` e `viewed_at`.
 - `release_monitor_runs`: auditoria de cada execução, métricas e status (`running`, `success`, `partial_success`, `failed`).
 

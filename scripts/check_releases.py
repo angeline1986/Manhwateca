@@ -15,6 +15,7 @@ def main() -> int:
     result = ReleaseMonitorService().run()
     print(f"Status: {result.status}")
     print(f"Execução: {result.run_id}")
+    print(f"Obras monitoradas: {result.monitored_series_count}")
     print(f"Páginas consultadas: {result.pages_requested}")
     print(f"Releases recebidas: {result.releases_received}")
     print(f"Releases parseadas: {result.releases_parsed}")

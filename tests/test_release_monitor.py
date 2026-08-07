@@ -134,6 +134,7 @@ class ReleaseMonitorTests(unittest.TestCase):
         self.assertEqual(result.releases_received, 1)
         self.assertEqual(result.releases_parsed, 1)
         self.assertEqual(result.releases_with_series_metadata, 1)
+        self.assertEqual(result.monitored_series_count, 2)
         self.assertEqual(result.releases_matched, 1)
         self.assertEqual(result.releases_inserted, 1)
 
