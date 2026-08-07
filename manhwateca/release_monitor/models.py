@@ -49,6 +49,9 @@ class ReleaseMonitorResult:
     releases_already_known: int = 0
     releases_unmatched: int = 0
     releases_invalid: int = 0
+    earliest_release_date: date | None = None
+    latest_release_date: date | None = None
+    stop_reason: str | None = None
     error_message: str | None = None
 
     @property

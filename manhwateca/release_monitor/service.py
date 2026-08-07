@@ -37,7 +37,7 @@ class ReleaseMonitorService:
         self.now_func = now_func
         self.timezone = timezone
 
-    def run(self, max_pages=10, per_page=100):
+    def run(self, max_pages=100):
         tz = ZoneInfo(self.timezone)
         now = self.now_func() if self.now_func else datetime.now(tz)
         periods = current_periods(now, self.timezone)
@@ -65,6 +65,9 @@ class ReleaseMonitorService:
             "releases_already_known": 0,
             "releases_unmatched": 0,
             "releases_invalid": 0,
+            "earliest_release_date": None,
+            "latest_release_date": None,
+            "stop_reason": None,
         }
         status = "success"
         error_message = None
@@ -76,13 +79,37 @@ class ReleaseMonitorService:
                 if str(row.get("work_code") or "").strip().isdigit()
             }
             metrics["monitored_series_count"] = len(by_series)
+            previous_oldest_date = None
+            descending_order_observed = True
             for page in range(1, max_pages + 1):
                 metrics["pages_requested"] += 1
                 payload = self.client_func(page=page, include_metadata=True)
+                if not _has_results_key(payload):
+                    metrics["stop_reason"] = "empty_page"
+                    break
                 releases, parse_stats = parse_external_releases_with_stats(payload)
                 for key, value in parse_stats.items():
                     metrics[key] += value
+                if not parse_stats["releases_received"]:
+                    metrics["stop_reason"] = "empty_page"
+                    break
                 page_dates = [release.release_date for release in releases]
+                if page_dates:
+                    page_newest = max(page_dates)
+                    page_oldest = min(page_dates)
+                    if previous_oldest_date is not None and page_newest > previous_oldest_date:
+                        descending_order_observed = False
+                    previous_oldest_date = page_oldest
+                    metrics["earliest_release_date"] = (
+                        page_oldest
+                        if metrics["earliest_release_date"] is None
+                        else min(metrics["earliest_release_date"], page_oldest)
+                    )
+                    metrics["latest_release_date"] = (
+                        page_newest
+                        if metrics["latest_release_date"] is None
+                        else max(metrics["latest_release_date"], page_newest)
+                    )
                 for release in releases:
                     if release.release_date < periods.earliest_start:
                         continue
@@ -96,10 +123,18 @@ class ReleaseMonitorService:
                         metrics["releases_inserted"] += 1
                     else:
                         metrics["releases_already_known"] += 1
-                if page_dates and max(page_dates) < periods.earliest_start:
+                if (
+                    page_dates
+                    and descending_order_observed
+                    and max(page_dates) < periods.earliest_start
+                ):
+                    metrics["stop_reason"] = "period_exhausted"
                     break
                 if not parse_stats["releases_received"] or not has_more_pages(payload, page):
+                    metrics["stop_reason"] = "end_of_results"
                     break
+            else:
+                metrics["stop_reason"] = "safety_limit"
             if metrics["releases_received"] and not metrics["releases_parsed"]:
                 status = "partial_success"
                 error_message = "A API retornou itens, mas nenhum release pôde ser convertido com series_id e data válidos."
@@ -122,6 +157,14 @@ class ReleaseMonitorService:
             error_message=error_message,
             **metrics,
         )
+
+
+def _has_results_key(payload):
+    if isinstance(payload, list):
+        return bool(payload)
+    if not isinstance(payload, dict):
+        return False
+    return any(key in payload for key in ("results", "releases", "items", "data"))
 
 
 def _safe_error(error):

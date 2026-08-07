@@ -153,6 +153,98 @@ class ReleaseMonitorTests(unittest.TestCase):
         self.assertEqual(first.releases_unmatched, 1)
         self.assertEqual(second.releases_already_known, 1)
 
+    def test_service_stops_when_period_is_exhausted_before_page_ten(self):
+        repository = FakeRepository()
+        payloads = {
+            1: {"results": [_release_item(release_id="in-month", release_date="2026-08-06")]},
+            2: {"results": [_release_item(release_id="old", release_date="2026-07-31")]},
+        }
+        seen_pages = []
+        service = ReleaseMonitorService(
+            repository=repository,
+            client_func=lambda page, **_kwargs: seen_pages.append(page) or payloads[page],
+            now_func=lambda: datetime(2026, 8, 7, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        )
+        result = service.run()
+        self.assertEqual(seen_pages, [1, 2])
+        self.assertEqual(result.pages_requested, 2)
+        self.assertEqual(result.stop_reason, "period_exhausted")
+        self.assertEqual(result.releases_inserted, 1)
+
+    def test_service_does_not_stop_at_page_ten_when_month_continues(self):
+        repository = FakeRepository()
+        payloads = {
+            page: {"results": [_release_item(release_id=f"month-{page}", release_date="2026-08-02")]}
+            for page in range(1, 13)
+        }
+        payloads[13] = {"results": [_release_item(release_id="old", release_date="2026-07-31")]}
+        seen_pages = []
+        service = ReleaseMonitorService(
+            repository=repository,
+            client_func=lambda page, **_kwargs: seen_pages.append(page) or payloads[page],
+            now_func=lambda: datetime(2026, 8, 7, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        )
+        result = service.run()
+        self.assertEqual(seen_pages, list(range(1, 14)))
+        self.assertEqual(result.pages_requested, 13)
+        self.assertEqual(result.stop_reason, "period_exhausted")
+        self.assertEqual(result.releases_inserted, 12)
+        self.assertEqual(len(repository.rows), 12)
+
+    def test_service_stops_on_empty_results_page(self):
+        repository = FakeRepository()
+        result = ReleaseMonitorService(
+            repository=repository,
+            client_func=lambda **_kwargs: {"results": []},
+            now_func=lambda: datetime(2026, 8, 7, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        ).run()
+        self.assertEqual(result.pages_requested, 1)
+        self.assertEqual(result.stop_reason, "empty_page")
+        self.assertEqual(result.releases_received, 0)
+
+    def test_service_stops_when_api_has_no_results_collection(self):
+        repository = FakeRepository()
+        result = ReleaseMonitorService(
+            repository=repository,
+            client_func=lambda **_kwargs: {"total_hits": 0},
+            now_func=lambda: datetime(2026, 8, 7, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        ).run()
+        self.assertEqual(result.pages_requested, 1)
+        self.assertEqual(result.stop_reason, "empty_page")
+
+    def test_service_reports_safety_limit_when_period_never_ends(self):
+        repository = FakeRepository()
+        result = ReleaseMonitorService(
+            repository=repository,
+            client_func=lambda page, **_kwargs: {
+                "results": [_release_item(release_id=f"rel-{page}", release_date="2026-08-06")]
+            },
+            now_func=lambda: datetime(2026, 8, 7, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        ).run(max_pages=3)
+        self.assertEqual(result.pages_requested, 3)
+        self.assertEqual(result.stop_reason, "safety_limit")
+        self.assertEqual(result.releases_inserted, 3)
+
+    def test_service_keeps_month_release_after_page_ten(self):
+        repository = FakeRepository()
+
+        def client(page, **_kwargs):
+            if page == 12:
+                return {"results": [_release_item(release_id="late-month", release_date="2026-08-01")]}
+            if page == 13:
+                return {"results": [_release_item(release_id="old", release_date="2026-07-31")]}
+            return {"results": [_release_item(release_id=f"other-{page}", series_id=456, release_date="2026-08-02")]}
+
+        result = ReleaseMonitorService(
+            repository=repository,
+            client_func=client,
+            now_func=lambda: datetime(2026, 8, 7, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        ).run()
+        self.assertEqual(result.pages_requested, 13)
+        self.assertEqual(result.stop_reason, "period_exhausted")
+        self.assertEqual(result.releases_matched, 1)
+        self.assertEqual(result.releases_inserted, 1)
+
     def test_service_matches_complete_item_by_work_code(self):
         repository = FakeRepository()
         payload = {"results": [_release_item()], "total_pages": 1}
