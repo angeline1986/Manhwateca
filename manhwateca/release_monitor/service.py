@@ -2,16 +2,12 @@ from calendar import monthrange
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from manhwateca.mangaupdates_service.client import list_releases_by_day
 from manhwateca.release_monitor.models import (
     TIMEZONE,
     ReleaseMonitorPeriods,
     ReleaseMonitorResult,
 )
-from manhwateca.release_monitor.parser import (
-    has_more_pages,
-    parse_external_releases_with_stats,
-)
+from manhwateca.release_monitor.providers import MangaUpdatesReleaseProvider
 from manhwateca.release_monitor.repository import ReleaseMonitorRepository
 
 
@@ -31,9 +27,16 @@ def current_periods(now=None, timezone=TIMEZONE):
 
 
 class ReleaseMonitorService:
-    def __init__(self, repository=None, client_func=None, now_func=None, timezone=TIMEZONE):
+    def __init__(
+        self,
+        repository=None,
+        provider=None,
+        client_func=None,
+        now_func=None,
+        timezone=TIMEZONE,
+    ):
         self.repository = repository or ReleaseMonitorRepository()
-        self.client_func = client_func or list_releases_by_day
+        self.provider = provider or MangaUpdatesReleaseProvider(client_func=client_func)
         self.now_func = now_func
         self.timezone = timezone
 
@@ -83,16 +86,16 @@ class ReleaseMonitorService:
             descending_order_observed = True
             for page in range(1, max_pages + 1):
                 metrics["pages_requested"] += 1
-                payload = self.client_func(page=page, include_metadata=True)
-                if not _has_results_key(payload):
+                provider_page = self.provider.fetch_page(page)
+                if not provider_page.has_results_collection:
                     metrics["stop_reason"] = "empty_page"
                     break
-                releases, parse_stats = parse_external_releases_with_stats(payload)
-                for key, value in parse_stats.items():
+                for key, value in provider_page.stats.items():
                     metrics[key] += value
-                if not parse_stats["releases_received"]:
+                if not provider_page.stats["releases_received"]:
                     metrics["stop_reason"] = "empty_page"
                     break
+                releases = provider_page.releases
                 page_dates = [release.release_date for release in releases]
                 if page_dates:
                     page_newest = max(page_dates)
@@ -130,7 +133,10 @@ class ReleaseMonitorService:
                 ):
                     metrics["stop_reason"] = "period_exhausted"
                     break
-                if not parse_stats["releases_received"] or not has_more_pages(payload, page):
+                if (
+                    not provider_page.stats["releases_received"]
+                    or not provider_page.has_next_page
+                ):
                     metrics["stop_reason"] = "end_of_results"
                     break
             else:
@@ -157,15 +163,6 @@ class ReleaseMonitorService:
             error_message=error_message,
             **metrics,
         )
-
-
-def _has_results_key(payload):
-    if isinstance(payload, list):
-        return bool(payload)
-    if not isinstance(payload, dict):
-        return False
-    return any(key in payload for key in ("results", "releases", "items", "data"))
-
 
 def _safe_error(error):
     text = str(error).strip()

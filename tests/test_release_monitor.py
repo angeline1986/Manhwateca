@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -8,6 +9,10 @@ from manhwateca.release_monitor.parser import (
 )
 from manhwateca.release_monitor import repository as repository_module
 from manhwateca.release_monitor.models import ExternalRelease
+from manhwateca.release_monitor.providers import (
+    MangaUpdatesReleaseProvider,
+    ReleaseProviderPage,
+)
 from manhwateca.release_monitor.repository import ReleaseMonitorRepository
 from manhwateca.release_monitor.service import ReleaseMonitorService, current_periods
 
@@ -75,6 +80,16 @@ class CapturingConnection:
 
     def commit(self):
         pass
+
+
+class FakeProvider:
+    def __init__(self, pages):
+        self.pages = pages
+        self.seen_pages = []
+
+    def fetch_page(self, page):
+        self.seen_pages.append(page)
+        return self.pages[page]
 
 
 class ReleaseMonitorTests(unittest.TestCase):
@@ -148,6 +163,58 @@ class ReleaseMonitorTests(unittest.TestCase):
         self.assertEqual(stats["releases_missing_series_metadata"], 1)
         self.assertEqual(stats["releases_invalid"], 1)
         self.assertEqual(stats["releases_parsed"], 0)
+
+    def test_mangaupdates_provider_fetches_normalizes_and_reports_next_page(self):
+        provider = MangaUpdatesReleaseProvider(
+            client_func=lambda page, **_kwargs: {
+                "results": [_release_item(release_id=f"rel-{page}")],
+                "total_pages": 2,
+            }
+        )
+        page = provider.fetch_page(1)
+        self.assertTrue(page.has_results_collection)
+        self.assertTrue(page.has_next_page)
+        self.assertEqual(page.stats["releases_received"], 1)
+        self.assertEqual(page.releases[0].provider, "mangaupdates")
+        self.assertEqual(page.releases[0].external_series_id, "39054810010")
+
+    def test_service_uses_provider_page_contract(self):
+        repository = FakeRepository()
+        provider = FakeProvider({
+            1: ReleaseProviderPage(
+                releases=[
+                    ExternalRelease(
+                        provider="mangaupdates",
+                        external_series_id="123",
+                        chapter="1",
+                        release_date=date(2026, 8, 6),
+                        external_release_id="rel-1",
+                    )
+                ],
+                stats={
+                    "releases_received": 1,
+                    "releases_parsed": 1,
+                    "releases_with_series_metadata": 1,
+                    "releases_missing_series_metadata": 0,
+                    "releases_invalid": 0,
+                },
+                has_results_collection=True,
+                has_next_page=False,
+            )
+        })
+        result = ReleaseMonitorService(
+            repository=repository,
+            provider=provider,
+            now_func=lambda: datetime(2026, 8, 6, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        ).run()
+        self.assertEqual(provider.seen_pages, [1])
+        self.assertEqual(result.stop_reason, "end_of_results")
+        self.assertEqual(result.releases_inserted, 1)
+
+    def test_service_does_not_import_mangaupdates_client_directly(self):
+        source = Path("manhwateca/release_monitor/service.py").read_text(encoding="utf-8")
+        self.assertNotIn("mangaupdates_service.client", source)
+        self.assertNotIn("list_releases_by_day", source)
 
     def test_service_matches_only_monitored_series_and_is_idempotent(self):
         repository = FakeRepository()
