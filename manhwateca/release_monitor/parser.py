@@ -63,7 +63,7 @@ def _parse_release_item(item: dict):
     metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
     series = metadata.get("series") if isinstance(metadata.get("series"), dict) else {}
 
-    series_id = _series_id(record, series)
+    external_series_id = _external_series_id(record, series)
     chapter = _first_text(record, "chapter", "chapter_number", "chapterNumber", "chap")
     release_date = _date_value(
         record.get("release_date")
@@ -71,12 +71,13 @@ def _parse_release_item(item: dict):
         or record.get("date")
         or record.get("timestamp")
     )
-    if series_id is None:
+    if external_series_id is None:
         return None, "missing_series_metadata"
     if not chapter or release_date is None:
         return None, "invalid"
     return ExternalRelease(
-        series_id=series_id,
+        provider="mangaupdates",
+        external_series_id=external_series_id,
         chapter=chapter,
         release_date=release_date,
         volume=_first_text(record, "volume", "vol"),
@@ -99,7 +100,7 @@ def _rows(payload):
     return []
 
 
-def _series_id(record, series=None):
+def _external_series_id(record, series=None):
     series = series or {}
     value = (
         series.get("series_id")
@@ -111,10 +112,8 @@ def _series_id(record, series=None):
     record_series = record.get("series")
     if value is None and isinstance(record_series, dict):
         value = record_series.get("id") or record_series.get("series_id")
-    try:
-        return int(str(value).strip())
-    except (TypeError, ValueError):
-        return None
+    text = str(value or "").strip()
+    return text or None
 
 
 def _group_name(row):

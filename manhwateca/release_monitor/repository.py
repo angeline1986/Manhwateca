@@ -176,9 +176,10 @@ class ReleaseMonitorRepository:
         return row
 
     def upsert_release(self, release, manga_id):
+        mangaupdates_series_id = _mangaupdates_series_id(release)
         params = (
             manga_id,
-            release.series_id,
+            mangaupdates_series_id,
             release.external_release_id,
             release.volume,
             release.chapter,
@@ -325,3 +326,12 @@ class ReleaseMonitorRepository:
     def _commit(self):
         if self.connection is not None:
             self.connection.commit()
+
+
+def _mangaupdates_series_id(release) -> int:
+    if release.provider != "mangaupdates":
+        raise ValueError(f"Provider não suportado nesta tabela: {release.provider}")
+    text = str(release.external_series_id or "").strip()
+    if not text.isdigit():
+        raise ValueError("ID externo MangaUpdates deve ser numérico.")
+    return int(text)

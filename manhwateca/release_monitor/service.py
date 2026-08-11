@@ -74,9 +74,9 @@ class ReleaseMonitorService:
         try:
             subscriptions = self.repository.list_active_subscriptions()
             by_series = {
-                int(str(row["work_code"]).strip()): row["manga_id"]
+                str(row["work_code"]).strip(): row["manga_id"]
                 for row in subscriptions
-                if str(row.get("work_code") or "").strip().isdigit()
+                if str(row.get("work_code") or "").strip()
             }
             metrics["monitored_series_count"] = len(by_series)
             previous_oldest_date = None
@@ -114,7 +114,7 @@ class ReleaseMonitorService:
                     if release.release_date < periods.earliest_start:
                         continue
                     metrics["releases_in_period"] += 1
-                    manga_id = by_series.get(release.series_id)
+                    manga_id = by_series.get(release.external_series_id)
                     if manga_id is None:
                         metrics["releases_unmatched"] += 1
                         continue

@@ -1,6 +1,6 @@
 # Monitor de lançamentos MangaUpdates
 
-O monitor consulta lançamentos recentes do MangaUpdates, associa cada release a uma obra local pelo ID confirmado (`release.series_id -> mangas.work_code -> mangas.id`) e mantém histórico em PostgreSQL. A página `Dashboard > Visão geral` consome esse histórico para os cards e a lista de capítulos disponíveis.
+O monitor consulta lançamentos recentes do MangaUpdates, associa cada release a uma obra local pelo ID confirmado (`release.external_series_id -> mangas.work_code -> mangas.id`) e mantém histórico em PostgreSQL. A página `Dashboard > Visão geral` consome esse histórico para os cards e a lista de capítulos disponíveis.
 
 Obras com `mangas.work_code` confirmado são monitoradas automaticamente. A tabela `release_monitor_subscriptions` funciona como override: registro ausente usa a regra automática, `enabled=true` força monitoramento e `enabled=false` exclui explicitamente a obra.
 
@@ -19,7 +19,7 @@ Contrato validado em 2026-08-06:
 - Autenticação: o cliente atual não injeta token; a API pública pode impor limites por origem.
 - HTTP 429: o cliente central respeita `Retry-After` quando fornecido e aplica backoff exponencial como fallback.
 
-A resposta externa é convertida para `ExternalRelease` antes de chegar ao serviço. O parser aceita variações comuns de campo (`series_id`/`seriesId`, `release_date`/`date`, `group_name`/`group`) para isolar o restante do sistema do JSON bruto.
+A resposta externa é convertida para `ExternalRelease` antes de chegar ao serviço. O parser aceita variações comuns de campo (`series_id`/`seriesId`, `release_date`/`date`, `group_name`/`group`) e preserva o identificador externo como texto para isolar o restante do sistema do JSON bruto.
 
 O MangaUpdates registra releases presentes na base dele. Isso ajuda a descobrir capítulos disponíveis, mas não garante cobertura completa de todos os capítulos oficiais publicados nas plataformas originais.
 

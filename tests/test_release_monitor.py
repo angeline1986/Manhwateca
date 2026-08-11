@@ -38,7 +38,7 @@ class FakeRepository:
 
     def upsert_release(self, release, manga_id):
         key = release.external_release_id or (
-            release.series_id,
+            release.external_series_id,
             release.release_date,
             release.chapter.casefold(),
             (release.group_name or "").casefold(),
@@ -108,12 +108,25 @@ class ReleaseMonitorTests(unittest.TestCase):
         self.assertEqual(stats["releases_received"], 1)
         self.assertEqual(stats["releases_parsed"], 1)
         self.assertEqual(stats["releases_with_series_metadata"], 1)
-        self.assertEqual(releases[0].series_id, 39054810010)
+        self.assertEqual(releases[0].provider, "mangaupdates")
+        self.assertEqual(releases[0].external_series_id, "39054810010")
         self.assertEqual(releases[0].chapter, "29.5")
         self.assertEqual(releases[0].release_date, date(2026, 8, 6))
         self.assertIsNone(releases[0].volume)
         self.assertEqual(releases[0].external_release_id, "123")
         self.assertEqual(releases[0].source_url, "https://www.mangaupdates.com/series/example")
+
+    def test_parser_accepts_string_external_series_id(self):
+        external_id = "eede42a0-78a1-413d-8cb6-3a03ec365e2b"
+        releases = parse_external_releases({
+            "results": [{
+                "id": "rel-uuid",
+                "series_id": external_id,
+                "chapter": "1",
+                "date": "2026-08-06",
+            }]
+        })
+        self.assertEqual(releases[0].external_series_id, external_id)
 
     def test_parser_preserves_textual_chapters_and_all_groups(self):
         releases = parse_external_releases({
@@ -290,7 +303,8 @@ class ReleaseMonitorTests(unittest.TestCase):
         repository_module.Jsonb = JsonbSentinel
         try:
             release = ExternalRelease(
-                series_id=123,
+                provider="mangaupdates",
+                external_series_id="39845325740",
                 external_release_id="rel-1",
                 chapter="1",
                 volume=None,
@@ -306,6 +320,30 @@ class ReleaseMonitorTests(unittest.TestCase):
         payload_param = connection.cursor_instance.params[-1]
         self.assertIsInstance(payload_param, JsonbSentinel)
         self.assertEqual(payload_param.value["record"]["chapter"], "1")
+
+    def test_repository_converts_mangaupdates_external_series_id_to_bigint(self):
+        connection = CapturingConnection()
+        release = ExternalRelease(
+            provider="mangaupdates",
+            external_series_id="39845325740",
+            external_release_id="rel-1",
+            chapter="1",
+            release_date=date(2026, 8, 6),
+        )
+        ReleaseMonitorRepository(connection=connection).upsert_release(release, 10)
+        self.assertEqual(connection.cursor_instance.params[1], 39845325740)
+
+    def test_repository_rejects_non_numeric_mangaupdates_external_series_id(self):
+        connection = CapturingConnection()
+        release = ExternalRelease(
+            provider="mangaupdates",
+            external_series_id="eede42a0-78a1-413d-8cb6-3a03ec365e2b",
+            external_release_id="rel-1",
+            chapter="1",
+            release_date=date(2026, 8, 6),
+        )
+        with self.assertRaises(ValueError):
+            ReleaseMonitorRepository(connection=connection).upsert_release(release, 10)
 
 
 if __name__ == "__main__":

@@ -7,12 +7,15 @@ TIMEZONE = "America/Sao_Paulo"
 
 @dataclass(frozen=True)
 class ExternalRelease:
-    series_id: int
+    provider: str
+    external_series_id: str
     chapter: str
     release_date: date
-    volume: str | None = None
     group_name: str | None = None
     external_release_id: str | None = None
+    volume: str | None = None
+    language: str | None = None
+    title: str | None = None
     source_url: str | None = None
     raw_payload: dict | None = None
 
