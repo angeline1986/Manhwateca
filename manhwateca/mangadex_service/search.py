@@ -112,6 +112,41 @@ def get_manga_feed(
     return parse_manga_feed(payload)
 
 
+def iter_manga_feed(
+    manga_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    order: str = "desc",
+    *,
+    max_pages: int = 100,
+    feed_func=None,
+    **request_options,
+):
+    if max_pages < 1:
+        return
+    feed_func = feed_func or get_manga_feed
+    current_offset = offset
+    for _page_number in range(max_pages):
+        page = feed_func(
+            manga_id,
+            limit=limit,
+            offset=current_offset,
+            order=order,
+            **request_options,
+        )
+        if page is None or not page.items:
+            break
+        received = len(page.items)
+        for item in page.items:
+            yield item
+        next_offset = current_offset + received
+        if next_offset <= current_offset:
+            break
+        if next_offset >= page.total:
+            break
+        current_offset = next_offset
+
+
 def get_manga(
     manga_id: str,
     include_cover_art: bool = False,

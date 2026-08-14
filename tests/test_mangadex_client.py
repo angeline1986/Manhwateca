@@ -17,6 +17,7 @@ from manhwateca.mangadex_service.search import (
     get_manga_feed,
     get_manga_cover_art,
     get_manga,
+    iter_manga_feed,
     parse_manga_feed,
     parse_manga_details,
     parse_manga_search,
@@ -517,6 +518,156 @@ class MangaDexClientTests(unittest.TestCase):
         with self.assertRaises(MangaDexPayloadError):
             parse_manga_feed({"data": {}})
 
+    def test_iter_manga_feed_stops_after_one_page_when_total_is_reached(self):
+        calls = []
+
+        def feed_func(_manga_id, **kwargs):
+            calls.append(kwargs["offset"])
+            return feed_page("chapter", 3, limit=100, offset=kwargs["offset"], total=3)
+
+        items = list(iter_manga_feed("manga-uuid", feed_func=feed_func))
+
+        self.assertEqual(calls, [0])
+        self.assertEqual([item.id for item in items], [
+            "chapter-0",
+            "chapter-1",
+            "chapter-2",
+        ])
+
+    def test_iter_manga_feed_uses_received_count_for_next_offset(self):
+        calls = []
+
+        def feed_func(_manga_id, **kwargs):
+            offset = kwargs["offset"]
+            calls.append(offset)
+            if offset == 0:
+                return feed_page("first", 80, limit=100, offset=0, total=200)
+            return feed_page("second", 0, limit=100, offset=80, total=200)
+
+        list(iter_manga_feed("manga-uuid", feed_func=feed_func))
+
+        self.assertEqual(calls, [0, 80])
+
+    def test_iter_manga_feed_handles_three_pages_and_partial_last_page(self):
+        calls = []
+
+        def feed_func(_manga_id, **kwargs):
+            offset = kwargs["offset"]
+            calls.append(offset)
+            if offset == 0:
+                return feed_page("page-1", 100, limit=100, offset=0, total=250)
+            if offset == 100:
+                return feed_page("page-2", 100, limit=100, offset=100, total=250)
+            if offset == 200:
+                return feed_page("page-3", 50, limit=100, offset=200, total=250)
+            raise AssertionError(f"unexpected offset {offset}")
+
+        items = list(iter_manga_feed("manga-uuid", feed_func=feed_func))
+
+        self.assertEqual(calls, [0, 100, 200])
+        self.assertEqual(len(items), 250)
+        self.assertEqual(items[-1].id, "page-3-49")
+
+    def test_iter_manga_feed_stops_on_empty_page_before_total(self):
+        calls = []
+
+        def feed_func(_manga_id, **kwargs):
+            offset = kwargs["offset"]
+            calls.append(offset)
+            if offset == 0:
+                return feed_page("page-1", 2, limit=100, offset=0, total=200)
+            return feed_page("empty", 0, limit=100, offset=2, total=200)
+
+        items = list(iter_manga_feed("manga-uuid", feed_func=feed_func))
+
+        self.assertEqual(calls, [0, 2])
+        self.assertEqual(len(items), 2)
+
+    def test_iter_manga_feed_stops_safely_with_inconsistent_total(self):
+        calls = []
+
+        def feed_func(_manga_id, **kwargs):
+            offset = kwargs["offset"]
+            calls.append(offset)
+            return feed_page(f"page-{offset}", 1, limit=100, offset=offset, total=999)
+
+        items = list(iter_manga_feed(
+            "manga-uuid",
+            max_pages=3,
+            feed_func=feed_func,
+        ))
+
+        self.assertEqual(calls, [0, 1, 2])
+        self.assertEqual(len(items), 3)
+
+    def test_iter_manga_feed_respects_initial_offset(self):
+        calls = []
+
+        def feed_func(_manga_id, **kwargs):
+            calls.append(kwargs["offset"])
+            return feed_page("chapter", 1, limit=100, offset=kwargs["offset"], total=11)
+
+        list(iter_manga_feed("manga-uuid", offset=10, feed_func=feed_func))
+
+        self.assertEqual(calls, [10])
+
+    def test_iter_manga_feed_passes_limit_and_order_to_pages(self):
+        calls = []
+
+        def feed_func(_manga_id, **kwargs):
+            calls.append((kwargs["limit"], kwargs["order"]))
+            return feed_page("chapter", 1, limit=50, offset=kwargs["offset"], total=1)
+
+        list(iter_manga_feed(
+            "manga-uuid",
+            limit=50,
+            order="asc",
+            feed_func=feed_func,
+        ))
+
+        self.assertEqual(calls, [(50, "asc")])
+
+    def test_iter_manga_feed_propagates_second_page_error(self):
+        calls = []
+
+        def feed_func(_manga_id, **kwargs):
+            offset = kwargs["offset"]
+            calls.append(offset)
+            if offset == 0:
+                return feed_page("page-1", 1, limit=100, offset=0, total=2)
+            raise MangaDexHTTPError(500)
+
+        with self.assertRaises(MangaDexHTTPError):
+            list(iter_manga_feed("manga-uuid", feed_func=feed_func))
+
+        self.assertEqual(calls, [0, 1])
+
+    def test_iter_manga_feed_preserves_items_and_languages_without_filtering(self):
+        page = parse_manga_feed(manga_feed_payload([
+            feed_item("chapter-pt", translated_language="pt-br"),
+            feed_item("chapter-en", translated_language="en"),
+        ], total=2))
+
+        items = list(iter_manga_feed(
+            "manga-uuid",
+            feed_func=lambda *_args, **_kwargs: page,
+        ))
+
+        self.assertIs(items[0], page.items[0])
+        self.assertIs(items[1], page.items[1])
+        self.assertEqual(
+            [item.translated_language for item in items],
+            ["pt-br", "en"],
+        )
+
+    def test_iter_manga_feed_stops_when_feed_returns_none(self):
+        items = list(iter_manga_feed(
+            "  ",
+            feed_func=lambda *_args, **_kwargs: None,
+        ))
+
+        self.assertEqual(items, [])
+
 
 def http_error(status, retry_after=None):
     headers = Message()
@@ -578,6 +729,15 @@ def feed_item(
         },
         "relationships": relationships if relationships is not None else [],
     }
+
+
+def feed_page(prefix, count, *, limit, offset, total):
+    return parse_manga_feed(manga_feed_payload(
+        [feed_item(f"{prefix}-{index}") for index in range(count)],
+        limit=limit,
+        offset=offset,
+        total=total,
+    ))
 
 
 def manga_item(
