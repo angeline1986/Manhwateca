@@ -12,6 +12,8 @@ from manhwateca.mangadex_service.client import (
     request_json,
 )
 from manhwateca.mangadex_service.search import (
+    get_manga,
+    parse_manga_details,
     parse_manga_search,
     search_manga,
 )
@@ -216,6 +218,74 @@ class MangaDexClientTests(unittest.TestCase):
         with self.assertRaises(MangaDexPayloadError):
             parse_manga_search({"data": {}})
 
+    def test_get_manga_requests_details_by_uuid(self):
+        calls = []
+        manga_id = "eede42a0-78a1-413d-8cb6-3a03ec365e2b"
+
+        def request_func(path, params, **_options):
+            calls.append((path, params))
+            return manga_detail_payload(manga_item(
+                manga_id,
+                title={"en": "Accidental Baby"},
+                alt_titles=[{"ko": "우연한 아기"}],
+                description={"en": "A careful summary."},
+                original_language="ko",
+                status="completed",
+                year=2024,
+                links={
+                    "mu": "39054810010",
+                    "mal": "12345",
+                    "raw": "https://raw.example.test",
+                    "engtl": "https://publisher.example.test",
+                },
+                latest_uploaded_chapter="chapter-uuid",
+                relationships=[{"id": "author-1", "type": "author"}],
+            ))
+
+        details = get_manga(manga_id, request_func=request_func)
+
+        self.assertEqual(calls, [(f"/manga/{manga_id}", None)])
+        self.assertEqual(details.id, manga_id)
+        self.assertEqual(details.title, "Accidental Baby")
+        self.assertEqual(details.description, {"en": "A careful summary."})
+        self.assertEqual(details.original_language, "ko")
+        self.assertEqual(details.status, "completed")
+        self.assertEqual(details.year, 2024)
+        self.assertEqual(details.links["mu"], "39054810010")
+        self.assertEqual(details.links["mal"], "12345")
+        self.assertEqual(details.links["raw"], "https://raw.example.test")
+        self.assertEqual(details.links["engtl"], "https://publisher.example.test")
+        self.assertEqual(details.latest_uploaded_chapter, "chapter-uuid")
+        self.assertEqual(details.relationships[0]["type"], "author")
+
+    def test_get_manga_returns_none_for_blank_uuid_without_request(self):
+        calls = []
+        self.assertIsNone(get_manga("  ", request_func=calls.append))
+        self.assertEqual(calls, [])
+
+    def test_parse_manga_details_returns_none_when_data_is_missing(self):
+        self.assertIsNone(parse_manga_details({"result": "ok"}))
+
+    def test_parse_manga_details_handles_partial_attributes(self):
+        details = parse_manga_details(manga_detail_payload({
+            "id": "uuid-1",
+            "attributes": {
+                "title": {"ko-ro": "Dressed to Kill"},
+                "links": None,
+                "latestUploadedChapter": None,
+            },
+        }))
+
+        self.assertEqual(details.title, "Dressed to Kill")
+        self.assertEqual(details.description, {})
+        self.assertEqual(details.links, {})
+        self.assertIsNone(details.latest_uploaded_chapter)
+        self.assertEqual(details.relationships, [])
+
+    def test_parse_manga_details_rejects_invalid_data_shape(self):
+        with self.assertRaises(MangaDexPayloadError):
+            parse_manga_details({"data": []})
+
 
 def http_error(status, retry_after=None):
     headers = Message()
@@ -234,24 +304,32 @@ def manga_search_payload(items):
     return {"result": "ok", "response": "collection", "data": items}
 
 
+def manga_detail_payload(item):
+    return {"result": "ok", "response": "entity", "data": item}
+
+
 def manga_item(
     manga_id,
     *,
     title=None,
     alt_titles=None,
+    description=None,
     original_language=None,
     status=None,
     year=None,
     links=None,
+    latest_uploaded_chapter=None,
     relationships=None,
 ):
     attributes = {
         "title": title if title is not None else {},
         "altTitles": alt_titles if alt_titles is not None else [],
+        "description": description if description is not None else {},
         "originalLanguage": original_language,
         "status": status,
         "year": year,
         "links": links if links is not None else {},
+        "latestUploadedChapter": latest_uploaded_chapter,
     }
     return {
         "id": manga_id,

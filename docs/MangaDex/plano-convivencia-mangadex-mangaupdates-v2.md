@@ -247,7 +247,8 @@ Não alterar migrations antigas já aplicadas.
 | M2 --- Abstrair o Release Provider | Concluído | `ef6287b` | `MangaUpdatesReleaseProvider` extraído; service preserva decisões de janela e parada. |
 | M3 --- Cliente MangaDex: infraestrutura HTTP | Concluído | `08cc49e` | Cliente HTTP MangaDex criado com `urllib`, exceções próprias e testes dedicados. |
 | M4 --- MangaDex: busca de obras | Concluído | `8b5a811` | Busca de candidatos MangaDex implementada sem ligação com o Release Monitor. |
-| M5 --- MangaDex: detalhes da obra | Próximo | - | Iniciar com Passo 0 --- Analisar. |
+| M5 --- MangaDex: detalhes da obra | Concluído | - | Consulta de detalhe por UUID preservando payload, links e capítulo mais recente. |
+| M6 --- MangaDex: Cover Art | Próximo | - | Iniciar com Passo 0 --- Analisar. |
 
 ## M1 --- Generalizar `ExternalRelease`
 

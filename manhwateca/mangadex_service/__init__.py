@@ -9,7 +9,10 @@ from manhwateca.mangadex_service.client import (
     request_json,
 )
 from manhwateca.mangadex_service.search import (
+    MangaDexMangaDetails,
     MangaDexMangaCandidate,
+    get_manga,
+    parse_manga_details,
     parse_manga_search,
     search_manga,
 )
@@ -20,7 +23,10 @@ __all__ = [
     "MangaDexHTTPError",
     "MangaDexPayloadError",
     "MangaDexRateLimitError",
+    "MangaDexMangaDetails",
     "MangaDexMangaCandidate",
+    "get_manga",
+    "parse_manga_details",
     "parse_manga_search",
     "request_json",
     "search_manga",
