@@ -99,7 +99,7 @@ python server.py --open
 ```
 ./start_manhwateca.command
 
-No macOS, também é possível abrir `start_manhwateca.command`.
+No macOS, também é possível abrir `.
 
 Abra `http://127.0.0.1:8000`. A versão atual mostra o status do ambiente,
 o catálogo pesquisável e permite executar tarefas em segundo plano:
