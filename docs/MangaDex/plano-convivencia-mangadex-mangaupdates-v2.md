@@ -254,7 +254,7 @@ Não alterar migrations antigas já aplicadas.
 | M9 --- MangaDex: normalização para `ExternalRelease` | Concluído | `67d5e94` | Feed MangaDex normalizado para `ExternalRelease` e provider MangaDex criado sem execução automática. |
 | M10 --- Armazenar referências externas por provider | Concluído | `82b9752` | `manga_external_refs` idempotente criada com refs MangaUpdates migradas e repository mínimo. |
 | M11 --- Armazenamento genérico de releases | Concluído | `5a8d245` | `external_releases` idempotente criada e upsert genérico adicionado sem alterar Dashboard. |
-| M12 --- MangaDex: execução eficiente e incremental | Próximo | - | Iniciar com Passo 0 --- Analisar. |
+| M12 --- MangaDex: execução eficiente e incremental | Concluído | `e593ec3` | Executor incremental por obra criado com checkpoint em `manga_external_refs.metadata`, safety limit, métricas e persistência em `external_releases`. |
 
 ## M1 --- Generalizar `ExternalRelease`
 
@@ -1278,6 +1278,21 @@ Cobrir, conforme a implementação escolhida:
 
 O custo de consultar MangaDex para muitas obras está controlado e
 observável antes de habilitar o fluxo multi-provider.
+
+### Resultado
+
+Implementado em `e593ec3`.
+
+-   Criado executor por obra em `release_monitor/mangadex_execution.py`.
+-   Estado incremental armazenado em
+    `manga_external_refs.metadata.release_monitor`.
+-   `last_checked_at` e `latest_release_published_at` são mantidos
+    separadamente.
+-   O feed reutiliza `iter_manga_feed(...)` e o retry/backoff permanece
+    concentrado no cliente HTTP MangaDex.
+-   Releases normalizados são persistidos via `external_releases`.
+-   Sem integração automática com `ReleaseMonitorService` e sem iniciar
+    M13.
 
 ------------------------------------------------------------------------
 
