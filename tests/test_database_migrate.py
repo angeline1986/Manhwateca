@@ -34,6 +34,45 @@ class DatabaseMigrateTests(unittest.TestCase):
             self.assertEqual(["001_first.sql", "002_second.sql"], applied)
             self.assertEqual(["SELECT 1;", "SELECT 2;"], connection.executed)
 
+    def test_manga_external_refs_migration_is_idempotent(self):
+        sql = (
+            migrate.MIGRATIONS_DIR / "013_manga_external_refs.sql"
+        ).read_text(encoding="utf-8").casefold()
+
+        self.assertIn("create table if not exists manhwateca.manga_external_refs", sql)
+        self.assertIn("external_id text not null", sql)
+        self.assertIn("unique (manga_id, provider)", sql)
+        self.assertIn("unique (provider, external_id)", sql)
+        self.assertIn("references manhwateca.mangas(id)", sql)
+        self.assertIn("metadata jsonb not null default '{}'::jsonb", sql)
+        self.assertIn("on conflict do nothing", sql)
+
+    def test_manga_external_refs_migration_can_be_executed_twice_by_runner(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            migration_sql = (
+                migrate.MIGRATIONS_DIR / "013_manga_external_refs.sql"
+            ).read_text(encoding="utf-8")
+            (root / "013_manga_external_refs.sql").write_text(
+                migration_sql,
+                encoding="utf-8",
+            )
+            connection = FakeConnection()
+
+            with patch.object(migrate, "transaction", fake_transaction(connection)):
+                first = migrate.apply_migrations(
+                    database_url="postgresql://example",
+                    migrations_dir=root,
+                )
+                second = migrate.apply_migrations(
+                    database_url="postgresql://example",
+                    migrations_dir=root,
+                )
+
+            self.assertEqual(["013_manga_external_refs.sql"], first)
+            self.assertEqual(["013_manga_external_refs.sql"], second)
+            self.assertEqual(2, len(connection.executed))
+
 
 class fake_transaction:
     def __init__(self, connection):

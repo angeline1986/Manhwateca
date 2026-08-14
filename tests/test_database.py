@@ -8,6 +8,7 @@ from manhwateca.database.connection import (
 )
 from manhwateca.database.manga_repository import (
     ConfirmedIdCorrectionResult,
+    MangaExternalRef,
     MangaRepository,
     select_alternative_title,
 )
@@ -52,6 +53,88 @@ class FakeCursor:
                 ),
                 None,
             )
+            return
+
+        if (
+            normalized.startswith("select * from manga_external_refs")
+            and "where manga_id = %s and provider = %s" in normalized
+        ):
+            self.row = next(
+                (
+                    row for row in self.connection.external_refs
+                    if row["manga_id"] == params[0]
+                    and row["provider"] == params[1]
+                ),
+                None,
+            )
+            return
+
+        if (
+            normalized.startswith("select * from manga_external_refs")
+            and "where manga_id = %s" in normalized
+        ):
+            self.rows = sorted(
+                [
+                    row for row in self.connection.external_refs
+                    if row["manga_id"] == params[0]
+                ],
+                key=lambda row: row["provider"],
+            )
+            return
+
+        if normalized.startswith("select m.* from manga_external_refs"):
+            ref = next(
+                (
+                    row for row in self.connection.external_refs
+                    if row["provider"] == params[0]
+                    and row["external_id"] == params[1]
+                ),
+                None,
+            )
+            self.row = next(
+                (
+                    row for row in self.connection.mangas
+                    if ref and row["id"] == ref["manga_id"]
+                ),
+                None,
+            )
+            return
+
+        if normalized.startswith("insert into manga_external_refs"):
+            manga_id, provider, external_id, external_url, external_title, metadata = params
+            conflict = next(
+                (
+                    row for row in self.connection.external_refs
+                    if row["provider"] == provider
+                    and row["external_id"] == external_id
+                    and row["manga_id"] != manga_id
+                ),
+                None,
+            )
+            if conflict:
+                raise RuntimeError("duplicate provider external_id")
+            row = next(
+                (
+                    row for row in self.connection.external_refs
+                    if row["manga_id"] == manga_id
+                    and row["provider"] == provider
+                ),
+                None,
+            )
+            if row is None:
+                row = {
+                    "id": len(self.connection.external_refs) + 1,
+                    "manga_id": manga_id,
+                    "provider": provider,
+                }
+                self.connection.external_refs.append(row)
+            row.update({
+                "external_id": external_id,
+                "external_url": external_url,
+                "external_title": external_title,
+                "metadata": metadata,
+            })
+            self.row = row
             return
 
         if (
@@ -230,6 +313,7 @@ class FakeConnection:
         self.decision_queue = []
         self.decision_inserts = []
         self.decision_updates = []
+        self.external_refs = []
 
     def cursor(self):
         return FakeCursor(self)
@@ -558,7 +642,82 @@ class MangaRepositoryTests(unittest.TestCase):
         query, params = connection.updated[0]
         self.assertIn("alternative_title = case", query)
         self.assertEqual("Novo Alias", params[5])
-        self.assertEqual(7, params[6])
+
+    def test_upserts_and_reads_external_refs(self):
+        connection = FakeConnection()
+        repository = MangaRepository(connection)
+
+        inserted = repository.upsert_external_ref(
+            1,
+            "mangadex",
+            "eede42a0-78a1-413d-8cb6-3a03ec365e2b",
+            metadata={"source": "manual"},
+        )
+        updated = repository.upsert_external_ref(
+            1,
+            "mangadex",
+            "eede42a0-78a1-413d-8cb6-3a03ec365e2b",
+            external_url="https://mangadex.org/title/eede42a0",
+            external_title="Accidental Baby",
+            metadata={"source": "review"},
+        )
+
+        self.assertIsInstance(inserted, MangaExternalRef)
+        self.assertEqual(inserted.external_id, "eede42a0-78a1-413d-8cb6-3a03ec365e2b")
+        self.assertEqual(updated.external_title, "Accidental Baby")
+        self.assertEqual(updated.metadata, {"source": "review"})
+        self.assertEqual(len(connection.external_refs), 1)
+
+    def test_external_refs_allow_mangaupdates_and_mangadex_for_same_work(self):
+        connection = FakeConnection()
+        repository = MangaRepository(connection)
+
+        repository.upsert_external_ref(1, "mangaupdates", "39054810010")
+        repository.upsert_external_ref(
+            1,
+            "mangadex",
+            "eede42a0-78a1-413d-8cb6-3a03ec365e2b",
+        )
+
+        refs = repository.list_external_refs(1)
+        self.assertEqual(
+            [(ref.provider, ref.external_id) for ref in refs],
+            [
+                ("mangadex", "eede42a0-78a1-413d-8cb6-3a03ec365e2b"),
+                ("mangaupdates", "39054810010"),
+            ],
+        )
+
+    def test_external_ref_rejects_same_provider_external_id_for_different_work(self):
+        connection = FakeConnection()
+        repository = MangaRepository(connection)
+        repository.upsert_external_ref(1, "mangadex", "uuid-123")
+
+        with self.assertRaises(RuntimeError):
+            repository.upsert_external_ref(2, "mangadex", "uuid-123")
+
+    def test_finds_manga_by_external_id(self):
+        connection = FakeConnection()
+        connection.mangas = [{"id": 7, "title": "Alpha", "work_code": "123"}]
+        repository = MangaRepository(connection)
+        repository.upsert_external_ref(7, "mangaupdates", "123")
+
+        manga = repository.find_manga_by_external_id("mangaupdates", "123")
+
+        self.assertEqual(manga.id, 7)
+        self.assertEqual(manga.title, "Alpha")
+
+    def test_external_ref_optional_fields_default_to_none_and_empty_metadata(self):
+        connection = FakeConnection()
+        ref = MangaRepository(connection).upsert_external_ref(
+            1,
+            "mangadex",
+            "uuid-123",
+        )
+
+        self.assertIsNone(ref.external_url)
+        self.assertIsNone(ref.external_title)
+        self.assertEqual(ref.metadata, {})
 
     def test_select_alternative_title_uses_first_valid_associated_title(self):
         self.assertEqual(

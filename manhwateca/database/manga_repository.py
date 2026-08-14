@@ -47,6 +47,19 @@ class ConfirmedIdCorrectionResult:
         return self.applied
 
 
+@dataclass(frozen=True)
+class MangaExternalRef:
+    id: int | None
+    manga_id: int
+    provider: str
+    external_id: str
+    external_url: str | None = None
+    external_title: str | None = None
+    metadata: dict | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
 class MangaRepository:
     def __init__(self, connection=None, *, connection_factory=None):
         self.connection = connection
@@ -143,6 +156,101 @@ class MangaRepository:
             LIMIT 1
             """,
             (page_id,),
+        )
+        return manga_from_row(row) if row else None
+
+    def get_external_ref(self, manga_id, provider) -> MangaExternalRef | None:
+        manga_id = _int_or_none(manga_id)
+        provider = _string_or_none(provider)
+        if manga_id is None or provider is None:
+            return None
+        row = self._fetch_one(
+            """
+            SELECT *
+            FROM manga_external_refs
+            WHERE manga_id = %s
+              AND provider = %s
+            LIMIT 1
+            """,
+            (manga_id, provider),
+        )
+        return external_ref_from_row(row) if row else None
+
+    def list_external_refs(self, manga_id) -> list[MangaExternalRef]:
+        manga_id = _int_or_none(manga_id)
+        if manga_id is None:
+            return []
+        rows = self._fetch_all(
+            """
+            SELECT *
+            FROM manga_external_refs
+            WHERE manga_id = %s
+            ORDER BY provider
+            """,
+            (manga_id,),
+        )
+        return [external_ref_from_row(row) for row in rows]
+
+    def upsert_external_ref(
+        self,
+        manga_id,
+        provider,
+        external_id,
+        *,
+        external_url=None,
+        external_title=None,
+        metadata=None,
+    ) -> MangaExternalRef:
+        manga_id = _int_or_none(manga_id)
+        provider = _string_or_none(provider)
+        external_id = _string_or_none(external_id)
+        if manga_id is None or provider is None or external_id is None:
+            raise ValueError("manga_id, provider e external_id são obrigatórios.")
+        row = self._fetch_one(
+            """
+            INSERT INTO manga_external_refs(
+                manga_id,
+                provider,
+                external_id,
+                external_url,
+                external_title,
+                metadata
+            )
+            VALUES (%s, %s, %s, %s, %s, %s::jsonb)
+            ON CONFLICT (manga_id, provider)
+            DO UPDATE SET external_id = EXCLUDED.external_id,
+                          external_url = EXCLUDED.external_url,
+                          external_title = EXCLUDED.external_title,
+                          metadata = EXCLUDED.metadata
+            RETURNING *
+            """,
+            (
+                manga_id,
+                provider,
+                external_id,
+                _string_or_none(external_url),
+                _string_or_none(external_title),
+                json.dumps(metadata or {}, ensure_ascii=False),
+            ),
+        )
+        self._connection().commit()
+        return external_ref_from_row(row)
+
+    def find_manga_by_external_id(self, provider, external_id) -> MangaRecord | None:
+        provider = _string_or_none(provider)
+        external_id = _string_or_none(external_id)
+        if provider is None or external_id is None:
+            return None
+        row = self._fetch_one(
+            """
+            SELECT m.*
+            FROM manga_external_refs r
+            JOIN vw_mangas m ON m.id = r.manga_id
+            WHERE r.provider = %s
+              AND r.external_id = %s
+            LIMIT 1
+            """,
+            (provider, external_id),
         )
         return manga_from_row(row) if row else None
 
@@ -1197,6 +1305,28 @@ def _work_code(manga: dict):
     if value is None or str(value).strip() == "":
         return None
     return str(value).strip()
+
+
+def external_ref_from_row(row: dict) -> MangaExternalRef:
+    metadata = row.get("metadata")
+    if metadata is None:
+        metadata = {}
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except json.JSONDecodeError:
+            metadata = {}
+    return MangaExternalRef(
+        id=row.get("id"),
+        manga_id=row.get("manga_id"),
+        provider=row.get("provider"),
+        external_id=row.get("external_id"),
+        external_url=row.get("external_url"),
+        external_title=row.get("external_title"),
+        metadata=metadata,
+        created_at=_string_or_none(row.get("created_at")),
+        updated_at=_string_or_none(row.get("updated_at")),
+    )
 
 
 def _aliases(manga: dict):
