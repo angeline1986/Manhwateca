@@ -253,7 +253,8 @@ Não alterar migrations antigas já aplicadas.
 | M8 --- MangaDex: paginação do feed | Concluído | `4738cab` | Iteração incremental por limit/offset/total com safety limit e avanço por itens recebidos. |
 | M9 --- MangaDex: normalização para `ExternalRelease` | Concluído | `67d5e94` | Feed MangaDex normalizado para `ExternalRelease` e provider MangaDex criado sem execução automática. |
 | M10 --- Armazenar referências externas por provider | Concluído | `82b9752` | `manga_external_refs` idempotente criada com refs MangaUpdates migradas e repository mínimo. |
-| M11 --- Armazenamento genérico de releases | Próximo | - | Iniciar com Passo 0 --- Analisar. |
+| M11 --- Armazenamento genérico de releases | Concluído | `5a8d245` | `external_releases` idempotente criada e upsert genérico adicionado sem alterar Dashboard. |
+| M12 --- MangaDex: execução eficiente e incremental | Próximo | - | Iniciar com Passo 0 --- Analisar. |
 
 ## M1 --- Generalizar `ExternalRelease`
 
