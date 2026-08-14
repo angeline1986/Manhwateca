@@ -26,7 +26,8 @@ O MangaUpdates registra releases presentes na base dele. Isso ajuda a descobrir 
 ## Tabelas
 
 - `release_monitor_subscriptions`: override por obra, com `enabled`, modo e datas de última verificação/sucesso/erro. Ausência de registro não impede monitoramento quando a obra possui `work_code`.
-- `mangaupdates_releases`: histórico de releases, com capítulo e volume textuais, `source_payload` em JSONB, `first_seen_at`, `last_seen_at` e `viewed_at`.
+- `external_releases`: histórico genérico de releases por provider, com capítulo, volume, idioma, grupo quando disponível, payload bruto, `first_seen_at`, `last_seen_at` e `viewed_at`. É a fonte atual das leituras do Dashboard.
+- `mangaupdates_releases`: histórico legado de releases MangaUpdates, mantido para compatibilidade e rollback.
 - `release_monitor_runs`: auditoria de cada execução, métricas e status (`running`, `success`, `partial_success`, `failed`).
 
 ## Períodos
@@ -37,7 +38,7 @@ O fuso é sempre `America/Sao_Paulo`.
 - Semana: segunda-feira a domingo da semana corrente.
 - Mês: primeiro ao último dia do mês corrente.
 
-`chapter_count` representa registros de capítulos persistidos em `mangaupdates_releases` para o período. `release_count` é mantido no contrato com o mesmo valor para compatibilidade.
+`chapter_count` representa registros de capítulos persistidos em `external_releases` para o período. `release_count` é mantido no contrato com o mesmo valor para compatibilidade.
 
 `release_date` é a data de lançamento informada pelo MangaUpdates. `first_seen_at` é quando a Manhwateca detectou a release pela primeira vez. `last_seen_at` é atualizado quando a mesma release reaparece em nova execução. Uma release publicada ontem e detectada hoje mantém `release_date` de ontem e `first_seen_at` de hoje.
 

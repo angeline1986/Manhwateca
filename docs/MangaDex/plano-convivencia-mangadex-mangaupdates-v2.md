@@ -257,6 +257,7 @@ Não alterar migrations antigas já aplicadas.
 | M12 --- MangaDex: execução eficiente e incremental | Concluído | `e593ec3` | Executor incremental por obra criado com checkpoint em `manga_external_refs.metadata`, safety limit, métricas e persistência em `external_releases`. |
 | M13 --- Release Monitor multi-provider | Concluído | `8b827d0` | Service coordena executores MangaUpdates/MangaDex, resolve refs externas e isola falhas por provider. |
 | M14 --- Comparação e validação | Concluído | `525d5d1` | Comparador read-only criado para relatar capítulos, datas, idiomas e divergências sem alterar Dashboard/checkpoints. |
+| M15 --- Migração controlada das leituras do Dashboard | Concluído | `631a5a0` | Dashboard passou a ler `external_releases`, com backfill idempotente MangaUpdates e escrita dupla para rollback. |
 
 ## M1 --- Generalizar `ExternalRelease`
 
@@ -1532,6 +1533,25 @@ Não remover a tabela antiga neste milestone.
 
 O Dashboard lê a persistência genérica de forma controlada, testada e
 reversível.
+
+### Resultado
+
+Implementado em `631a5a0`.
+
+-   Criada migration `015_external_releases_dashboard_cutover.sql`.
+-   `mangaupdates_releases` é copiada para `external_releases` de forma
+    idempotente.
+-   `release_group` foi preservado na tabela genérica para manter o
+    contrato atual da lista.
+-   `ReleaseMonitorRepository.release_summary`,
+    `list_releases` e `mark_viewed` passam a usar `external_releases`.
+-   MangaUpdates segue escrevendo em `mangaupdates_releases` e também em
+    `external_releases`, mantendo rollback simples.
+-   Leituras do Dashboard não mudaram contrato HTTP.
+-   Validação PostgreSQL real segue pendente quando `DATABASE_URL` não
+    está disponível.
+-   Fonte atual do Dashboard: `external_releases`.
+-   Sem iniciar M16.
 
 ------------------------------------------------------------------------
 
