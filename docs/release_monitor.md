@@ -1,8 +1,42 @@
-# Monitor de lançamentos MangaUpdates
+# Monitor de lançamentos
 
-O monitor consulta lançamentos recentes do MangaUpdates, associa cada release a uma obra local pelo ID confirmado (`release.external_series_id -> mangas.work_code -> mangas.id`) e mantém histórico em PostgreSQL. A página `Dashboard > Visão geral` consome esse histórico para os cards e a lista de capítulos disponíveis.
+O Release Monitor consulta fontes externas de capítulos, normaliza os
+itens como `ExternalRelease` e mantém o histórico genérico em
+PostgreSQL. A página `Dashboard > Visão geral` consome
+`external_releases` para os cards e a lista de capítulos disponíveis.
 
-Obras com `mangas.work_code` confirmado são monitoradas automaticamente. A tabela `release_monitor_subscriptions` funciona como override: registro ausente usa a regra automática, `enabled=true` força monitoramento e `enabled=false` exclui explicitamente a obra.
+```text
+Release Monitor
+    |
+    +-- MangaUpdates -> provider/executor
+    |
+    +-- MangaDex     -> provider/executor incremental
+    |
+    v
+ExternalRelease
+    |
+    v
+external_releases
+    |
+    v
+Dashboard
+```
+
+As referências externas por obra ficam em `manga_external_refs`:
+
+```text
+Obra local
+    |
+    +-- MangaUpdates external ref
+    |
+    +-- MangaDex external ref
+```
+
+Obras com `mangas.work_code` confirmado ainda são monitoradas
+automaticamente pelo caminho legado MangaUpdates. A tabela
+`release_monitor_subscriptions` funciona como override: registro
+ausente usa a regra automática, `enabled=true` força monitoramento e
+`enabled=false` exclui explicitamente a obra.
 
 ## API MangaUpdates
 
@@ -23,11 +57,30 @@ A resposta externa é convertida para `ExternalRelease` antes de chegar ao servi
 
 O MangaUpdates registra releases presentes na base dele. Isso ajuda a descobrir capítulos disponíveis, mas não garante cobertura completa de todos os capítulos oficiais publicados nas plataformas originais.
 
+## API MangaDex
+
+O cliente MangaDex fica em `manhwateca/mangadex_service` e cobre busca,
+detalhes, cover art, feed de capítulos e paginação `limit`/`offset`.
+O Release Monitor não chama endpoints MangaDex diretamente: o executor
+usa `process_manga(...)`, que percorre o feed incrementalmente,
+normaliza os capítulos e persiste em `external_releases`.
+
+O estado incremental MangaDex é guardado em
+`manga_external_refs.metadata.release_monitor`, com
+`last_checked_at` e `latest_release_published_at`. A execução para ao
+encontrar release já conhecida, ao esgotar o feed ou ao atingir o limite
+de segurança.
+
+`translatedLanguage` é preservado no campo `language`. O monitor não
+filtra idioma e não aplica regra funcional baseada em idioma neste
+ponto.
+
 ## Tabelas
 
 - `release_monitor_subscriptions`: override por obra, com `enabled`, modo e datas de última verificação/sucesso/erro. Ausência de registro não impede monitoramento quando a obra possui `work_code`.
+- `manga_external_refs`: referências externas por provider, como IDs MangaUpdates e UUIDs MangaDex, com metadados opcionais por integração.
 - `external_releases`: histórico genérico de releases por provider, com capítulo, volume, idioma, grupo quando disponível, payload bruto, `first_seen_at`, `last_seen_at` e `viewed_at`. É a fonte atual das leituras do Dashboard.
-- `mangaupdates_releases`: histórico legado de releases MangaUpdates, mantido para compatibilidade e rollback.
+- `mangaupdates_releases`: histórico legado de releases MangaUpdates, ainda alimentado por escrita dupla para compatibilidade e rollback.
 - `release_monitor_runs`: auditoria de cada execução, métricas e status (`running`, `success`, `partial_success`, `failed`).
 
 ## Períodos
@@ -40,19 +93,49 @@ O fuso é sempre `America/Sao_Paulo`.
 
 `chapter_count` representa registros de capítulos persistidos em `external_releases` para o período. `release_count` é mantido no contrato com o mesmo valor para compatibilidade.
 
-`release_date` é a data de lançamento informada pelo MangaUpdates. `first_seen_at` é quando a Manhwateca detectou a release pela primeira vez. `last_seen_at` é atualizado quando a mesma release reaparece em nova execução. Uma release publicada ontem e detectada hoje mantém `release_date` de ontem e `first_seen_at` de hoje.
+`release_date` é a data de lançamento normalizada a partir do provider.
+Para MangaUpdates, vem do payload de release. Para MangaDex, vem de
+`publishAt`. `first_seen_at` é quando a Manhwateca detectou a release
+pela primeira vez. `last_seen_at` é atualizado quando a mesma release
+reaparece em nova execução. Uma release publicada ontem e detectada hoje
+mantém `release_date` de ontem e `first_seen_at` de hoje.
 
 ## Deduplicação
 
-A deduplicação prioriza `external_release_id`, quando presente. Sem esse ID, usa:
+A deduplicação genérica em `external_releases` prioriza
+`(provider, external_release_id)`, quando o ID externo da release existe.
+Sem esse ID, usa:
 
-- `mangaupdates_series_id`;
+- `provider`;
+- `external_series_id`;
 - `release_date`;
 - `chapter` normalizado;
 - `release_group` normalizado;
 - `volume` normalizado.
 
-O upsert preserva `first_seen_at` e `viewed_at`, atualiza `last_seen_at` e pode atualizar `source_payload`.
+O upsert preserva `first_seen_at` e `viewed_at`, atualiza
+`last_seen_at` e pode atualizar `raw_payload`.
+
+No caminho legado MangaUpdates, `mangaupdates_releases` mantém sua
+deduplicação própria com `mangaupdates_series_id` para rollback.
+
+## Providers
+
+`ReleaseMonitorService` coordena a execução, períodos, métricas e
+consolidação de status. Ele conhece executores/providers, mas não
+conhece os endpoints HTTP específicos.
+
+- MangaUpdates: `MangaUpdatesReleaseProvider` consulta páginas de
+  releases, normaliza para `ExternalRelease` e o executor aplica a
+  janela temporal do monitor. O resultado é gravado em
+  `mangaupdates_releases` e em `external_releases`.
+- MangaDex: `MangaDexMonitorExecutor` reutiliza `process_manga(...)`.
+  O executor consulta obras com referência MangaDex, usa checkpoint por
+  obra e grava apenas em `external_releases`.
+- Provider comparison: `ProviderComparisonService` compara MangaUpdates
+  e MangaDex de forma read-only, usando refs externas e fallback
+  `work_code` quando necessário. Ele não grava releases nem altera
+  checkpoints.
 
 ## Endpoints
 
@@ -115,4 +198,9 @@ Para voltar ao monitoramento explícito, use `enabled=true`. Para voltar ao modo
 
 ## Limitações
 
-Os testes automatizados usam cliente falso e relógio controlado. A validação real controlada depende de rede e disponibilidade/limites da API pública do MangaUpdates.
+Os testes automatizados usam clientes falsos e relógio controlado. A
+validação real controlada depende de rede, disponibilidade/limites das
+APIs públicas e `DATABASE_URL` disponível no ambiente. Quando não é
+possível validar dados reais, o fallback `work_code`, a tabela
+`mangaupdates_releases` e a escrita dupla MangaUpdates permanecem por
+compatibilidade.

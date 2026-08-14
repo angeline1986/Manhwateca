@@ -258,6 +258,7 @@ Não alterar migrations antigas já aplicadas.
 | M13 --- Release Monitor multi-provider | Concluído | `8b827d0` | Service coordena executores MangaUpdates/MangaDex, resolve refs externas e isola falhas por provider. |
 | M14 --- Comparação e validação | Concluído | `525d5d1` | Comparador read-only criado para relatar capítulos, datas, idiomas e divergências sem alterar Dashboard/checkpoints. |
 | M15 --- Migração controlada das leituras do Dashboard | Concluído | `631a5a0` | Dashboard passou a ler `external_releases`, com backfill idempotente MangaUpdates e escrita dupla para rollback. |
+| M16 --- Limpeza técnica e documentação | Concluído | `este commit` | Varredura final confirmou compatibilidades legadas necessárias e atualizou documentação da arquitetura multi-provider. |
 
 ## M1 --- Generalizar `ExternalRelease`
 
@@ -1602,6 +1603,25 @@ Release Monitor
     +-- external_releases
 ```
 
+### Resultado
+
+-   A varredura final não identificou remoção segura de código Python sem
+    risco de quebrar compatibilidade legada ou rollback.
+-   Imports MangaUpdates remanescentes dentro de `release_monitor` estão
+    restritos ao provider/executor correto; o service não chama endpoints
+    HTTP diretamente.
+-   `mangaupdates_releases` e `upsert_release` permanecem para escrita
+    dupla e rollback após o cutover do Dashboard.
+-   `work_code` permanece como fallback MangaUpdates para obras ainda
+    sem `manga_external_refs` e para consumidores externos ao Release
+    Monitor.
+-   `external_series_id` segue como texto no domínio genérico; conversão
+    para inteiro existe apenas na escrita da tabela legada MangaUpdates.
+-   `docs/release_monitor.md` foi atualizado para documentar
+    `manga_external_refs`, `external_releases`, checkpoint incremental
+    MangaDex, provider comparison, Dashboard lendo `external_releases`,
+    idioma MangaDex preservado e persistência legada de rollback.
+
 ------------------------------------------------------------------------
 
 # Ordem resumida revisada
@@ -1617,39 +1637,51 @@ M2   [concluído - ef6287b]
 M3   [concluído - 08cc49e]
      Criar infraestrutura HTTP MangaDex
 
-M4   [próximo]
+M4   [concluído - 8b5a811]
      Implementar busca de obras MangaDex
 
-M5   Implementar detalhes da obra MangaDex
+M5   [concluído - 41dc3f7]
+     Implementar detalhes da obra MangaDex
 
-M6   Implementar Cover Art MangaDex
+M6   [concluído - 25e10cb]
+     Implementar Cover Art MangaDex
 
-M7   Implementar feed de capítulos MangaDex
+M7   [concluído - 3d5ad4b]
+     Implementar feed de capítulos MangaDex
 
-M8   Implementar paginação limit/offset MangaDex
+M8   [concluído - 4738cab]
+     Implementar paginação limit/offset MangaDex
 
-M9   Criar MangaDexReleaseProvider
+M9   [concluído - 67d5e94]
+     Criar MangaDexReleaseProvider
 
-M10  Criar manga_external_refs
+M10  [concluído - 82b9752]
+     Criar manga_external_refs
 
-M11  Criar external_releases
+M11  [concluído - 5a8d245]
+     Criar external_releases
      + deduplicação explícita
      + compatibilidade com persistência/leitura antiga
 
-M12  Preparar execução MangaDex eficiente
+M12  [concluído - e593ec3]
+     Preparar execução MangaDex eficiente
      + estado de última consulta
      + incremental
      + rate limit
      + concorrência controlada, se necessária
      + observabilidade de custo
 
-M13  Tornar ReleaseMonitorService multi-provider
+M13  [concluído - 8b827d0]
+     Tornar ReleaseMonitorService multi-provider
 
-M14  Comparar MangaDex x MangaUpdates
+M14  [concluído - 525d5d1]
+     Comparar MangaDex x MangaUpdates
 
-M15  Migrar controladamente as leituras do Dashboard
+M15  [concluído - 631a5a0]
+     Migrar controladamente as leituras do Dashboard
 
-M16  Limpeza técnica e documentação
+M16  [concluído - este commit]
+     Limpeza técnica e documentação
 ```
 
 # Estrutura de arquivos esperada
