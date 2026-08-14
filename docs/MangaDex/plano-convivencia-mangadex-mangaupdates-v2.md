@@ -248,7 +248,8 @@ Não alterar migrations antigas já aplicadas.
 | M3 --- Cliente MangaDex: infraestrutura HTTP | Concluído | `08cc49e` | Cliente HTTP MangaDex criado com `urllib`, exceções próprias e testes dedicados. |
 | M4 --- MangaDex: busca de obras | Concluído | `8b5a811` | Busca de candidatos MangaDex implementada sem ligação com o Release Monitor. |
 | M5 --- MangaDex: detalhes da obra | Concluído | `41dc3f7` | Consulta de detalhe por UUID preservando payload, links e capítulo mais recente. |
-| M6 --- MangaDex: Cover Art | Próximo | - | Iniciar com Passo 0 --- Analisar. |
+| M6 --- MangaDex: Cover Art | Concluído | `25e10cb` | Extração de cover_art e URLs original/256/512 usando UUID da obra. |
+| M7 --- MangaDex: feed de capítulos | Próximo | - | Iniciar com Passo 0 --- Analisar. |
 
 ## M1 --- Generalizar `ExternalRelease`
 
