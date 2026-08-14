@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
 from datetime import date, datetime
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 from manhwateca.release_monitor.parser import (
@@ -14,14 +15,22 @@ from manhwateca.release_monitor.providers import (
     ReleaseProviderPage,
 )
 from manhwateca.release_monitor.repository import ReleaseMonitorRepository
-from manhwateca.release_monitor.service import ReleaseMonitorService, current_periods
+from manhwateca.release_monitor.mangadex_execution import MangaDexExecutionResult
+from manhwateca.release_monitor.service import (
+    MangaDexMonitorExecutor,
+    MangaUpdatesMonitorExecutor,
+    ReleaseMonitorService,
+    current_periods,
+)
 
 
 class FakeRepository:
-    def __init__(self):
+    def __init__(self, subscriptions=None):
         self.running = False
         self.rows = {}
+        self.external_rows = {}
         self.finished = []
+        self.subscriptions = subscriptions
 
     def active_run(self):
         return {"id": 99, "started_at": datetime(2026, 8, 6, tzinfo=ZoneInfo("UTC"))} if self.running else None
@@ -36,6 +45,8 @@ class FakeRepository:
         return {"started_at": datetime(2026, 8, 6, 13, tzinfo=ZoneInfo("UTC")), "finished_at": datetime(2026, 8, 6, 13, 1, tzinfo=ZoneInfo("UTC"))}
 
     def list_active_subscriptions(self):
+        if self.subscriptions is not None:
+            return self.subscriptions
         return [
             {"manga_id": 10, "work_code": "123", "title": "Obra A"},
             {"manga_id": 390, "work_code": "39054810010", "title": "Accidental Baby (Luharang)"},
@@ -52,6 +63,33 @@ class FakeRepository:
         inserted = key not in self.rows
         self.rows[key] = release
         return inserted
+
+    def upsert_external_release(self, release, manga_id):
+        key = (release.provider, release.external_release_id)
+        inserted = key not in self.external_rows
+        self.external_rows[key] = (release, manga_id)
+        return inserted
+
+
+class FakeExternalRefRepository:
+    def __init__(self, refs_by_manga):
+        self.refs_by_manga = refs_by_manga
+        self.seen_manga_ids = []
+
+    def list_external_refs(self, manga_id):
+        self.seen_manga_ids.append(manga_id)
+        return list(self.refs_by_manga.get(manga_id, []))
+
+
+class FakeMangaDexProcess:
+    def __init__(self, results_by_external_id):
+        self.results_by_external_id = results_by_external_id
+        self.calls = []
+
+    def __call__(self, manga_id, mangadex_id, **kwargs):
+        self.calls.append((manga_id, mangadex_id, kwargs))
+        result = self.results_by_external_id[mangadex_id]
+        return result(manga_id, mangadex_id, kwargs) if callable(result) else result
 
 
 class CapturingCursor:
@@ -211,6 +249,10 @@ class FakeProvider:
     def fetch_page(self, page):
         self.seen_pages.append(page)
         return self.pages[page]
+
+
+def ref(provider, external_id):
+    return SimpleNamespace(provider=provider, external_id=external_id)
 
 
 class ReleaseMonitorTests(unittest.TestCase):
@@ -461,6 +503,275 @@ class ReleaseMonitorTests(unittest.TestCase):
         self.assertEqual(result.monitored_series_count, 2)
         self.assertEqual(result.releases_matched, 1)
         self.assertEqual(result.releases_inserted, 1)
+
+    def test_service_processes_mangaupdates_mangadex_and_mangadex_only_refs(self):
+        subscriptions = [
+            {"manga_id": 1, "work_code": "mu-a", "title": "Obra A"},
+            {"manga_id": 2, "work_code": "mu-b", "title": "Obra B"},
+            {"manga_id": 3, "work_code": None, "title": "Obra C", "enabled": True},
+        ]
+        repository = FakeRepository(subscriptions=subscriptions)
+        refs = FakeExternalRefRepository({
+            1: [ref("mangaupdates", "mu-a"), ref("mangadex", "md-a")],
+            2: [ref("mangaupdates", "mu-b")],
+            3: [ref("mangadex", "md-c")],
+        })
+        provider = FakeProvider({
+            1: ReleaseProviderPage(
+                releases=[
+                    ExternalRelease("mangaupdates", "mu-a", "1", date(2026, 8, 6), external_release_id="mu-rel-a"),
+                    ExternalRelease("mangaupdates", "mu-b", "2", date(2026, 8, 6), external_release_id="mu-rel-b"),
+                ],
+                stats={
+                    "releases_received": 2,
+                    "releases_parsed": 2,
+                    "releases_with_series_metadata": 2,
+                    "releases_missing_series_metadata": 0,
+                    "releases_invalid": 0,
+                },
+                has_results_collection=True,
+                has_next_page=False,
+            )
+        })
+        mangadex_process = FakeMangaDexProcess({
+            "md-a": MangaDexExecutionResult(
+                manga_id=1,
+                external_series_id="md-a",
+                status="success",
+                pages_requested=1,
+                items_received=1,
+                releases_normalized=1,
+                releases_inserted=1,
+                stop_reason="end_of_feed",
+            ),
+            "md-c": MangaDexExecutionResult(
+                manga_id=3,
+                external_series_id="md-c",
+                status="success",
+                pages_requested=1,
+                items_received=1,
+                releases_normalized=1,
+                releases_inserted=1,
+                stop_reason="end_of_feed",
+            ),
+        })
+
+        result = ReleaseMonitorService(
+            repository=repository,
+            provider=provider,
+            external_ref_repository=refs,
+            provider_executors=[
+                MangaUpdatesMonitorExecutor(provider),
+                MangaDexMonitorExecutor(mangadex_process),
+            ],
+            now_func=lambda: datetime(2026, 8, 6, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        ).run()
+
+        self.assertEqual("success", result.status)
+        self.assertEqual(provider.seen_pages, [1])
+        self.assertEqual([(1, "md-a"), (3, "md-c")], [
+            (manga_id, mangadex_id) for manga_id, mangadex_id, _kwargs in mangadex_process.calls
+        ])
+        self.assertEqual({("mu-rel-a"), ("mu-rel-b")}, set(repository.rows))
+        self.assertEqual(result.provider_metrics["mangaupdates"]["works_consulted"], 2)
+        self.assertEqual(result.provider_metrics["mangadex"]["works_consulted"], 2)
+        self.assertEqual(result.provider_metrics["mangadex"]["releases_inserted"], 2)
+        self.assertEqual(refs.seen_manga_ids, [1, 2, 3])
+
+    def test_service_runs_mangadex_only_when_explicitly_eligible(self):
+        repository = FakeRepository(subscriptions=[
+            {"manga_id": 3, "work_code": None, "title": "Obra C", "enabled": True},
+        ])
+        refs = FakeExternalRefRepository({3: [ref("mangadex", "md-c")]})
+        provider = FakeProvider({})
+        mangadex_process = FakeMangaDexProcess({
+            "md-c": MangaDexExecutionResult(
+                manga_id=3,
+                external_series_id="md-c",
+                status="success",
+                pages_requested=1,
+                items_received=1,
+                releases_normalized=1,
+                releases_inserted=1,
+                stop_reason="end_of_feed",
+            )
+        })
+
+        result = ReleaseMonitorService(
+            repository=repository,
+            provider=provider,
+            external_ref_repository=refs,
+            provider_executors=[
+                MangaDexMonitorExecutor(mangadex_process),
+            ],
+            now_func=lambda: datetime(2026, 8, 6, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        ).run()
+
+        self.assertEqual("success", result.status)
+        self.assertEqual([(3, "md-c")], [
+            (manga_id, mangadex_id) for manga_id, mangadex_id, _kwargs in mangadex_process.calls
+        ])
+        self.assertEqual(0, result.monitored_series_count)
+        self.assertEqual(1, result.provider_metrics["mangadex"]["works_consulted"])
+
+    def test_service_skips_unknown_provider_without_external_call(self):
+        repository = FakeRepository(subscriptions=[
+            {"manga_id": 1, "work_code": None, "title": "Obra"},
+        ])
+        refs = FakeExternalRefRepository({1: [ref("provider_inexistente", "abc")]})
+        provider = FakeProvider({})
+
+        result = ReleaseMonitorService(
+            repository=repository,
+            provider=provider,
+            external_ref_repository=refs,
+            provider_executors=[],
+            now_func=lambda: datetime(2026, 8, 6, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        ).run()
+
+        self.assertEqual("partial_success", result.status)
+        self.assertEqual(1, result.provider_metrics["unknown"]["references_skipped"])
+
+    def test_mangadex_failure_does_not_stop_mangaupdates_or_other_works(self):
+        repository = FakeRepository(subscriptions=[
+            {"manga_id": 1, "work_code": "mu-a", "title": "Obra A"},
+            {"manga_id": 2, "work_code": "mu-b", "title": "Obra B"},
+        ])
+        refs = FakeExternalRefRepository({
+            1: [ref("mangaupdates", "mu-a"), ref("mangadex", "md-a")],
+            2: [ref("mangaupdates", "mu-b")],
+        })
+        provider = FakeProvider({
+            1: ReleaseProviderPage(
+                releases=[
+                    ExternalRelease("mangaupdates", "mu-a", "1", date(2026, 8, 6), external_release_id="mu-a"),
+                    ExternalRelease("mangaupdates", "mu-b", "1", date(2026, 8, 6), external_release_id="mu-b"),
+                ],
+                stats={
+                    "releases_received": 2,
+                    "releases_parsed": 2,
+                    "releases_with_series_metadata": 2,
+                    "releases_missing_series_metadata": 0,
+                    "releases_invalid": 0,
+                },
+                has_results_collection=True,
+                has_next_page=False,
+            )
+        })
+        mangadex_process = FakeMangaDexProcess({
+            "md-a": MangaDexExecutionResult(
+                manga_id=1,
+                external_series_id="md-a",
+                status="failed",
+                failures=1,
+                stop_reason="error",
+                error_message="MangaDex indisponível",
+            )
+        })
+
+        result = ReleaseMonitorService(
+            repository=repository,
+            provider=provider,
+            external_ref_repository=refs,
+            provider_executors=[
+                MangaUpdatesMonitorExecutor(provider),
+                MangaDexMonitorExecutor(mangadex_process),
+            ],
+            now_func=lambda: datetime(2026, 8, 6, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        ).run()
+
+        self.assertEqual("partial_success", result.status)
+        self.assertEqual(2, result.releases_inserted)
+        self.assertEqual(1, result.provider_metrics["mangadex"]["failures"])
+        self.assertIn("mangadex: MangaDex indisponível", result.error_message)
+
+    def test_mangaupdates_failure_does_not_stop_mangadex(self):
+        repository = FakeRepository(subscriptions=[
+            {"manga_id": 1, "work_code": "mu-a", "title": "Obra A"},
+        ])
+        refs = FakeExternalRefRepository({
+            1: [ref("mangaupdates", "mu-a"), ref("mangadex", "md-a")],
+        })
+
+        class FailingProvider:
+            def fetch_page(self, _page):
+                raise RuntimeError("MangaUpdates indisponível")
+
+        mangadex_process = FakeMangaDexProcess({
+            "md-a": MangaDexExecutionResult(
+                manga_id=1,
+                external_series_id="md-a",
+                status="success",
+                pages_requested=1,
+                items_received=1,
+                releases_normalized=1,
+                releases_inserted=1,
+                stop_reason="end_of_feed",
+            )
+        })
+
+        result = ReleaseMonitorService(
+            repository=repository,
+            provider=FailingProvider(),
+            external_ref_repository=refs,
+            provider_executors=[
+                MangaUpdatesMonitorExecutor(FailingProvider()),
+                MangaDexMonitorExecutor(mangadex_process),
+            ],
+            now_func=lambda: datetime(2026, 8, 6, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        ).run()
+
+        self.assertEqual("partial_success", result.status)
+        self.assertEqual([(1, "md-a")], [
+            (manga_id, mangadex_id) for manga_id, mangadex_id, _kwargs in mangadex_process.calls
+        ])
+        self.assertEqual(1, result.provider_metrics["mangaupdates"]["failures"])
+        self.assertEqual(1, result.provider_metrics["mangadex"]["releases_inserted"])
+
+    def test_service_reports_failed_when_all_executed_providers_fail(self):
+        repository = FakeRepository(subscriptions=[
+            {"manga_id": 1, "work_code": "mu-a", "title": "Obra A"},
+        ])
+        refs = FakeExternalRefRepository({
+            1: [ref("mangaupdates", "mu-a"), ref("mangadex", "md-a")],
+        })
+
+        class FailingProvider:
+            def fetch_page(self, _page):
+                raise RuntimeError("MangaUpdates indisponível")
+
+        mangadex_process = FakeMangaDexProcess({
+            "md-a": MangaDexExecutionResult(
+                manga_id=1,
+                external_series_id="md-a",
+                status="failed",
+                failures=1,
+                stop_reason="error",
+                error_message="MangaDex indisponível",
+            )
+        })
+
+        result = ReleaseMonitorService(
+            repository=repository,
+            provider=FailingProvider(),
+            external_ref_repository=refs,
+            provider_executors=[
+                MangaUpdatesMonitorExecutor(FailingProvider()),
+                MangaDexMonitorExecutor(mangadex_process),
+            ],
+            now_func=lambda: datetime(2026, 8, 6, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        ).run()
+
+        self.assertEqual("failed", result.status)
+        self.assertIn("mangaupdates: MangaUpdates indisponível", result.error_message)
+        self.assertIn("mangadex: MangaDex indisponível", result.error_message)
+
+    def test_service_does_not_include_api_specific_calls(self):
+        source = Path("manhwateca/release_monitor/service.py").read_text(encoding="utf-8")
+        self.assertNotIn("/manga/", source)
+        self.assertNotIn("/releases/days", source)
+        self.assertNotIn("list_releases_by_day", source)
+        self.assertIn("process_manga", source)
 
     def test_service_marks_missing_metadata_response_as_partial_success(self):
         repository = FakeRepository()

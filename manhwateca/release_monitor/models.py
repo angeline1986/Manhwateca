@@ -55,6 +55,7 @@ class ReleaseMonitorResult:
     earliest_release_date: date | None = None
     latest_release_date: date | None = None
     stop_reason: str | None = None
+    provider_metrics: dict | None = None
     error_message: str | None = None
 
     @property

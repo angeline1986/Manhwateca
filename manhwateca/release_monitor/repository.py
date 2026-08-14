@@ -108,8 +108,10 @@ class ReleaseMonitorRepository:
             LEFT JOIN release_monitor_subscriptions s
                 ON s.manga_id = m.id
             WHERE COALESCE(s.enabled, TRUE) = TRUE
-              AND m.work_code IS NOT NULL
-              AND btrim(m.work_code) <> ''
+              AND (
+                  (m.work_code IS NOT NULL AND btrim(m.work_code) <> '')
+                  OR s.enabled = TRUE
+              )
             ORDER BY m.title
             """
         )
