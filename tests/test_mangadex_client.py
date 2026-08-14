@@ -12,6 +12,9 @@ from manhwateca.mangadex_service.client import (
     request_json,
 )
 from manhwateca.mangadex_service.search import (
+    build_cover_url,
+    cover_art_from_details,
+    get_manga_cover_art,
     get_manga,
     parse_manga_details,
     parse_manga_search,
@@ -286,6 +289,105 @@ class MangaDexClientTests(unittest.TestCase):
         with self.assertRaises(MangaDexPayloadError):
             parse_manga_details({"data": []})
 
+    def test_get_manga_cover_art_sends_cover_include_parameter(self):
+        calls = []
+        manga_id = "eede42a0-78a1-413d-8cb6-3a03ec365e2b"
+
+        def request_func(path, params, **_options):
+            calls.append((path, params))
+            return manga_detail_payload(manga_item(
+                manga_id,
+                relationships=[cover_relationship(
+                    "cover-art-id",
+                    "accidental-baby.jpg",
+                )],
+            ))
+
+        cover = get_manga_cover_art(manga_id, request_func=request_func)
+
+        self.assertEqual(calls, [(f"/manga/{manga_id}", {
+            "includes[]": ["cover_art"],
+        })])
+        self.assertEqual(cover.file_name, "accidental-baby.jpg")
+
+    def test_cover_art_from_details_returns_cover_urls(self):
+        manga_id = "manga-uuid"
+        details = parse_manga_details(manga_detail_payload(manga_item(
+            manga_id,
+            relationships=[cover_relationship("cover-art-id", "cover.jpg")],
+        )))
+
+        cover = cover_art_from_details(details)
+
+        self.assertEqual(cover.manga_id, manga_id)
+        self.assertEqual(cover.file_name, "cover.jpg")
+        self.assertEqual(
+            cover.url,
+            "https://uploads.mangadex.org/covers/manga-uuid/cover.jpg",
+        )
+        self.assertEqual(
+            cover.url_256,
+            "https://uploads.mangadex.org/covers/manga-uuid/cover.jpg.256.jpg",
+        )
+        self.assertEqual(
+            cover.url_512,
+            "https://uploads.mangadex.org/covers/manga-uuid/cover.jpg.512.jpg",
+        )
+        self.assertEqual(cover.raw_payload["id"], "cover-art-id")
+
+    def test_cover_art_from_details_does_not_use_cover_art_id_in_url(self):
+        details = parse_manga_details(manga_detail_payload(manga_item(
+            "manga-uuid",
+            relationships=[cover_relationship("cover-art-id", "cover.jpg")],
+        )))
+
+        cover = cover_art_from_details(details)
+
+        self.assertIn("/covers/manga-uuid/cover.jpg", cover.url)
+        self.assertNotIn("/covers/cover-art-id/cover.jpg", cover.url)
+
+    def test_cover_art_from_details_returns_none_when_cover_is_absent(self):
+        details = parse_manga_details(manga_detail_payload(manga_item(
+            "manga-uuid",
+            relationships=[{"id": "author-id", "type": "author"}],
+        )))
+
+        self.assertIsNone(cover_art_from_details(details))
+
+    def test_cover_art_from_details_returns_none_when_filename_is_absent(self):
+        details = parse_manga_details(manga_detail_payload(manga_item(
+            "manga-uuid",
+            relationships=[{"id": "cover-id", "type": "cover_art", "attributes": {}}],
+        )))
+
+        self.assertIsNone(cover_art_from_details(details))
+
+    def test_cover_art_from_details_handles_missing_relationships(self):
+        details = parse_manga_details(manga_detail_payload({
+            "id": "manga-uuid",
+            "attributes": {"title": {"en": "Alpha"}},
+        }))
+
+        self.assertIsNone(cover_art_from_details(details))
+
+    def test_build_cover_url_supports_original_256_and_512(self):
+        self.assertEqual(
+            build_cover_url("manga-uuid", "cover.jpg"),
+            "https://uploads.mangadex.org/covers/manga-uuid/cover.jpg",
+        )
+        self.assertEqual(
+            build_cover_url("manga-uuid", "cover.jpg", 256),
+            "https://uploads.mangadex.org/covers/manga-uuid/cover.jpg.256.jpg",
+        )
+        self.assertEqual(
+            build_cover_url("manga-uuid", "cover.jpg", 512),
+            "https://uploads.mangadex.org/covers/manga-uuid/cover.jpg.512.jpg",
+        )
+
+    def test_build_cover_url_rejects_unsupported_size(self):
+        with self.assertRaises(ValueError):
+            build_cover_url("manga-uuid", "cover.jpg", 1024)
+
 
 def http_error(status, retry_after=None):
     headers = Message()
@@ -336,6 +438,14 @@ def manga_item(
         "type": "manga",
         "attributes": attributes,
         "relationships": relationships if relationships is not None else [],
+    }
+
+
+def cover_relationship(cover_id, file_name):
+    return {
+        "id": cover_id,
+        "type": "cover_art",
+        "attributes": {"fileName": file_name},
     }
 
 

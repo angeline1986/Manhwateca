@@ -33,6 +33,16 @@ class MangaDexMangaDetails:
     raw_payload: dict
 
 
+@dataclass(frozen=True)
+class MangaDexCoverArt:
+    manga_id: str
+    file_name: str
+    url: str
+    url_256: str
+    url_512: str
+    raw_payload: dict
+
+
 def search_manga(
     title: str,
     limit: int = 10,
@@ -55,6 +65,7 @@ def search_manga(
 
 def get_manga(
     manga_id: str,
+    include_cover_art: bool = False,
     *,
     request_func=None,
     **request_options,
@@ -63,8 +74,60 @@ def get_manga(
     if not uuid:
         return None
     request_func = request_func or request_json
-    payload = request_func(f"/manga/{uuid}", None, **request_options)
+    params = {"includes[]": ["cover_art"]} if include_cover_art else None
+    payload = request_func(f"/manga/{uuid}", params, **request_options)
     return parse_manga_details(payload)
+
+
+def get_manga_cover_art(
+    manga_id: str,
+    *,
+    request_func=None,
+    **request_options,
+) -> MangaDexCoverArt | None:
+    details = get_manga(
+        manga_id,
+        include_cover_art=True,
+        request_func=request_func,
+        **request_options,
+    )
+    if details is None:
+        return None
+    return cover_art_from_details(details)
+
+
+def cover_art_from_details(details: MangaDexMangaDetails) -> MangaDexCoverArt | None:
+    for relationship in details.relationships:
+        if relationship.get("type") != "cover_art":
+            continue
+        attributes = relationship.get("attributes") or {}
+        if not isinstance(attributes, dict):
+            continue
+        file_name = _string_or_none(attributes.get("fileName"))
+        if not file_name:
+            continue
+        return MangaDexCoverArt(
+            manga_id=details.id,
+            file_name=file_name,
+            url=build_cover_url(details.id, file_name),
+            url_256=build_cover_url(details.id, file_name, 256),
+            url_512=build_cover_url(details.id, file_name, 512),
+            raw_payload=relationship,
+        )
+    return None
+
+
+def build_cover_url(manga_id: str, file_name: str, size: int | None = None) -> str:
+    uuid = str(manga_id or "").strip()
+    name = str(file_name or "").strip()
+    if not uuid:
+        raise ValueError("UUID da obra MangaDex é obrigatório.")
+    if not name:
+        raise ValueError("Nome do arquivo da capa MangaDex é obrigatório.")
+    if size not in (None, 256, 512):
+        raise ValueError("Tamanho de capa MangaDex deve ser None, 256 ou 512.")
+    suffix = "" if size is None else f".{size}.jpg"
+    return f"https://uploads.mangadex.org/covers/{uuid}/{name}{suffix}"
 
 
 def parse_manga_search(payload) -> list[MangaDexMangaCandidate]:
