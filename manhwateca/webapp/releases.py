@@ -215,7 +215,8 @@ def _is_missing_monitor_table(error):
         return True
     text = str(error).casefold()
     return (
-        "mangaupdates_releases" in text
+        "external_releases" in text
+        or "mangaupdates_releases" in text
         or "release_monitor_runs" in text
         or "release_monitor_subscriptions" in text
     ) and ("does not exist" in text or "undefinedtable" in text)

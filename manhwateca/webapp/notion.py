@@ -2,7 +2,11 @@ import json
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:
+    def load_dotenv(*_args, **_kwargs):
+        return False
 
 from manhwateca.library_organizer.discovery import find_manga_folders
 from manhwateca.library_organizer.grouping import (

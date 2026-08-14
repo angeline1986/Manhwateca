@@ -115,6 +115,47 @@ class DatabaseMigrateTests(unittest.TestCase):
             self.assertEqual(["014_external_releases.sql"], second)
             self.assertEqual(2, len(connection.executed))
 
+    def test_dashboard_cutover_migration_backfills_mangaupdates_idempotently(self):
+        sql = (
+            migrate.MIGRATIONS_DIR / "015_external_releases_dashboard_cutover.sql"
+        ).read_text(encoding="utf-8").casefold()
+
+        self.assertIn("add column if not exists release_group text", sql)
+        self.assertIn("add column if not exists normalized_release_group", sql)
+        self.assertIn("drop index if exists manhwateca.uq_external_releases_fallback", sql)
+        self.assertIn("normalized_release_group", sql)
+        self.assertIn("from manhwateca.mangaupdates_releases", sql)
+        self.assertIn("'mangaupdates'", sql)
+        self.assertIn("on conflict (provider, external_release_id)", sql)
+        self.assertIn("on conflict (\n    provider,\n    external_series_id", sql)
+        self.assertIn("coalesce(manhwateca.external_releases.viewed_at, excluded.viewed_at)", sql)
+
+    def test_dashboard_cutover_migration_can_be_executed_twice_by_runner(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            migration_sql = (
+                migrate.MIGRATIONS_DIR / "015_external_releases_dashboard_cutover.sql"
+            ).read_text(encoding="utf-8")
+            (root / "015_external_releases_dashboard_cutover.sql").write_text(
+                migration_sql,
+                encoding="utf-8",
+            )
+            connection = FakeConnection()
+
+            with patch.object(migrate, "transaction", fake_transaction(connection)):
+                first = migrate.apply_migrations(
+                    database_url="postgresql://example",
+                    migrations_dir=root,
+                )
+                second = migrate.apply_migrations(
+                    database_url="postgresql://example",
+                    migrations_dir=root,
+                )
+
+            self.assertEqual(["015_external_releases_dashboard_cutover.sql"], first)
+            self.assertEqual(["015_external_releases_dashboard_cutover.sql"], second)
+            self.assertEqual(2, len(connection.executed))
+
 
 class fake_transaction:
     def __init__(self, connection):

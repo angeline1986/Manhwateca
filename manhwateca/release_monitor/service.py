@@ -233,7 +233,9 @@ class MangaUpdatesMonitorExecutor:
                         metrics["releases_unmatched"] += 1
                         continue
                     metrics["releases_matched"] += 1
-                    if repository.upsert_release(release, manga_id):
+                    inserted = repository.upsert_release(release, manga_id)
+                    repository.upsert_external_release(release, manga_id)
+                    if inserted:
                         metrics["releases_inserted"] += 1
                         provider_metrics["releases_inserted"] += 1
                     else:

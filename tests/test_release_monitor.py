@@ -135,19 +135,33 @@ class ExternalReleaseCursor:
     def execute(self, sql, params=None):
         self.params = params
         normalized = " ".join(sql.split()).casefold()
+        self.connection.current_sql = normalized
         if normalized.startswith("insert into external_releases"):
             self.row = self.connection.upsert_external_release(normalized, params)
+        elif normalized.startswith("select count(*) filter"):
+            self.row = self.connection.release_summary(params)
+        elif normalized.startswith("select count(*) as total from external_releases"):
+            self.row = {"total": len(self.connection.filtered_rows(params))}
+        elif normalized.startswith("select r.*, m.title from external_releases"):
+            self.connection.result_rows = self.connection.list_release_rows(params)
+        elif normalized.startswith("update external_releases"):
+            self.row = self.connection.mark_viewed(normalized, params)
 
     def fetchone(self):
         return self.row
+
+    def fetchall(self):
+        return self.connection.result_rows
 
 
 class ExternalReleaseConnection:
     def __init__(self):
         self.rows = []
+        self.mangas = {}
         self.cursor_instance = ExternalReleaseCursor(self)
         self.commits = []
         self.clock = 0
+        self.result_rows = []
 
     def cursor(self):
         return self.cursor_instance
@@ -170,6 +184,8 @@ class ExternalReleaseConnection:
                 release_date,
                 language,
                 title,
+                release_group,
+                normalized_release_group,
                 source_url,
                 raw_payload,
             ) = params
@@ -185,6 +201,8 @@ class ExternalReleaseConnection:
                 release_date,
                 language,
                 title,
+                release_group,
+                normalized_release_group,
                 source_url,
                 raw_payload,
             ) = params
@@ -206,6 +224,7 @@ class ExternalReleaseConnection:
                     and row["external_series_id"] == external_series_id
                     and row["release_date"] == release_date
                     and row["normalized_chapter"] == normalized_chapter
+                    and row["normalized_release_group"] == normalized_release_group
                     and row["normalized_volume"] == normalized_volume
                     and row["external_release_id"] is None
                 ),
@@ -234,11 +253,88 @@ class ExternalReleaseConnection:
             "release_date": release_date,
             "language": language,
             "title": title,
+            "release_group": release_group,
+            "normalized_release_group": normalized_release_group,
             "source_url": source_url,
             "raw_payload": raw_payload,
             "last_seen_at": f"seen-{self.clock}",
         })
         return {"id": existing["id"], "inserted": inserted}
+
+    def release_summary(self, periods):
+        rows = [row for row in self.rows if row.get("manga_id") is not None]
+        return {
+            "today_chapters": count_between(rows, periods["today_start"], periods["today_end"]),
+            "today_releases": count_between(rows, periods["today_start"], periods["today_end"]),
+            "today_works": works_between(rows, periods["today_start"], periods["today_end"]),
+            "today_unseen": unseen_between(rows, periods["today_start"], periods["today_end"]),
+            "week_chapters": count_between(rows, periods["week_start"], periods["week_end"]),
+            "week_releases": count_between(rows, periods["week_start"], periods["week_end"]),
+            "week_works": works_between(rows, periods["week_start"], periods["week_end"]),
+            "week_unseen": unseen_between(rows, periods["week_start"], periods["week_end"]),
+            "month_chapters": count_between(rows, periods["month_start"], periods["month_end"]),
+            "month_releases": count_between(rows, periods["month_start"], periods["month_end"]),
+            "month_works": works_between(rows, periods["month_start"], periods["month_end"]),
+            "month_unseen": unseen_between(rows, periods["month_start"], periods["month_end"]),
+        }
+
+    def filtered_rows(self, params):
+        start_date, end_date = params[0], params[1]
+        rows = [
+            row for row in self.rows
+            if row.get("manga_id") is not None
+            and start_date <= row["release_date"] <= end_date
+        ]
+        if "r.viewed_at is null" in self.current_sql:
+            rows = [row for row in rows if row.get("viewed_at") is None]
+        rest = list(params[2:])
+        if rest and isinstance(rest[0], str) and rest[0].startswith("%"):
+            left, right = rest.pop(0), rest.pop(0)
+            search = left.strip("%").casefold()
+            rows = [
+                row for row in rows
+                if search in self.mangas.get(row["manga_id"], {}).get("title", "").casefold()
+                or search in self.mangas.get(row["manga_id"], {}).get("alternative_title", "").casefold()
+            ]
+        if rest and not isinstance(rest[0], int):
+            manga_id = rest.pop(0)
+            rows = [row for row in rows if row["manga_id"] == manga_id]
+        return rows
+
+    def list_release_rows(self, params):
+        *filter_params, per_page, offset = params
+        rows = self.filtered_rows(tuple(filter_params))
+        rows = sorted(
+            rows,
+            key=lambda row: (
+                row["release_date"],
+                row["first_seen_at"],
+                self.mangas.get(row["manga_id"], {}).get("title", ""),
+                row["normalized_chapter"],
+            ),
+            reverse=True,
+        )
+        page = rows[offset:offset + per_page]
+        return [
+            {
+                **row,
+                "title": self.mangas.get(row["manga_id"], {}).get("title"),
+            }
+            for row in page
+        ]
+
+    def mark_viewed(self, sql, params):
+        if "where id = %s" in sql:
+            rows = [row for row in self.rows if row["id"] == params[0]]
+        else:
+            start_date, end_date = params
+            rows = [
+                row for row in self.rows
+                if start_date <= row["release_date"] <= end_date
+            ]
+        for row in rows:
+            row["viewed_at"] = row["viewed_at"] or "viewed-now"
+        return {"changed": len(rows)} if rows else None
 
 
 class FakeProvider:
@@ -253,6 +349,24 @@ class FakeProvider:
 
 def ref(provider, external_id):
     return SimpleNamespace(provider=provider, external_id=external_id)
+
+
+def count_between(rows, start_date, end_date):
+    return sum(1 for row in rows if start_date <= row["release_date"] <= end_date)
+
+
+def works_between(rows, start_date, end_date):
+    return len({
+        row["manga_id"] for row in rows
+        if start_date <= row["release_date"] <= end_date
+    })
+
+
+def unseen_between(rows, start_date, end_date):
+    return sum(
+        1 for row in rows
+        if start_date <= row["release_date"] <= end_date and row.get("viewed_at") is None
+    )
 
 
 class ReleaseMonitorTests(unittest.TestCase):
@@ -948,6 +1062,28 @@ class ReleaseMonitorTests(unittest.TestCase):
         self.assertFalse(second)
         self.assertEqual(len(connection.rows), 1)
 
+    def test_fallback_key_keeps_mangaupdates_release_groups_distinct(self):
+        connection = ExternalReleaseConnection()
+        repository = ReleaseMonitorRepository(connection=connection)
+        for group in ("Grupo A", "Grupo B"):
+            repository.upsert_external_release(
+                ExternalRelease(
+                    provider="mangaupdates",
+                    external_series_id="39054810010",
+                    external_release_id=None,
+                    chapter="29",
+                    group_name=group,
+                    release_date=date(2026, 8, 6),
+                ),
+                390,
+            )
+
+        self.assertEqual(len(connection.rows), 2)
+        self.assertEqual(
+            {row["release_group"] for row in connection.rows},
+            {"Grupo A", "Grupo B"},
+        )
+
     def test_same_chapter_can_coexist_across_providers(self):
         connection = ExternalReleaseConnection()
         repository = ReleaseMonitorRepository(connection=connection)
@@ -971,6 +1107,138 @@ class ReleaseMonitorTests(unittest.TestCase):
             "mangaupdates",
             "mangadex",
         })
+
+    def test_dashboard_summary_reads_external_releases(self):
+        connection = ExternalReleaseConnection()
+        connection.mangas = {
+            1: {"title": "Alpha", "alternative_title": ""},
+            2: {"title": "Beta", "alternative_title": ""},
+        }
+        repository = ReleaseMonitorRepository(connection=connection)
+        repository.upsert_external_release(
+            ExternalRelease("mangaupdates", "111", "1", date(2026, 8, 14), external_release_id="mu-1"),
+            1,
+        )
+        repository.upsert_external_release(
+            ExternalRelease("mangadex", "md-1", "1", date(2026, 8, 13), external_release_id="md-1", language="pt-br"),
+            1,
+        )
+        repository.upsert_external_release(
+            ExternalRelease("mangadex", "md-2", "extra", date(2026, 8, 1), external_release_id="md-2", language="en"),
+            2,
+        )
+        connection.rows[1]["viewed_at"] = "viewed"
+        periods = current_periods(datetime(2026, 8, 14, 12, tzinfo=ZoneInfo("America/Sao_Paulo")))
+
+        counts, _latest = repository.release_summary(periods, "America/Sao_Paulo")
+
+        self.assertEqual(1, counts["today_chapters"])
+        self.assertEqual(2, counts["week_chapters"])
+        self.assertEqual(3, counts["month_chapters"])
+        self.assertEqual(1, counts["today_works"])
+        self.assertEqual(1, counts["week_unseen"])
+        self.assertEqual(2, counts["month_unseen"])
+
+    def test_dashboard_list_reads_external_releases_with_filters_order_and_pagination(self):
+        connection = ExternalReleaseConnection()
+        connection.mangas = {
+            1: {"title": "Alpha", "alternative_title": "Primeira"},
+            2: {"title": "Beta", "alternative_title": ""},
+        }
+        repository = ReleaseMonitorRepository(connection=connection)
+        repository.upsert_external_release(
+            ExternalRelease("mangaupdates", "111", "10.5", date(2026, 8, 14), external_release_id="mu-1", group_name="Grupo"),
+            1,
+        )
+        repository.upsert_external_release(
+            ExternalRelease("mangadex", "md-1", "extra", date(2026, 8, 13), external_release_id="md-1", language="en"),
+            2,
+        )
+        repository.upsert_external_release(
+            ExternalRelease("mangadex", "md-2", "texto", date(2026, 8, 12), external_release_id="md-2", language="pt-br"),
+            1,
+        )
+        connection.rows[2]["viewed_at"] = "viewed"
+
+        result = repository.list_releases(
+            date(2026, 8, 1),
+            date(2026, 8, 31),
+            search="alpha",
+            page=1,
+            per_page=1,
+        )
+        unseen = repository.list_releases(
+            date(2026, 8, 1),
+            date(2026, 8, 31),
+            unseen_only=True,
+            page=1,
+            per_page=20,
+        )
+
+        self.assertEqual(2, result["total"])
+        self.assertEqual(["10.5"], [row["chapter"] for row in result["items"]])
+        self.assertEqual("Grupo", result["items"][0]["release_group"])
+        self.assertEqual(2, unseen["total"])
+        self.assertEqual({"10.5", "extra"}, {row["chapter"] for row in unseen["items"]})
+
+    def test_mark_viewed_updates_external_releases_by_id_and_period(self):
+        connection = ExternalReleaseConnection()
+        repository = ReleaseMonitorRepository(connection=connection)
+        repository.upsert_external_release(
+            ExternalRelease("mangaupdates", "111", "1", date(2026, 8, 14), external_release_id="mu-1"),
+            1,
+        )
+        repository.upsert_external_release(
+            ExternalRelease("mangadex", "md-1", "2", date(2026, 8, 14), external_release_id="md-1"),
+            1,
+        )
+
+        by_id = repository.mark_viewed(release_id=connection.rows[0]["id"])
+        by_period = repository.mark_viewed(start_date=date(2026, 8, 14), end_date=date(2026, 8, 14))
+
+        self.assertEqual(1, by_id)
+        self.assertEqual(2, by_period)
+        self.assertTrue(all(row["viewed_at"] for row in connection.rows))
+
+    def test_mangaupdates_executor_writes_legacy_and_external_tables(self):
+        repository = FakeRepository(subscriptions=[
+            {"manga_id": 1, "work_code": "mu-a", "title": "Obra A"},
+        ])
+        provider = FakeProvider({
+            1: ReleaseProviderPage(
+                releases=[
+                    ExternalRelease(
+                        "mangaupdates",
+                        "mu-a",
+                        "29",
+                        date(2026, 8, 14),
+                        external_release_id="mu-rel",
+                        group_name="Grupo",
+                    )
+                ],
+                stats={
+                    "releases_received": 1,
+                    "releases_parsed": 1,
+                    "releases_with_series_metadata": 1,
+                    "releases_missing_series_metadata": 0,
+                    "releases_invalid": 0,
+                },
+                has_results_collection=True,
+                has_next_page=False,
+            )
+        })
+
+        result = ReleaseMonitorService(
+            repository=repository,
+            provider=provider,
+            external_ref_repository=FakeExternalRefRepository({}),
+            provider_executors=[MangaUpdatesMonitorExecutor(provider)],
+            now_func=lambda: datetime(2026, 8, 14, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        ).run()
+
+        self.assertEqual("success", result.status)
+        self.assertEqual(["mu-rel"], list(repository.rows))
+        self.assertEqual([("mangaupdates", "mu-rel")], list(repository.external_rows))
 
 
 if __name__ == "__main__":

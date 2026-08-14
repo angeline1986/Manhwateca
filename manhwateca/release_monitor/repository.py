@@ -247,6 +247,8 @@ class ReleaseMonitorRepository:
             release.release_date,
             release.language,
             release.title,
+            release.group_name,
+            normalize_key(release.group_name),
             release.source_url,
             jsonb_payload(release.raw_payload or {}),
         )
@@ -255,9 +257,10 @@ class ReleaseMonitorRepository:
             INSERT INTO external_releases(
                 manga_id, provider, external_series_id, external_release_id,
                 volume, chapter, normalized_volume, normalized_chapter,
-                release_date, language, title, source_url, raw_payload
+                release_date, language, title, release_group,
+                normalized_release_group, source_url, raw_payload
             )
-            VALUES (%s, %s, %s, NULLIF(%s, ''), %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, NULLIF(%s, ''), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (provider, external_release_id)
             WHERE external_release_id IS NOT NULL AND btrim(external_release_id) <> ''
             DO UPDATE SET last_seen_at = now(),
@@ -270,6 +273,8 @@ class ReleaseMonitorRepository:
                           release_date = EXCLUDED.release_date,
                           language = EXCLUDED.language,
                           title = EXCLUDED.title,
+                          release_group = EXCLUDED.release_group,
+                          normalized_release_group = EXCLUDED.normalized_release_group,
                           source_url = EXCLUDED.source_url,
                           raw_payload = EXCLUDED.raw_payload
             RETURNING id, (xmax = 0) AS inserted
@@ -282,12 +287,13 @@ class ReleaseMonitorRepository:
                 INSERT INTO external_releases(
                     manga_id, provider, external_series_id, external_release_id,
                     volume, chapter, normalized_volume, normalized_chapter,
-                    release_date, language, title, source_url, raw_payload
+                    release_date, language, title, release_group,
+                    normalized_release_group, source_url, raw_payload
                 )
-                VALUES (%s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (
                     provider, external_series_id, release_date,
-                    normalized_chapter, normalized_volume
+                    normalized_chapter, normalized_release_group, normalized_volume
                 )
                 WHERE external_release_id IS NULL OR btrim(external_release_id) = ''
                 DO UPDATE SET last_seen_at = now(),
@@ -296,6 +302,8 @@ class ReleaseMonitorRepository:
                               chapter = EXCLUDED.chapter,
                               language = EXCLUDED.language,
                               title = EXCLUDED.title,
+                              release_group = EXCLUDED.release_group,
+                              normalized_release_group = EXCLUDED.normalized_release_group,
                               source_url = EXCLUDED.source_url,
                               raw_payload = EXCLUDED.raw_payload
                 RETURNING id, (xmax = 0) AS inserted
@@ -321,7 +329,7 @@ class ReleaseMonitorRepository:
                 count(*) FILTER (WHERE release_date BETWEEN %(month_start)s AND %(month_end)s) AS month_releases,
                 count(DISTINCT manga_id) FILTER (WHERE release_date BETWEEN %(month_start)s AND %(month_end)s) AS month_works,
                 count(*) FILTER (WHERE viewed_at IS NULL AND release_date BETWEEN %(month_start)s AND %(month_end)s) AS month_unseen
-            FROM mangaupdates_releases
+            FROM external_releases
             WHERE manga_id IS NOT NULL
             """,
             periods.__dict__,
@@ -342,13 +350,13 @@ class ReleaseMonitorRepository:
             params.append(manga_id)
         where = " AND ".join(filters)
         total = self._fetch_one(
-            f"SELECT count(*) AS total FROM mangaupdates_releases r JOIN mangas m ON m.id = r.manga_id WHERE {where}",
+            f"SELECT count(*) AS total FROM external_releases r JOIN mangas m ON m.id = r.manga_id WHERE {where}",
             tuple(params),
         )["total"]
         rows = self._fetch_all(
             f"""
             SELECT r.*, m.title
-            FROM mangaupdates_releases r
+            FROM external_releases r
             JOIN mangas m ON m.id = r.manga_id
             WHERE {where}
             ORDER BY r.release_date DESC, r.first_seen_at DESC, m.title, r.normalized_chapter
@@ -367,7 +375,7 @@ class ReleaseMonitorRepository:
             where = "release_date BETWEEN %s AND %s"
         row = self._fetch_one(
             f"""
-            UPDATE mangaupdates_releases
+            UPDATE external_releases
             SET viewed_at = COALESCE(viewed_at, now())
             WHERE {where}
             RETURNING count(*) OVER() AS changed
