@@ -255,6 +255,7 @@ Não alterar migrations antigas já aplicadas.
 | M10 --- Armazenar referências externas por provider | Concluído | `82b9752` | `manga_external_refs` idempotente criada com refs MangaUpdates migradas e repository mínimo. |
 | M11 --- Armazenamento genérico de releases | Concluído | `5a8d245` | `external_releases` idempotente criada e upsert genérico adicionado sem alterar Dashboard. |
 | M12 --- MangaDex: execução eficiente e incremental | Concluído | `e593ec3` | Executor incremental por obra criado com checkpoint em `manga_external_refs.metadata`, safety limit, métricas e persistência em `external_releases`. |
+| M13 --- Release Monitor multi-provider | Concluído | `8b827d0` | Service coordena executores MangaUpdates/MangaDex, resolve refs externas e isola falhas por provider. |
 
 ## M1 --- Generalizar `ExternalRelease`
 
@@ -1368,6 +1369,23 @@ Falhas de um provider devem ser isoladas quando possível.
 
 Uma execução do Release Monitor processa MangaDex e MangaUpdates usando
 a mesma camada de domínio.
+
+### Resultado
+
+Implementado em `8b827d0`.
+
+-   `ReleaseMonitorService` passou a coordenar executores por provider.
+-   MangaUpdates preserva paginação por período e escrita em
+    `mangaupdates_releases`.
+-   MangaDex reutiliza `process_manga(...)` do M12 e escreve em
+    `external_releases`.
+-   IDs externos são resolvidos por `manga_external_refs`, com fallback
+    legado para `work_code` no provider MangaUpdates.
+-   Obras MangaDex-only são permitidas quando explicitamente habilitadas
+    em `release_monitor_subscriptions`.
+-   Métricas por provider são retornadas em `ReleaseMonitorResult`.
+-   Leituras do Dashboard não foram alteradas.
+-   Sem iniciar M14.
 
 ------------------------------------------------------------------------
 
