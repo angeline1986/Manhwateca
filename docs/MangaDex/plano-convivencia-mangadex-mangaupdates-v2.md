@@ -256,6 +256,7 @@ Não alterar migrations antigas já aplicadas.
 | M11 --- Armazenamento genérico de releases | Concluído | `5a8d245` | `external_releases` idempotente criada e upsert genérico adicionado sem alterar Dashboard. |
 | M12 --- MangaDex: execução eficiente e incremental | Concluído | `e593ec3` | Executor incremental por obra criado com checkpoint em `manga_external_refs.metadata`, safety limit, métricas e persistência em `external_releases`. |
 | M13 --- Release Monitor multi-provider | Concluído | `8b827d0` | Service coordena executores MangaUpdates/MangaDex, resolve refs externas e isola falhas por provider. |
+| M14 --- Comparação e validação | Concluído | `525d5d1` | Comparador read-only criado para relatar capítulos, datas, idiomas e divergências sem alterar Dashboard/checkpoints. |
 
 ## M1 --- Generalizar `ExternalRelease`
 
@@ -1443,6 +1444,24 @@ Não interpretar automaticamente divergências como erro.
 
 É possível comparar claramente os dados técnicos retornados pelos dois
 providers para a mesma obra.
+
+### Resultado
+
+Implementado em `525d5d1`.
+
+-   Criado comparador read-only em
+    `release_monitor/provider_comparison.py`.
+-   A seleção de amostras usa obras com refs MangaUpdates e MangaDex,
+    via `manga_external_refs`, com fallback legado para `work_code`.
+-   O relatório em memória preserva releases por provider, capítulos,
+    datas, idiomas MangaDex e diferenças observadas.
+-   Divergências são registradas como diagnóstico, sem escolher provider
+    correto.
+-   Nenhum checkpoint, `last_seen_at`, `viewed_at`, subscription ou
+    leitura do Dashboard é alterado pelo comparador.
+-   Validação real segue pendente quando `DATABASE_URL` não está
+    disponível.
+-   Sem iniciar M15.
 
 ------------------------------------------------------------------------
 
