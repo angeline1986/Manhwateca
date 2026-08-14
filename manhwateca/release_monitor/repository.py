@@ -232,6 +232,77 @@ class ReleaseMonitorRepository:
         self._commit()
         return bool(row["inserted"])
 
+    def upsert_external_release(self, release, manga_id):
+        params = (
+            manga_id,
+            release.provider,
+            release.external_series_id,
+            release.external_release_id,
+            release.volume,
+            release.chapter,
+            normalize_key(release.volume),
+            normalize_key(release.chapter),
+            release.release_date,
+            release.language,
+            release.title,
+            release.source_url,
+            jsonb_payload(release.raw_payload or {}),
+        )
+        row = self._fetch_one(
+            """
+            INSERT INTO external_releases(
+                manga_id, provider, external_series_id, external_release_id,
+                volume, chapter, normalized_volume, normalized_chapter,
+                release_date, language, title, source_url, raw_payload
+            )
+            VALUES (%s, %s, %s, NULLIF(%s, ''), %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (provider, external_release_id)
+            WHERE external_release_id IS NOT NULL AND btrim(external_release_id) <> ''
+            DO UPDATE SET last_seen_at = now(),
+                          manga_id = COALESCE(external_releases.manga_id, EXCLUDED.manga_id),
+                          external_series_id = EXCLUDED.external_series_id,
+                          volume = EXCLUDED.volume,
+                          chapter = EXCLUDED.chapter,
+                          normalized_volume = EXCLUDED.normalized_volume,
+                          normalized_chapter = EXCLUDED.normalized_chapter,
+                          release_date = EXCLUDED.release_date,
+                          language = EXCLUDED.language,
+                          title = EXCLUDED.title,
+                          source_url = EXCLUDED.source_url,
+                          raw_payload = EXCLUDED.raw_payload
+            RETURNING id, (xmax = 0) AS inserted
+            """,
+            params,
+        ) if release.external_release_id else None
+        if row is None:
+            row = self._fetch_one(
+                """
+                INSERT INTO external_releases(
+                    manga_id, provider, external_series_id, external_release_id,
+                    volume, chapter, normalized_volume, normalized_chapter,
+                    release_date, language, title, source_url, raw_payload
+                )
+                VALUES (%s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (
+                    provider, external_series_id, release_date,
+                    normalized_chapter, normalized_volume
+                )
+                WHERE external_release_id IS NULL OR btrim(external_release_id) = ''
+                DO UPDATE SET last_seen_at = now(),
+                              manga_id = COALESCE(external_releases.manga_id, EXCLUDED.manga_id),
+                              volume = EXCLUDED.volume,
+                              chapter = EXCLUDED.chapter,
+                              language = EXCLUDED.language,
+                              title = EXCLUDED.title,
+                              source_url = EXCLUDED.source_url,
+                              raw_payload = EXCLUDED.raw_payload
+                RETURNING id, (xmax = 0) AS inserted
+                """,
+                (params[0], params[1], params[2], *params[4:]),
+            )
+        self._commit()
+        return bool(row["inserted"])
+
     def release_summary(self, periods, timezone):
         row = self._fetch_one(
             """

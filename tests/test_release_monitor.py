@@ -82,6 +82,127 @@ class CapturingConnection:
         pass
 
 
+class ExternalReleaseCursor:
+    def __init__(self, connection):
+        self.connection = connection
+        self.row = None
+        self.params = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, sql, params=None):
+        self.params = params
+        normalized = " ".join(sql.split()).casefold()
+        if normalized.startswith("insert into external_releases"):
+            self.row = self.connection.upsert_external_release(normalized, params)
+
+    def fetchone(self):
+        return self.row
+
+
+class ExternalReleaseConnection:
+    def __init__(self):
+        self.rows = []
+        self.cursor_instance = ExternalReleaseCursor(self)
+        self.commits = []
+        self.clock = 0
+
+    def cursor(self):
+        return self.cursor_instance
+
+    def commit(self):
+        self.commits.append(True)
+
+    def upsert_external_release(self, sql, params):
+        with_external_id = "nullif(%s, '')" in sql
+        if with_external_id:
+            (
+                manga_id,
+                provider,
+                external_series_id,
+                external_release_id,
+                volume,
+                chapter,
+                normalized_volume,
+                normalized_chapter,
+                release_date,
+                language,
+                title,
+                source_url,
+                raw_payload,
+            ) = params
+        else:
+            (
+                manga_id,
+                provider,
+                external_series_id,
+                volume,
+                chapter,
+                normalized_volume,
+                normalized_chapter,
+                release_date,
+                language,
+                title,
+                source_url,
+                raw_payload,
+            ) = params
+            external_release_id = None
+        if external_release_id:
+            existing = next(
+                (
+                    row for row in self.rows
+                    if row["provider"] == provider
+                    and row["external_release_id"] == external_release_id
+                ),
+                None,
+            )
+        else:
+            existing = next(
+                (
+                    row for row in self.rows
+                    if row["provider"] == provider
+                    and row["external_series_id"] == external_series_id
+                    and row["release_date"] == release_date
+                    and row["normalized_chapter"] == normalized_chapter
+                    and row["normalized_volume"] == normalized_volume
+                    and row["external_release_id"] is None
+                ),
+                None,
+            )
+        inserted = existing is None
+        if inserted:
+            self.clock += 1
+            existing = {
+                "id": len(self.rows) + 1,
+                "first_seen_at": f"seen-{self.clock}",
+                "viewed_at": None,
+            }
+            self.rows.append(existing)
+        else:
+            self.clock += 1
+        existing.update({
+            "manga_id": existing.get("manga_id") or manga_id,
+            "provider": provider,
+            "external_series_id": external_series_id,
+            "external_release_id": external_release_id,
+            "volume": volume,
+            "chapter": chapter,
+            "normalized_volume": normalized_volume,
+            "normalized_chapter": normalized_chapter,
+            "release_date": release_date,
+            "language": language,
+            "title": title,
+            "source_url": source_url,
+            "raw_payload": raw_payload,
+            "last_seen_at": f"seen-{self.clock}",
+        })
+        return {"id": existing["id"], "inserted": inserted}
+
+
 class FakeProvider:
     def __init__(self, pages):
         self.pages = pages
@@ -411,6 +532,134 @@ class ReleaseMonitorTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             ReleaseMonitorRepository(connection=connection).upsert_release(release, 10)
+
+    def test_upserts_external_release_with_mangadex_uuid_and_release_id(self):
+        connection = ExternalReleaseConnection()
+        release = ExternalRelease(
+            provider="mangadex",
+            external_series_id="eede42a0-78a1-413d-8cb6-3a03ec365e2b",
+            external_release_id="release-uuid-123",
+            chapter="29",
+            volume=None,
+            release_date=date(2026, 8, 6),
+            language="pt-br",
+            title="Capítulo 29",
+            raw_payload={"id": "release-uuid-123"},
+        )
+
+        inserted = ReleaseMonitorRepository(connection=connection).upsert_external_release(
+            release,
+            390,
+        )
+
+        self.assertTrue(inserted)
+        row = connection.rows[0]
+        self.assertEqual(row["provider"], "mangadex")
+        self.assertEqual(row["external_series_id"], "eede42a0-78a1-413d-8cb6-3a03ec365e2b")
+        self.assertEqual(row["external_release_id"], "release-uuid-123")
+        self.assertEqual(row["language"], "pt-br")
+        self.assertEqual(row["raw_payload"], {"id": "release-uuid-123"})
+
+    def test_external_release_keeps_mangaupdates_series_id_as_text(self):
+        connection = ExternalReleaseConnection()
+        release = ExternalRelease(
+            provider="mangaupdates",
+            external_series_id="39054810010",
+            external_release_id=None,
+            chapter="29",
+            release_date=date(2026, 8, 6),
+        )
+
+        ReleaseMonitorRepository(connection=connection).upsert_external_release(release, 390)
+
+        self.assertEqual(connection.rows[0]["external_series_id"], "39054810010")
+
+    def test_external_release_accepts_decimal_textual_and_null_chapters(self):
+        connection = ExternalReleaseConnection()
+        repository = ReleaseMonitorRepository(connection=connection)
+        for index, chapter in enumerate(("10", "10.5", "extra", None), start=1):
+            repository.upsert_external_release(
+                ExternalRelease(
+                    provider="mangadex",
+                    external_series_id="manga-uuid",
+                    external_release_id=f"release-{index}",
+                    chapter=chapter,
+                    release_date=date(2026, 8, 6),
+                ),
+                390,
+            )
+
+        self.assertEqual(
+            [row["chapter"] for row in connection.rows],
+            ["10", "10.5", "extra", None],
+        )
+        self.assertEqual(connection.rows[-1]["normalized_chapter"], "")
+
+    def test_duplicate_mangadex_external_release_updates_last_seen_only(self):
+        connection = ExternalReleaseConnection()
+        repository = ReleaseMonitorRepository(connection=connection)
+        release = ExternalRelease(
+            provider="mangadex",
+            external_series_id="manga-uuid",
+            external_release_id="release-uuid-123",
+            chapter="29",
+            release_date=date(2026, 8, 6),
+        )
+
+        first = repository.upsert_external_release(release, 390)
+        connection.rows[0]["viewed_at"] = "viewed"
+        first_seen = connection.rows[0]["first_seen_at"]
+        second = repository.upsert_external_release(release, 390)
+
+        self.assertTrue(first)
+        self.assertFalse(second)
+        self.assertEqual(len(connection.rows), 1)
+        self.assertEqual(connection.rows[0]["first_seen_at"], first_seen)
+        self.assertEqual(connection.rows[0]["viewed_at"], "viewed")
+        self.assertEqual(connection.rows[0]["last_seen_at"], "seen-2")
+
+    def test_duplicate_without_external_release_id_uses_fallback_key(self):
+        connection = ExternalReleaseConnection()
+        repository = ReleaseMonitorRepository(connection=connection)
+        release = ExternalRelease(
+            provider="mangaupdates",
+            external_series_id="39054810010",
+            external_release_id=None,
+            chapter="29",
+            volume=None,
+            release_date=date(2026, 8, 6),
+        )
+
+        first = repository.upsert_external_release(release, 390)
+        second = repository.upsert_external_release(release, 390)
+
+        self.assertTrue(first)
+        self.assertFalse(second)
+        self.assertEqual(len(connection.rows), 1)
+
+    def test_same_chapter_can_coexist_across_providers(self):
+        connection = ExternalReleaseConnection()
+        repository = ReleaseMonitorRepository(connection=connection)
+        for provider, series_id, release_id in (
+            ("mangaupdates", "39054810010", None),
+            ("mangadex", "manga-uuid", "release-uuid-123"),
+        ):
+            repository.upsert_external_release(
+                ExternalRelease(
+                    provider=provider,
+                    external_series_id=series_id,
+                    external_release_id=release_id,
+                    chapter="29",
+                    release_date=date(2026, 8, 6),
+                ),
+                390,
+            )
+
+        self.assertEqual(len(connection.rows), 2)
+        self.assertEqual({row["provider"] for row in connection.rows}, {
+            "mangaupdates",
+            "mangadex",
+        })
 
 
 if __name__ == "__main__":

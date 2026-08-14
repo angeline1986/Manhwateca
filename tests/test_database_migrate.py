@@ -73,6 +73,48 @@ class DatabaseMigrateTests(unittest.TestCase):
             self.assertEqual(["013_manga_external_refs.sql"], second)
             self.assertEqual(2, len(connection.executed))
 
+    def test_external_releases_migration_is_idempotent(self):
+        sql = (
+            migrate.MIGRATIONS_DIR / "014_external_releases.sql"
+        ).read_text(encoding="utf-8").casefold()
+
+        self.assertIn("create table if not exists manhwateca.external_releases", sql)
+        self.assertIn("external_series_id text not null", sql)
+        self.assertIn("external_release_id text", sql)
+        self.assertIn("chapter text", sql)
+        self.assertIn("raw_payload jsonb not null default '{}'::jsonb", sql)
+        self.assertIn("references manhwateca.mangas(id)", sql)
+        self.assertIn("create unique index if not exists uq_external_releases_external_id", sql)
+        self.assertIn("provider, external_release_id", sql)
+        self.assertIn("create unique index if not exists uq_external_releases_fallback", sql)
+        self.assertIn("provider,\n    external_series_id", sql)
+
+    def test_external_releases_migration_can_be_executed_twice_by_runner(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            migration_sql = (
+                migrate.MIGRATIONS_DIR / "014_external_releases.sql"
+            ).read_text(encoding="utf-8")
+            (root / "014_external_releases.sql").write_text(
+                migration_sql,
+                encoding="utf-8",
+            )
+            connection = FakeConnection()
+
+            with patch.object(migrate, "transaction", fake_transaction(connection)):
+                first = migrate.apply_migrations(
+                    database_url="postgresql://example",
+                    migrations_dir=root,
+                )
+                second = migrate.apply_migrations(
+                    database_url="postgresql://example",
+                    migrations_dir=root,
+                )
+
+            self.assertEqual(["014_external_releases.sql"], first)
+            self.assertEqual(["014_external_releases.sql"], second)
+            self.assertEqual(2, len(connection.executed))
+
 
 class fake_transaction:
     def __init__(self, connection):
