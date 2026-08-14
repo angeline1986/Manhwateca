@@ -249,7 +249,8 @@ Não alterar migrations antigas já aplicadas.
 | M4 --- MangaDex: busca de obras | Concluído | `8b5a811` | Busca de candidatos MangaDex implementada sem ligação com o Release Monitor. |
 | M5 --- MangaDex: detalhes da obra | Concluído | `41dc3f7` | Consulta de detalhe por UUID preservando payload, links e capítulo mais recente. |
 | M6 --- MangaDex: Cover Art | Concluído | `25e10cb` | Extração de cover_art e URLs original/256/512 usando UUID da obra. |
-| M7 --- MangaDex: feed de capítulos | Próximo | - | Iniciar com Passo 0 --- Analisar. |
+| M7 --- MangaDex: feed de capítulos | Concluído | `3d5ad4b` | Consulta de uma página do feed preservando capítulo, idioma, timestamps e total. |
+| M8 --- MangaDex: paginação do feed | Próximo | - | Iniciar com Passo 0 --- Analisar. |
 
 ## M1 --- Generalizar `ExternalRelease`
 
