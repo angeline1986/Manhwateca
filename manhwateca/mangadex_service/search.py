@@ -43,6 +43,30 @@ class MangaDexCoverArt:
     raw_payload: dict
 
 
+@dataclass(frozen=True)
+class MangaDexFeedItem:
+    id: str
+    volume: str | None
+    chapter: str | None
+    title: str | None
+    translated_language: str | None
+    publish_at: str | None
+    readable_at: str | None
+    created_at: str | None
+    updated_at: str | None
+    relationships: list[dict]
+    raw_payload: dict
+
+
+@dataclass(frozen=True)
+class MangaDexFeedPage:
+    items: list[MangaDexFeedItem]
+    limit: int
+    offset: int
+    total: int
+    raw_payload: dict
+
+
 def search_manga(
     title: str,
     limit: int = 10,
@@ -63,6 +87,31 @@ def search_manga(
     return parse_manga_search(payload)
 
 
+def get_manga_feed(
+    manga_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    order: str = "desc",
+    *,
+    request_func=None,
+    **request_options,
+) -> MangaDexFeedPage | None:
+    uuid = str(manga_id or "").strip()
+    if not uuid:
+        return None
+    request_func = request_func or request_json
+    payload = request_func(
+        f"/manga/{uuid}/feed",
+        {
+            "limit": limit,
+            "offset": offset,
+            "order[publishAt]": order,
+        },
+        **request_options,
+    )
+    return parse_manga_feed(payload)
+
+
 def get_manga(
     manga_id: str,
     include_cover_art: bool = False,
@@ -77,6 +126,28 @@ def get_manga(
     params = {"includes[]": ["cover_art"]} if include_cover_art else None
     payload = request_func(f"/manga/{uuid}", params, **request_options)
     return parse_manga_details(payload)
+
+
+def parse_manga_feed(payload) -> MangaDexFeedPage:
+    if not isinstance(payload, dict):
+        raise MangaDexPayloadError("Feed MangaDex possui estrutura inválida.")
+    data = payload.get("data")
+    if data is None:
+        data = []
+    if not isinstance(data, list):
+        raise MangaDexPayloadError("Feed MangaDex possui data inválido.")
+    items = []
+    for item in data:
+        feed_item = _feed_item_from_item(item)
+        if feed_item is not None:
+            items.append(feed_item)
+    return MangaDexFeedPage(
+        items=items,
+        limit=_int_or_default(payload.get("limit"), 0),
+        offset=_int_or_default(payload.get("offset"), 0),
+        total=_int_or_default(payload.get("total"), len(items)),
+        raw_payload=payload,
+    )
 
 
 def get_manga_cover_art(
@@ -182,6 +253,30 @@ def _candidate_from_item(item):
     )
 
 
+def _feed_item_from_item(item):
+    if not isinstance(item, dict):
+        return None
+    feed_id = str(item.get("id") or "").strip()
+    if not feed_id:
+        return None
+    attributes = item.get("attributes") or {}
+    if not isinstance(attributes, dict):
+        attributes = {}
+    return MangaDexFeedItem(
+        id=feed_id,
+        volume=_string_or_none(attributes.get("volume")),
+        chapter=_string_or_none(attributes.get("chapter")),
+        title=_string_or_none(attributes.get("title")),
+        translated_language=_string_or_none(attributes.get("translatedLanguage")),
+        publish_at=_string_or_none(attributes.get("publishAt")),
+        readable_at=_string_or_none(attributes.get("readableAt")),
+        created_at=_string_or_none(attributes.get("createdAt")),
+        updated_at=_string_or_none(attributes.get("updatedAt")),
+        relationships=_relationships(item.get("relationships")),
+        raw_payload=item,
+    )
+
+
 def _details_from_item(item):
     if not isinstance(item, dict):
         return None
@@ -258,3 +353,10 @@ def _int_or_none(value):
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _int_or_default(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default

@@ -14,8 +14,10 @@ from manhwateca.mangadex_service.client import (
 from manhwateca.mangadex_service.search import (
     build_cover_url,
     cover_art_from_details,
+    get_manga_feed,
     get_manga_cover_art,
     get_manga,
+    parse_manga_feed,
     parse_manga_details,
     parse_manga_search,
     search_manga,
@@ -388,6 +390,133 @@ class MangaDexClientTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_cover_url("manga-uuid", "cover.jpg", 1024)
 
+    def test_get_manga_feed_requests_one_page_with_publish_order(self):
+        calls = []
+        manga_id = "eede42a0-78a1-413d-8cb6-3a03ec365e2b"
+
+        def request_func(path, params, **_options):
+            calls.append((path, params))
+            return manga_feed_payload([
+                feed_item(
+                    "chapter-1",
+                    chapter="12.5",
+                    volume=None,
+                    translated_language="pt-br",
+                    publish_at="2026-08-14T10:30:00+00:00",
+                )
+            ], limit=100, offset=20, total=120)
+
+        page = get_manga_feed(
+            manga_id,
+            limit=100,
+            offset=20,
+            order="desc",
+            request_func=request_func,
+        )
+
+        self.assertEqual(calls, [(f"/manga/{manga_id}/feed", {
+            "limit": 100,
+            "offset": 20,
+            "order[publishAt]": "desc",
+        })])
+        self.assertEqual(page.limit, 100)
+        self.assertEqual(page.offset, 20)
+        self.assertEqual(page.total, 120)
+        self.assertEqual(page.items[0].chapter, "12.5")
+        self.assertIsNone(page.items[0].volume)
+        self.assertEqual(page.items[0].translated_language, "pt-br")
+        self.assertEqual(page.items[0].publish_at, "2026-08-14T10:30:00+00:00")
+
+    def test_get_manga_feed_returns_none_for_blank_uuid_without_request(self):
+        calls = []
+        self.assertIsNone(get_manga_feed("  ", request_func=calls.append))
+        self.assertEqual(calls, [])
+
+    def test_parse_manga_feed_accepts_empty_feed(self):
+        page = parse_manga_feed(manga_feed_payload([], limit=100, offset=0, total=0))
+
+        self.assertEqual(page.items, [])
+        self.assertEqual(page.limit, 100)
+        self.assertEqual(page.offset, 0)
+        self.assertEqual(page.total, 0)
+
+    def test_parse_manga_feed_preserves_chapter_shapes(self):
+        page = parse_manga_feed(manga_feed_payload([
+            feed_item("chapter-null", chapter=None),
+            feed_item("chapter-decimal", chapter="10.5"),
+            feed_item("chapter-text", chapter="extra"),
+        ]))
+
+        self.assertEqual(
+            [item.chapter for item in page.items],
+            [None, "10.5", "extra"],
+        )
+
+    def test_parse_manga_feed_preserves_languages_without_filtering(self):
+        page = parse_manga_feed(manga_feed_payload([
+            feed_item("chapter-pt", translated_language="pt-br"),
+            feed_item("chapter-en", translated_language="en"),
+            feed_item("chapter-ko", translated_language="ko"),
+        ]))
+
+        self.assertEqual(
+            [item.translated_language for item in page.items],
+            ["pt-br", "en", "ko"],
+        )
+
+    def test_parse_manga_feed_preserves_timestamps_and_relationships(self):
+        page = parse_manga_feed(manga_feed_payload([
+            feed_item(
+                "chapter-1",
+                title="Special Episode",
+                publish_at="2026-08-14T10:30:00+00:00",
+                readable_at="2026-08-14T10:31:00+00:00",
+                created_at="2026-08-14T10:00:00+00:00",
+                updated_at="2026-08-14T11:00:00+00:00",
+                relationships=[{"id": "scanlation-group", "type": "scanlation_group"}],
+            )
+        ]))
+        item = page.items[0]
+
+        self.assertEqual(item.title, "Special Episode")
+        self.assertEqual(item.publish_at, "2026-08-14T10:30:00+00:00")
+        self.assertEqual(item.readable_at, "2026-08-14T10:31:00+00:00")
+        self.assertEqual(item.created_at, "2026-08-14T10:00:00+00:00")
+        self.assertEqual(item.updated_at, "2026-08-14T11:00:00+00:00")
+        self.assertEqual(item.relationships[0]["type"], "scanlation_group")
+
+    def test_parse_manga_feed_handles_missing_relationships(self):
+        page = parse_manga_feed(manga_feed_payload([{
+            "id": "chapter-1",
+            "attributes": {"chapter": "1"},
+        }]))
+
+        self.assertEqual(page.items[0].relationships, [])
+
+    def test_parse_manga_feed_handles_partial_attributes(self):
+        page = parse_manga_feed(manga_feed_payload([{"id": "chapter-1"}]))
+        item = page.items[0]
+
+        self.assertIsNone(item.volume)
+        self.assertIsNone(item.chapter)
+        self.assertIsNone(item.title)
+        self.assertIsNone(item.translated_language)
+        self.assertIsNone(item.publish_at)
+
+    def test_parse_manga_feed_preserves_raw_payload(self):
+        payload = manga_feed_payload([
+            feed_item("chapter-1", chapter="1", translated_language="en")
+        ], limit=1, offset=0, total=2)
+
+        page = parse_manga_feed(payload)
+
+        self.assertIs(page.raw_payload, payload)
+        self.assertIs(page.items[0].raw_payload, payload["data"][0])
+
+    def test_parse_manga_feed_rejects_invalid_data_shape(self):
+        with self.assertRaises(MangaDexPayloadError):
+            parse_manga_feed({"data": {}})
+
 
 def http_error(status, retry_after=None):
     headers = Message()
@@ -408,6 +537,47 @@ def manga_search_payload(items):
 
 def manga_detail_payload(item):
     return {"result": "ok", "response": "entity", "data": item}
+
+
+def manga_feed_payload(items, limit=100, offset=0, total=None):
+    return {
+        "result": "ok",
+        "response": "collection",
+        "data": items,
+        "limit": limit,
+        "offset": offset,
+        "total": len(items) if total is None else total,
+    }
+
+
+def feed_item(
+    chapter_id,
+    *,
+    volume="1",
+    chapter="1",
+    title=None,
+    translated_language="en",
+    publish_at=None,
+    readable_at=None,
+    created_at=None,
+    updated_at=None,
+    relationships=None,
+):
+    return {
+        "id": chapter_id,
+        "type": "chapter",
+        "attributes": {
+            "volume": volume,
+            "chapter": chapter,
+            "title": title,
+            "translatedLanguage": translated_language,
+            "publishAt": publish_at,
+            "readableAt": readable_at,
+            "createdAt": created_at,
+            "updatedAt": updated_at,
+        },
+        "relationships": relationships if relationships is not None else [],
+    }
 
 
 def manga_item(
