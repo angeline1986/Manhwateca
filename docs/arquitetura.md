@@ -82,6 +82,15 @@ usar os serviços posteriormente por uma API web.
 5. Registre arquivos gerados em `README.md` e no guia do menu.
 6. Use `manhwateca.reporting` para escrita de relatórios HTML.
 
+## Padrão de páginas web
+
+Novas páginas web devem seguir
+[`docs/padrao_paginas_web.md`](padrao_paginas_web.md). A página Fluxo
+operacional da Manhwateca é a referência visual e estrutural oficial.
+
+Ao criar telas, reutilize os tokens, layout, componentes e estados já
+existentes em `web/css/` e `web/js/` antes de introduzir novos padrões.
+
 ## Próxima fase
 
 Antes de iniciar outra grande frente, use esta ordem:

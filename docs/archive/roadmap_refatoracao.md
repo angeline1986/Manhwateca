@@ -945,8 +945,8 @@ devem ser feitas depois, em commits separados.
 
 ## Relação com a aplicação web
 
-Este roadmap deve ser concluído antes dos milestones principais de
-`docs/roadmap_aplicacao_web.md`.
+Este roadmap foi planejado antes dos milestones principais de
+`roadmap_aplicacao_web.md`.
 
 Após a refatoração:
 
