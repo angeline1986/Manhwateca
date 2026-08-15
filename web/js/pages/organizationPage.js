@@ -14,6 +14,7 @@ export function initOrganizationPage({
   const catalogPendingPageSize = 8;
   let organizationSubtab = null;
   let selectedIndex = 0;
+  let organizationCheckedKeys = new Set();
   let organizationWorkspace = null;
 
   const organizationPage = document.getElementById("page-organization");
@@ -471,16 +472,36 @@ export function initOrganizationPage({
     `;
   }
 
+  function organizationItemKey(item) {
+    return String(item?.id || item?.title || "");
+  }
+
   function renderOrganizationItems(items) {
     if (!items.length) {
       return '<div class="organization-empty-list">Nenhum item nesta etapa.</div>';
     }
-    return items.map((item, index) => `
-      <article class="organization-list-item ${index === selectedIndex ? "active" : ""}" data-organization-index="${index}">
-        <input type="checkbox" aria-label="Selecionar ${escapeHtml(item.title)}">
-        <h4>${escapeHtml(item.title)}</h4>
-      </article>
-    `).join("");
+
+    const selectedItem = getListData(organizationSubtab)[selectedIndex] || null;
+    const selectedKey = organizationItemKey(selectedItem);
+
+    return items.map(item => {
+      const key = organizationItemKey(item);
+      const active = key === selectedKey;
+      const checked = organizationCheckedKeys.has(key);
+
+      return `
+        <article class="organization-list-item ${active ? "active" : ""}"
+                 data-organization-key="${escapeHtml(key)}"
+                 ${active ? 'aria-current="true"' : ""}>
+          <input type="checkbox"
+                 data-organization-item-checkbox
+                 data-organization-key="${escapeHtml(key)}"
+                 ${checked ? "checked" : ""}
+                 aria-label="Selecionar ${escapeHtml(item.title)}">
+          <h4>${escapeHtml(item.title)}</h4>
+        </article>
+      `;
+    }).join("");
   }
 
   function renderOrganizationDetail(item) {
@@ -671,9 +692,20 @@ export function initOrganizationPage({
   }
 
   function handleOrganizationClick(event) {
-    const item = event.target.closest("[data-organization-index]");
+    const itemCheckbox = event.target.closest("[data-organization-item-checkbox]");
+    if (itemCheckbox) {
+      const key = itemCheckbox.dataset.organizationKey || "";
+      if (itemCheckbox.checked) organizationCheckedKeys.add(key);
+      else organizationCheckedKeys.delete(key);
+      return;
+    }
+
+    const item = event.target.closest("[data-organization-key]");
     if (item) {
-      selectedIndex = Number.parseInt(item.dataset.organizationIndex, 10) || 0;
+      const key = item.dataset.organizationKey || "";
+      const allItems = getListData(organizationSubtab);
+      const nextIndex = allItems.findIndex(candidate => organizationItemKey(candidate) === key);
+      if (nextIndex >= 0) selectedIndex = nextIndex;
       renderOrganizationSubtab();
       return;
     }
@@ -716,8 +748,11 @@ export function initOrganizationPage({
     const list = workspace.querySelector("[data-organization-list]");
     if (list) list.innerHTML = renderOrganizationItems(filtered);
     if (event.target.matches("[data-organization-select-all]")) {
-      list?.querySelectorAll('input[type="checkbox"]').forEach(input => {
+      list?.querySelectorAll("[data-organization-item-checkbox]").forEach(input => {
         input.checked = event.target.checked;
+        const key = input.dataset.organizationKey || "";
+        if (input.checked) organizationCheckedKeys.add(key);
+        else organizationCheckedKeys.delete(key);
       });
     }
   }
@@ -725,6 +760,7 @@ export function initOrganizationPage({
   function setSubtab(subtab) {
     organizationSubtab = subtab;
     selectedIndex = 0;
+    organizationCheckedKeys = new Set();
     if (subtab === "track_library") {
       renderTrackLibrary();
       return;

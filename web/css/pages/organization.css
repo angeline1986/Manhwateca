@@ -127,7 +127,7 @@
 /* Lista + detalhe */
 .organization-split {
   display: grid;
-  grid-template-columns: 294px minmax(0, 1fr);
+  grid-template-columns: 340px minmax(0, 1fr);
   min-height: 585px;
 }
 .organization-list-panel {
@@ -172,16 +172,22 @@
   white-space: nowrap;
 }
 .organization-kpi span {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 21px;
   margin-top: 6px;
-  overflow: hidden;
+  overflow: visible;
   color: var(--muted);
   font-size: 9px;
   font-weight: 850;
-  letter-spacing: .07em;
-  text-overflow: ellipsis;
+  letter-spacing: .055em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  text-align: center;
+  text-overflow: clip;
   text-transform: uppercase;
-  white-space: nowrap;
+  white-space: normal;
 }
 .organization-search-row {
   margin-bottom: 12px;
@@ -603,7 +609,7 @@
 }
 
 @media (max-width: 1100px) {
-  .organization-split { grid-template-columns: 280px minmax(0, 1fr); }
+  .organization-split { grid-template-columns: 340px minmax(0, 1fr); }
   .organization-detail-panel { padding-inline: 28px; }
 }
 @media (max-width: 760px) {
@@ -765,5 +771,113 @@
 
   #page-organization .organization-workspace {
     width: 100%;
+  }
+}
+
+/* ORGANIZATION_QUEUE_340_FLOW_CHECKBOX_TOOLTIP_20260815 */
+
+/* A coluna de fila replica a largura real do Sync Notion: 340px. */
+.organization-split {
+  grid-template-columns: 340px minmax(0, 1fr);
+}
+
+/* Lista mais leve, seguindo o comportamento visual do Fluxo Operacional. */
+.organization-item-list {
+  gap: 6px;
+}
+
+.organization-list-item {
+  position: relative;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.organization-list-item:hover {
+  border-color: var(--border);
+  background: var(--soft);
+}
+
+.organization-list-item.active {
+  border-color: var(--rose-border);
+  background: var(--soft-2);
+  box-shadow: inset 3px 0 0 var(--rose);
+}
+
+/* O estado ativo identifica o item aberto no detalhe.
+   Checkbox continua sendo um controle independente para seleção em lote. */
+.organization-list-item input[type="checkbox"] {
+  position: relative;
+  z-index: 2;
+  cursor: pointer;
+}
+
+/* Tooltip compacto inspirado no padrão da Fila de revisão de Fluxos. */
+.organization-kpis {
+  position: relative;
+  overflow: visible;
+}
+
+.organization-kpi.has-tooltip {
+  position: relative;
+  overflow: visible;
+}
+
+.organization-tooltip {
+  top: calc(100% + 8px);
+  bottom: auto;
+  left: 0;
+  z-index: 40;
+  display: block;
+  width: 240px;
+  padding: 9px 11px;
+  border: 1px solid #f0d8c1;
+  border-radius: 10px;
+  background: #fff8f0;
+  color: #9a4d16;
+  box-shadow: 0 10px 24px rgba(67, 56, 59, .12);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  transform: translateY(-4px);
+}
+
+.organization-tooltip b {
+  display: none;
+}
+
+/* Primeiro abre alinhado à esquerda, segundo centralizado, terceiro à direita. */
+.organization-kpi.has-tooltip:nth-child(2) .organization-tooltip {
+  left: 50%;
+  transform: translate(-50%, -4px);
+}
+
+.organization-kpi.has-tooltip:nth-child(3) .organization-tooltip {
+  right: 0;
+  left: auto;
+}
+
+.organization-kpi.has-tooltip:hover .organization-tooltip,
+.organization-kpi.has-tooltip:focus .organization-tooltip,
+.organization-kpi.has-tooltip:focus-within .organization-tooltip {
+  transform: translateY(0);
+}
+
+.organization-kpi.has-tooltip:nth-child(2):hover .organization-tooltip,
+.organization-kpi.has-tooltip:nth-child(2):focus .organization-tooltip,
+.organization-kpi.has-tooltip:nth-child(2):focus-within .organization-tooltip {
+  transform: translate(-50%, 0);
+}
+
+@media (max-width: 900px) {
+  .organization-split {
+    grid-template-columns: 1fr;
   }
 }
