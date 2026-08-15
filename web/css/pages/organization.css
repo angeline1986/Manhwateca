@@ -684,3 +684,86 @@
   font-weight: 800;
   line-height: 1.7;
 }
+
+/* ORGANIZATION_FLOW_SPACING_20260815
+   O enquadramento externo segue o mesmo ritmo da tela de Fluxos. */
+.page-container:has(#page-organization.active) {
+  padding: 16px;
+}
+
+#page-organization .organization-workspace {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+.organization-workspace-head {
+  padding: 22px 28px 18px;
+}
+
+.organization-workspace-head h2 {
+  margin-bottom: 5px;
+}
+
+.organization-split {
+  min-height: 0;
+}
+
+.organization-list-panel {
+  padding: 20px 18px;
+}
+
+.organization-list-subtitle {
+  margin-bottom: 16px;
+}
+
+.organization-kpis {
+  margin-bottom: 18px;
+}
+
+.organization-filter-row {
+  margin-bottom: 14px;
+}
+
+.organization-detail-panel {
+  padding: 28px 34px 26px;
+}
+
+.organization-detail-top {
+  margin-bottom: 18px;
+}
+
+.organization-meta-grid {
+  margin-bottom: 18px;
+}
+
+.organization-notice {
+  margin-bottom: 18px;
+}
+
+.organization-action-bar {
+  margin-top: 24px;
+  padding-top: 18px;
+}
+
+.organization-full-content {
+  padding: 22px 28px 26px;
+}
+
+.organization-full-lead {
+  margin-bottom: 16px;
+}
+
+.organization-full-action {
+  margin-top: 16px;
+}
+
+/* Em telas menores, preserva o respiro sem criar largura artificial. */
+@media (max-width: 760px) {
+  .page-container:has(#page-organization.active) {
+    padding: 16px;
+  }
+
+  #page-organization .organization-workspace {
+    width: 100%;
+  }
+}

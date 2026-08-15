@@ -157,3 +157,34 @@ button:not(.nav-link):not(.menu-toggle):not(.flow-page-link):not(.flow-candidate
 .page.active { display: block; }
 @keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
 .page > .panel + .panel { margin-top: 24px; }
+
+/* ORGANIZATION_MENU_REFINEMENT_20260815
+   Mantém o mesmo componente, mas evita a sensação de recorte no ativo/hover. */
+.sidebar.organization-context .organization-menu {
+  left: 6px;
+  right: 6px;
+}
+
+.sidebar.organization-context .organization-menu .nav-link {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  transform: none;
+}
+
+.sidebar.organization-context .organization-menu .nav-link:hover {
+  border-color: transparent;
+  background: rgba(255,255,255,.5);
+  transform: none;
+}
+
+.sidebar.organization-context .organization-menu .nav-link.active {
+  border-color: var(--rose-border);
+  background: #fff;
+  box-shadow: 0 10px 25px rgba(113,55,74,.08);
+}
+
+.sidebar.organization-context .organization-menu {
+  gap: 4px;
+}
