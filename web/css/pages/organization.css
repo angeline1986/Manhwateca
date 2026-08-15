@@ -881,3 +881,142 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ORGANIZATION_STABLE_GEOMETRY_20260815
+   Geometria fixa entre as telas do menu Organização. */
+
+/* Item aberto no painel direito não recebe destaque visual automaticamente.
+   O destaque lateral aparece somente quando o checkbox está efetivamente marcado. */
+.organization-list-item.active,
+.organization-list-item[aria-current="true"] {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.organization-list-item[aria-current="true"]:hover {
+  border-color: var(--border);
+  background: var(--soft);
+}
+
+.organization-list-item.selected {
+  border-color: var(--rose-border);
+  background: var(--soft-2);
+  box-shadow: inset 3px 0 0 var(--rose);
+}
+
+/* Mantém as cinco telas split-panel com a mesma moldura visual. */
+.organization-split {
+  grid-template-columns: 340px minmax(0, 1fr);
+  min-height: 554px;
+  align-items: stretch;
+}
+
+.organization-list-panel {
+  width: 340px;
+  min-width: 340px;
+  padding: 20px 18px;
+}
+
+/* Reserva altura constante para cabeçalho da fila. */
+.organization-list-panel > h3 {
+  min-height: 20px;
+  margin: 0;
+}
+
+.organization-list-subtitle {
+  min-height: 34px;
+  margin: 4px 0 16px;
+}
+
+/* KPIs sempre ocupam a mesma altura/posição. */
+.organization-kpis {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-height: 60px;
+  margin-bottom: 16px;
+}
+
+.organization-kpi {
+  min-width: 0;
+  min-height: 60px;
+  padding: 9px 6px 8px;
+}
+
+.organization-kpi strong {
+  line-height: 1;
+}
+
+.organization-kpi span {
+  min-height: 22px;
+  margin-top: 6px;
+  line-height: 1.12;
+}
+
+/* Busca e filtros sempre começam no mesmo ponto vertical. */
+.organization-search-field {
+  margin-bottom: 10px;
+}
+
+.organization-search-field input,
+.organization-filter-row select,
+.organization-select-compact {
+  height: 40px;
+}
+
+.organization-filter-row {
+  grid-template-columns: minmax(0, 1fr) 64px 40px;
+  gap: 8px;
+  min-height: 40px;
+  margin-bottom: 12px;
+}
+
+/* Lista começa sempre na mesma coordenada e itens mantêm a mesma altura mínima. */
+.organization-item-list {
+  min-height: 260px;
+  align-content: start;
+}
+
+.organization-list-item {
+  min-height: 48px;
+}
+
+/* O painel direito também preserva a mesma posição inicial. */
+.organization-detail-panel {
+  min-height: 554px;
+  padding: 28px 34px 26px;
+}
+
+.organization-detail-top {
+  min-height: 58px;
+  margin-bottom: 18px;
+}
+
+.organization-meta-grid {
+  min-height: 64px;
+  margin-bottom: 18px;
+}
+
+.organization-notice {
+  min-height: 72px;
+}
+
+.organization-detail-boxes {
+  min-height: 92px;
+}
+
+/* Em telas menores, volta a uma coluna sem largura fixa. */
+@media (max-width: 900px) {
+  .organization-split {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .organization-list-panel {
+    width: auto;
+    min-width: 0;
+  }
+
+  .organization-detail-panel {
+    min-height: 0;
+  }
+}

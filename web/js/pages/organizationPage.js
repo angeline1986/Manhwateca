@@ -393,7 +393,7 @@ export function initOrganizationPage({
     }
 
     if (subtab === "validate_chapters") {
-      return [["42", "INCONSISTÊNCIAS"], ["7", "LACUNAS"], ["6", "DUPLICADOS"]];
+      return [["42", "DIVERGÊNCIAS"], ["7", "LACUNAS"], ["6", "DUPLICADOS"]];
     }
 
     if (subtab === "review_pending") {
@@ -490,7 +490,7 @@ export function initOrganizationPage({
       const checked = organizationCheckedKeys.has(key);
 
       return `
-        <article class="organization-list-item ${active ? "active" : ""}"
+        <article class="organization-list-item ${checked ? "selected" : ""}"
                  data-organization-key="${escapeHtml(key)}"
                  ${active ? 'aria-current="true"' : ""}>
           <input type="checkbox"
@@ -697,6 +697,7 @@ export function initOrganizationPage({
       const key = itemCheckbox.dataset.organizationKey || "";
       if (itemCheckbox.checked) organizationCheckedKeys.add(key);
       else organizationCheckedKeys.delete(key);
+      itemCheckbox.closest(".organization-list-item")?.classList.toggle("selected", itemCheckbox.checked);
       return;
     }
 
@@ -753,6 +754,7 @@ export function initOrganizationPage({
         const key = input.dataset.organizationKey || "";
         if (input.checked) organizationCheckedKeys.add(key);
         else organizationCheckedKeys.delete(key);
+        input.closest(".organization-list-item")?.classList.toggle("selected", input.checked);
       });
     }
   }
