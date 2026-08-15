@@ -619,3 +619,68 @@
   .organization-actions { justify-content: stretch; }
   .organization-actions button { flex: 1; }
 }
+
+/* ORGANIZACAO_ACORDOS_FINAIS_20260815 */
+.organization-kpi.has-tooltip {
+  position: relative;
+  overflow: visible;
+  cursor: help;
+}
+
+.organization-info {
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.organization-tooltip {
+  position: absolute;
+  z-index: 30;
+  left: 50%;
+  bottom: calc(100% + 9px);
+  width: 220px;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--muted);
+  box-shadow: var(--shadow);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  transform: translate(-50%, 4px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .14s ease, transform .14s ease;
+}
+
+.organization-tooltip b {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.organization-kpi.has-tooltip:hover .organization-tooltip,
+.organization-kpi.has-tooltip:focus .organization-tooltip,
+.organization-kpi.has-tooltip:focus-within .organization-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+
+.organization-detail-box p {
+  white-space: pre-line;
+}
+
+.organization-ready-lines {
+  color: var(--success);
+  font-weight: 800;
+  line-height: 1.7;
+}

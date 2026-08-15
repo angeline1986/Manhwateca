@@ -26,40 +26,40 @@ export function initOrganizationPage({
       title: "Revisar estrutura",
       subtitle: "As informações detalhadas da divergência estão no painel à direita.",
       listTitle: "Fila de estrutura",
-      listSubtitle: "Obras identificadas na biblioteca local que exigem conferência.",
-      filterOptions: ["Todas", "Pendentes"],
+      listSubtitle: "Obras identificadas no snapshot.",
+      filterOptions: ["Todas", "Problemas", "Duplicatas", "OK"],
       status: "Prévia local",
     },
     standardize_names: {
       title: "Padronizar nomes",
-      subtitle: "Revise nomes atuais e a proposta antes de qualquer renomeação física.",
+      subtitle: "Revise os nomes identificados e confirme as sugestões necessárias.",
       listTitle: "Fila de nomenclatura",
-      listSubtitle: "Itens de padronização disponíveis para revisão.",
-      filterOptions: ["Todas", "Preview"],
+      listSubtitle: "Arquivos e pastas que podem ter seus nomes padronizados.",
+      filterOptions: ["Todas", "Sugeridos", "Revisar", "Manter"],
       status: "Prévia local",
     },
     organize_folders: {
       title: "Organizar pastas",
-      subtitle: "Compare origem e destino antes de mover qualquer pasta.",
+      subtitle: "Revise origem e destino antes de qualquer movimentação.",
       listTitle: "Fila de organização",
-      listSubtitle: "Movimentações disponíveis para conferência.",
-      filterOptions: ["Todas", "Preview"],
+      listSubtitle: "Arquivos e pastas com movimentação proposta.",
+      filterOptions: ["Todas", "Movimentos", "Conflitos", "Manter"],
       status: "Prévia local",
     },
     validate_chapters: {
       title: "Validar capítulos",
-      subtitle: "Confira a auditoria de capítulos antes de continuar.",
+      subtitle: "Verifique lacunas e duplicidades na sequência de capítulos das obras.",
       listTitle: "Fila de capítulos",
-      listSubtitle: "Auditorias e verificações disponíveis para revisão local.",
-      filterOptions: ["Todas", "Auditoria"],
+      listSubtitle: "Obras com sequência válida, lacunas ou duplicidades.",
+      filterOptions: ["Todas", "Inconsistências", "Lacunas", "Duplicados"],
       status: "Prévia local",
     },
     review_pending: {
       title: "Revisar pendências",
-      subtitle: "Resolva somente os casos que ainda exigem execução ou decisão.",
+      subtitle: "Resolva os casos que não puderam ser tratados automaticamente.",
       listTitle: "Fila de revisão",
-      listSubtitle: "Pendências acionáveis já calculadas pelo sistema.",
-      filterOptions: ["Todas", "Com ação", "Abrir seção"],
+      listSubtitle: "Casos que não puderam ser resolvidos automaticamente.",
+      filterOptions: ["Todas", "Corrigir", "Decidir", "Revisar"],
       status: "Decisão manual",
     },
   };
@@ -231,27 +231,25 @@ export function initOrganizationPage({
         title: name,
         badge: "Revisão necessária",
         badgeKind: "warning",
-        filter: "Pendentes",
+        filter: "Problemas",
         meta: [
-          ["Status", "Divergente"],
-          ["Origem", "Biblioteca local"],
-          ["Estrutura", "Fora do catálogo"],
-          ["Tipo", "Pasta"],
-          ["Modo", "Prévia local"],
+          ["Estrutura atual", "2 pastas"],
+          ["Estrutura esperada", "1 pasta"],
+          ["Arquivos", "A conferir"],
         ],
         notice: [
-          "Divergência identificada",
-          "Esta pasta foi detectada na biblioteca local e ainda não está representada no catálogo atual.",
+          "Problema identificado",
+          "A estrutura encontrada precisa ser conferida antes de continuar.",
         ],
         boxes: [
-          ["Pasta detectada", name],
-          ["Próximo passo", "Gerar a prévia de organização para conferir a estrutura antes de qualquer movimentação."],
+          ["Estrutura atual", name],
+          ["Estrutura sugerida", "Consolidar a obra no padrão da biblioteca."],
         ],
         action: {
-          label: "Conferir estrutura",
-          description: "Analise a organização sem mover pastas.",
-          secondary: "Ignorar por enquanto",
-          primary: "Gerar preview",
+          label: "Unificar estrutura",
+          description: "A consolidação será executada somente na etapa Aplicar organização.",
+          secondary: "Ignorar",
+          primary: "Aprovar",
           task: "organization_preview",
           confirmation: false,
         },
@@ -261,28 +259,29 @@ export function initOrganizationPage({
     if (subtab === "review_pending") {
       return getPendingItems().map(item => ({
         ...item,
-        badge: item.action ? "Ação disponível" : "Decisão necessária",
-        badgeKind: item.action ? "ok" : "warning",
-        filter: item.action ? "Com ação" : "Abrir seção",
+        badge: "Decisão necessária",
+        badgeKind: "warning",
+        filter: item.action ? "Corrigir" : "Decidir",
         meta: [
-          ["Status", "Pendente"],
-          ["Tipo", item.kind],
-          ["Tratamento", item.action ? "Executar" : "Revisar"],
-          ["Origem", "Pendências"],
-          ["Modo", "Manual"],
+          ["Problema", item.kind || "Pendência"],
+          ["Origem", item.title || "Revisão"],
+          ["Impacto", item.action ? "Requer tratamento" : "Decisão manual"],
         ],
-        notice: ["Pendência identificada", item.detail || "Este item ainda exige uma ação ou decisão."],
+        notice: [
+          "Sem decisão segura",
+          item.detail || "O sistema não conseguiu determinar sozinho o tratamento adequado para esta pendência.",
+        ],
         boxes: [
-          ["Item", item.title],
-          ["Tratamento", item.action ? "Executar a próxima etapa indicada pelo sistema." : "Abrir a seção relacionada para revisar o caso."],
+          ["Opção 1", "Ignorar a pendência e continuar."],
+          ["Opção 2", "Corrigir a origem antes da aplicação."],
         ],
         action: {
-          label: item.action ? "Executar próxima etapa" : "Revisar pendência",
-          description: item.detail || "Continue pelo fluxo indicado.",
-          secondary: "Agora não",
-          primary: item.action ? "Executar" : "Abrir seção",
-          task: item.action,
-          confirmation: ["apply_organization", "apply_renaming", "catalog_scan"].includes(item.action),
+          label: "Registrar decisão",
+          description: "Escolha como esta pendência deve ser tratada.",
+          secondary: "Ignorar",
+          primary: "Sinalizar correção",
+          task: "",
+          confirmation: false,
           sourceElement: item.sourceElement,
         },
       }));
@@ -291,101 +290,123 @@ export function initOrganizationPage({
     const definitions = {
       standardize_names: {
         id: "standardize_names",
-        title: "Padronização de nomes",
-        badge: "Prévia local",
+        title: "Boredom_01.cbz",
+        badge: "Sugestão disponível",
         badgeKind: "ok",
-        filter: "Preview",
+        filter: "Sugeridos",
         meta: [
-          ["Status", "Aguardando preview"],
-          ["Escopo", "Nomes"],
-          ["Conteúdo", "Capítulos e capas"],
-          ["Modo", "Prévia local"],
-          ["Aplicação", "Com confirmação"],
+          ["Tipo", "Capítulo"],
+          ["Obra", "Boredom"],
+          ["Confiança", "Alta"],
         ],
-        notice: ["Padronização de nomes", "Analisa capítulos, capas e títulos fora do padrão antes de qualquer renomeação."],
+        notice: [
+          "Nome sugerido",
+          "Boredom - Capítulo 001.cbz",
+        ],
         boxes: [
-          ["Antes", "Nomes atuais da biblioteca local"],
-          ["Depois", "Sugestões apresentadas pelo preview de padronização"],
+          ["Antes", "Boredom_01.cbz"],
+          ["Depois", "Boredom - Capítulo 001.cbz"],
         ],
         action: {
-          label: "Gerar prévia de nomes",
-          description: "Nenhum arquivo é renomeado durante a prévia.",
-          secondary: "Agora não",
-          primary: "Gerar preview",
+          label: "Confirmar renomeação",
+          description: "A alteração ficará em prévia até a aplicação final.",
+          secondary: "Ignorar",
+          primary: "Aprovar",
           task: "rename_preview",
           confirmation: false,
         },
       },
       organize_folders: {
         id: "organize_folders",
-        title: "Organização de pastas",
-        badge: "Prévia local",
+        title: "Boredom_01.cbz",
+        badge: "Movimento seguro",
         badgeKind: "ok",
-        filter: "Preview",
+        filter: "Movimentos",
         meta: [
-          ["Status", "Aguardando preview"],
-          ["Escopo", "Pastas"],
-          ["Organização", "Alfabética"],
-          ["Modo", "Prévia local"],
-          ["Aplicação", "Com confirmação"],
+          ["Origem", "/Downloads"],
+          ["Destino", "/Biblioteca/Boredom"],
+          ["Conflitos", "0"],
         ],
-        notice: ["Movimentação proposta", "A prévia mostra a organização alfabética antes de qualquer movimentação física."],
+        notice: [
+          "Movimentação proposta",
+          "O arquivo será movido para a pasta principal da obra.",
+        ],
         boxes: [
-          ["Origem", "Estrutura atual da biblioteca"],
-          ["Destino", "Grupos alfabéticos calculados pelo preview"],
+          ["Antes", "Downloads/\n└── Boredom_01.cbz"],
+          ["Depois", "Biblioteca/Boredom/\n└── Boredom_01.cbz"],
         ],
         action: {
-          label: "Gerar prévia de pastas",
-          description: "Nenhuma pasta é movida durante a prévia.",
-          secondary: "Agora não",
-          primary: "Gerar preview",
+          label: "Confirmar movimentação",
+          description: "O arquivo só será movido na aplicação final.",
+          secondary: "Ignorar",
+          primary: "Aprovar",
           task: "organization_preview",
           confirmation: false,
         },
       },
       validate_chapters: {
         id: "validate_chapters",
-        title: "Auditoria de capítulos",
-        badge: "Auditoria local",
-        badgeKind: "ok",
-        filter: "Auditoria",
+        title: "Romance in Romance",
+        badge: "Lacuna encontrada",
+        badgeKind: "warning",
+        filter: "Lacunas",
         meta: [
-          ["Status", "Pronta para executar"],
-          ["Escopo", "Capítulos"],
-          ["Inclui", "Arquivos"],
-          ["Modo", "Auditoria"],
-          ["Alteração física", "Não"],
+          ["Capítulos", "38"],
+          ["Lacunas", "1"],
+          ["Duplicados", "0"],
         ],
-        notice: ["Validação de capítulos", "Verifica divergências de capítulos e arquivos que precisam de conferência."],
+        notice: [
+          "Capítulo ausente",
+          "Não foi encontrado um arquivo correspondente ao capítulo 012.",
+        ],
         boxes: [
-          ["Verificação", "Capítulos e arquivos não interpretados"],
-          ["Resultado", "Relatório local para revisão"],
+          ["Sequência", "001–011, 013–038"],
+          ["Ação sugerida", "Ignorar a lacuna ou corrigir a origem antes da aplicação."],
         ],
         action: {
-          label: "Executar auditoria",
-          description: "Gere o relatório sem alterar a biblioteca.",
-          secondary: "Agora não",
-          primary: "Executar auditoria",
+          label: "Decidir tratamento",
+          description: "A lacuna não pode ser resolvida automaticamente.",
+          secondary: "Ignorar",
+          primary: "Sinalizar correção",
           task: "chapter_audit",
           confirmation: false,
         },
       },
     };
+
     const item = definitions[subtab];
     return item ? [item] : [];
   }
 
   function getKpis(subtab, items) {
     if (subtab === "review_structure") {
-      return [[String(items.length), "PENDENTES"], ["LOCAL", "ORIGEM"], ["PREVIEW", "MODO"]];
+      return [[String(items.length), "DIVERGÊNCIAS"], ["0", "DUPLICATAS"], ["0", "OK"]];
     }
+
+    if (subtab === "standardize_names") {
+      return [["1", "SUGERIDOS"], ["0", "REVISAR"], ["0", "MANTER"]];
+    }
+
+    if (subtab === "organize_folders") {
+      return [["1", "MOVER"], ["0", "REVISAR"], ["0", "MANTER"]];
+    }
+
+    if (subtab === "validate_chapters") {
+      return [["42", "INCONSISTÊNCIAS"], ["7", "LACUNAS"], ["6", "DUPLICADOS"]];
+    }
+
     if (subtab === "review_pending") {
-      const actionCount = items.filter(item => item.action?.task).length;
-      return [[String(items.length), "PENDENTES"], [String(actionCount), "COM AÇÃO"], [String(Math.max(0, items.length - actionCount)), "REVISAR"]];
+      const corrigir = items.filter(item => item.filter === "Corrigir").length;
+      const decidir = items.filter(item => item.filter === "Decidir").length;
+      const revisar = Math.max(0, items.length - corrigir - decidir);
+      return [
+        [String(corrigir), "CORRIGIR", "O problema está identificado e sabemos que a origem precisa de correção."],
+        [String(decidir), "DECIDIR", "Existem alternativas e o usuário precisa escolher o tratamento."],
+        [String(revisar), "REVISAR", "O sistema não conseguiu chegar a uma conclusão suficiente para recomendar uma decisão."],
+      ];
     }
-    if (subtab === "standardize_names") return [["1", "ETAPA"], ["PREVIEW", "MODO"], ["LOCAL", "ESCOPO"]];
-    if (subtab === "organize_folders") return [["1", "ETAPA"], ["PREVIEW", "MODO"], ["PASTAS", "ESCOPO"]];
-    return [["1", "AUDITORIA"], ["LOCAL", "ESCOPO"], ["0", "ALTERAÇÕES"]];
+
+    return [];
   }
 
   function renderOrganizationSubtab() {
@@ -415,8 +436,13 @@ export function initOrganizationPage({
           <h3>${escapeHtml(config.listTitle)}</h3>
           <p class="organization-list-subtitle">${escapeHtml(config.listSubtitle)}</p>
           <div class="organization-kpis">
-            ${kpis.map(([value, label]) => `
-              <article class="organization-kpi"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></article>
+            ${kpis.map(([value, label, tooltip]) => `
+              <article class="organization-kpi ${tooltip ? "has-tooltip" : ""}"
+                       ${tooltip ? 'tabindex="0"' : ""}>
+                <strong>${escapeHtml(value)}</strong>
+                <span>${escapeHtml(label)}${tooltip ? ' <b class="organization-info" aria-hidden="true">ⓘ</b>' : ""}</span>
+                ${tooltip ? `<em class="organization-tooltip" role="tooltip"><b>${escapeHtml(label)}</b>${escapeHtml(tooltip)}</em>` : ""}
+              </article>
             `).join("")}
           </div>
           <div class="organization-search-row">
@@ -573,45 +599,57 @@ export function initOrganizationPage({
   function renderApplyOrganization() {
     const workspace = ensureOrganizationWorkspace();
     if (!workspace) return;
+
     const config = {
       title: "Aplicar organização",
       subtitle: "Confirme as alterações revisadas antes de alterar arquivos e pastas.",
       status: "Pronto para aplicar",
     };
+
     updateTopbar(config);
     setOrganizationMode(true);
+
     workspace.innerHTML = `
       <header class="organization-workspace-head">
         <div>
           <span class="eyebrow">ORGANIZAÇÃO LOCAL</span>
           <h2>Aplicar organização</h2>
-          <p>Revise o impacto antes da confirmação final.</p>
+          <p>Revise o impacto das alterações antes da confirmação final.</p>
         </div>
         <span class="organization-stage-status">Pronto para aplicar</span>
       </header>
+
       <section class="organization-full-content organization-apply-content">
         <p class="organization-full-lead">Última conferência antes de renomear e mover itens.</p>
 
         <div class="organization-summary-grid">
           <article class="organization-apply-summary success">
-            <h3>Mudanças revisadas</h3>
-            <p>Organização de pastas e padronização de nomes continuam protegidas por confirmação explícita.</p>
+            <h3>24 mudanças prontas</h3>
+            <p class="organization-ready-lines">✓ 18 renomeações<br>✓ 6 movimentos<br>✓ Nenhum conflito bloqueante</p>
           </article>
+
           <article class="organization-apply-summary">
             <h3>Impacto da aplicação</h3>
-            <p>Destino: biblioteca local<br>Modo: aplicação confirmada<br>Operações: pastas e nomes</p>
+            <p>Destino: Biblioteca local<br>Modo: aplicação com log<br>Rollback: disponível</p>
           </article>
         </div>
 
         <section class="organization-checklist">
           <div class="organization-check">
             <span class="organization-step-marker">✓</span>
-            <div><b>Organizar pastas</b><small>Move obras para os grupos alfabéticos calculados pelo preview.</small></div>
+            <div>
+              <b>Renomear capítulos</b>
+              <small>18 arquivos serão padronizados.</small>
+            </div>
             <span class="organization-step-status">Pronto</span>
           </div>
+
           <div class="organization-check">
             <span class="organization-step-marker">✓</span>
-            <div><b>Padronizar nomes</b><small>Aplica as renomeações aprovadas para capítulos, capas e títulos.</small></div>
+            <div>
+              <b>Mover pastas</b>
+              <small>6 itens serão reorganizados.</small>
+            </div>
             <span class="organization-step-status">Pronto</span>
           </div>
         </section>
@@ -620,10 +658,11 @@ export function initOrganizationPage({
           <div class="organization-action-copy">
             <small>PRÓXIMA AÇÃO</small>
             <strong>Aplicar organização</strong>
-            <p>Escolha a operação física somente depois de revisar as prévias correspondentes.</p>
+            <p>A operação será registrada e poderá ser revertida.</p>
           </div>
+
           <div class="organization-actions">
-            <button type="button" class="secondary-action" data-organization-task="apply_renaming" data-confirmation="true">Aplicar nomes</button>
+            <button type="button" class="secondary-action" data-organization-go="review_pending">Voltar às pendências</button>
             <button type="button" class="primary-action" data-organization-task="apply_organization" data-confirmation="true">Aplicar organização</button>
           </div>
         </section>
