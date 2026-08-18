@@ -1,4 +1,9 @@
+import json
 from pathlib import Path
+
+from manhwateca.database.connection import transaction
+from manhwateca.database.manga_repository import MangaRepository
+from manhwateca.webapp.catalog import load_catalog
 
 from manhwateca.library_organizer.discovery import (
     find_manga_folders,
@@ -398,3 +403,254 @@ def serialize_folder_organization(plan, conflicts, duplicates, root):
         },
         "items": items,
     }
+
+
+ORGANIZATION_DECISION_TYPE = "organization_local"
+
+
+def chapter_review_payload(project_root):
+    mangas = load_catalog(project_root)
+    return serialize_chapter_review(mangas)
+
+
+def serialize_chapter_review(mangas):
+    items = []
+
+    for index, manga in enumerate(mangas or []):
+        title = str(manga.get("nome") or "Obra sem título")
+        gaps = [str(value) for value in (manga.get("missing_ranges") or []) if str(value).strip()]
+        issues = [str(value) for value in (manga.get("count_issues") or []) if str(value).strip()]
+        unparsed = [str(value) for value in (manga.get("unparsed_files") or []) if str(value).strip()]
+        duplicate_issues = [
+            issue for issue in issues
+            if "sobrepos" in issue.casefold() or "duplic" in issue.casefold()
+        ]
+        other_issues = [
+            issue for issue in issues
+            if issue not in duplicate_issues and issue.casefold() != "lacunas"
+        ]
+
+        has_gap = bool(gaps) or any(issue.casefold() == "lacunas" for issue in issues)
+        has_duplicate = bool(duplicate_issues)
+        has_other = bool(other_issues or unparsed)
+        status = str(manga.get("count_status") or "OK")
+        status_problem = status.casefold() not in {"ok", "correto", "conforme"}
+        has_divergence = has_gap or has_duplicate or has_other or status_problem
+
+        filters = []
+        if has_divergence:
+            filters.append("Divergências")
+        if has_gap:
+            filters.append("Lacunas")
+        if has_duplicate:
+            filters.append("Duplicados")
+        if not filters:
+            filters.append("OK")
+
+        if has_gap:
+            badge = "Lacuna encontrada"
+            issue_title = "Capítulo ausente"
+            issue_description = (
+                "Foram identificadas lacunas na sequência: "
+                + (", ".join(gaps) if gaps else "verifique a auditoria detalhada.")
+            )
+            suggested = "Confirmar se a lacuna é intencional ou corrigir a origem."
+        elif has_duplicate:
+            badge = "Duplicidade encontrada"
+            issue_title = "Capítulos sobrepostos"
+            issue_description = " · ".join(duplicate_issues)
+            suggested = "Comparar os arquivos sobrepostos antes de manter ou remover qualquer versão."
+        elif has_other or status_problem:
+            badge = "Revisão necessária"
+            issue_title = "Divergência identificada"
+            details = other_issues + [f"Arquivo não interpretado: {name}" for name in unparsed]
+            issue_description = " · ".join(details) or f"Status da contagem: {status}."
+            suggested = "Revisar a origem antes de qualquer alteração."
+        else:
+            badge = "Sequência válida"
+            issue_title = "Sequência consistente"
+            issue_description = "Nenhuma lacuna, duplicidade ou arquivo não interpretado foi informado."
+            suggested = "Nenhuma correção necessária."
+
+        latest = manga.get("main_caps", 0)
+        gap_text = ", ".join(gaps) if gaps else "nenhuma"
+        sequence = f"1–{latest} · lacunas: {gap_text}" if latest else f"Lacunas: {gap_text}"
+
+        items.append({
+            "id": f"chapter:{index}:{title}",
+            "title": title,
+            "category": "divergence" if has_divergence else "ok",
+            "filters": filters,
+            "badge": badge,
+            "chapters": int(manga.get("chapters_found") or 0),
+            "latest": manga.get("main_caps", 0),
+            "gaps": gaps,
+            "gap_count": len(gaps) if gaps else (1 if has_gap else 0),
+            "duplicate_issues": duplicate_issues,
+            "duplicate_count": len(duplicate_issues),
+            "unparsed_files": unparsed,
+            "status": status,
+            "issue_title": issue_title,
+            "issue_description": issue_description,
+            "sequence": sequence,
+            "suggested_action": suggested,
+            "source_key": f"chapter:{title}",
+        })
+
+    items.sort(key=lambda item: item["title"].casefold())
+    return {
+        "summary": {
+            "divergences": sum(item["category"] == "divergence" for item in items),
+            "gaps": sum("Lacunas" in item["filters"] for item in items),
+            "duplicates": sum("Duplicados" in item["filters"] for item in items),
+            "total": len(items),
+        },
+        "items": items,
+    }
+
+
+def enqueue_organization_decision(payload):
+    title = str(payload.get("title") or "").strip()
+    source = str(payload.get("source") or "").strip()
+    source_key = str(payload.get("source_key") or "").strip()
+    if not title or not source:
+        raise ValueError("Título e origem da pendência são obrigatórios.")
+
+    review_category = str(payload.get("review_category") or "review").strip()
+    decision_payload = {
+        "review_category": review_category,
+        "kind": payload.get("kind") or "Pendência",
+        "detail": payload.get("detail") or "",
+        "impact": payload.get("impact") or "",
+        "suggested_action": payload.get("suggested_action") or "",
+        "origin_label": payload.get("origin_label") or source,
+        "metadata": payload.get("metadata") or {},
+    }
+
+    with transaction() as connection:
+        repository = MangaRepository(connection=connection)
+        saved = repository.enqueue_decision(
+            decision_type=ORGANIZATION_DECISION_TYPE,
+            source=source,
+            title=title,
+            source_key=source_key or None,
+            payload=decision_payload,
+            manga_name=title,
+            status="pending",
+        )
+
+    if not saved:
+        raise RuntimeError("A decision_queue não está disponível para registrar a pendência.")
+
+    return {
+        "status": "pending",
+        "title": title,
+        "source": source,
+        "source_key": source_key,
+    }
+
+
+def resolve_organization_decision(payload):
+    title = str(payload.get("title") or "").strip()
+    source = str(payload.get("source") or "").strip()
+    resolution = str(payload.get("resolution") or "").strip()
+    if not title or not source or not resolution:
+        raise ValueError("Título, origem e resolução são obrigatórios.")
+
+    with transaction() as connection:
+        repository = MangaRepository(connection=connection)
+        resolved = repository.resolve_decision(
+            decision_type=ORGANIZATION_DECISION_TYPE,
+            source=source,
+            title=title,
+            resolution={
+                "resolution": resolution,
+                "note": payload.get("note") or "",
+            },
+            status="resolved",
+        )
+
+    if not resolved:
+        raise ValueError("Pendência não encontrada ou já resolvida.")
+
+    return {
+        "status": "resolved",
+        "title": title,
+        "source": source,
+        "resolution": resolution,
+    }
+
+
+def organization_pending_review_payload(repository_factory=MangaRepository):
+    try:
+        repository = repository_factory()
+        rows = repository.list_decisions(
+            decision_type=ORGANIZATION_DECISION_TYPE,
+            status="pending",
+        )
+    except Exception as error:
+        return {
+            "summary": {"correct": 0, "decide": 0, "review": 0, "total": 0},
+            "items": [],
+            "warning": str(error),
+        }
+
+    items = []
+    for row in rows:
+        payload = _decision_payload(row)
+        category = str(payload.get("review_category") or "review")
+        if category not in {"correct", "decide", "review"}:
+            category = "review"
+
+        title = (
+            row.get("title")
+            or row.get("name")
+            or row.get("manga_title")
+            or row.get("work_title")
+            or "Pendência"
+        )
+        source = row.get("source") or "organization"
+        source_key = row.get("source_key") or ""
+
+        items.append({
+            "id": f"decision:{row.get('id') or source_key or title}",
+            "title": title,
+            "source": source,
+            "source_key": source_key,
+            "category": category,
+            "kind": payload.get("kind") or "Pendência",
+            "detail": payload.get("detail") or "",
+            "impact": payload.get("impact") or "Requer revisão",
+            "suggested_action": payload.get("suggested_action") or "",
+            "origin_label": payload.get("origin_label") or source,
+            "metadata": payload.get("metadata") or {},
+        })
+
+    items.sort(key=lambda item: item["title"].casefold())
+    return {
+        "summary": {
+            "correct": sum(item["category"] == "correct" for item in items),
+            "decide": sum(item["category"] == "decide" for item in items),
+            "review": sum(item["category"] == "review" for item in items),
+            "total": len(items),
+        },
+        "items": items,
+    }
+
+
+def _decision_payload(row):
+    value = (
+        row.get("payload")
+        or row.get("data")
+        or row.get("metadata")
+        or {}
+    )
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return decoded if isinstance(decoded, dict) else {}
+    return {}

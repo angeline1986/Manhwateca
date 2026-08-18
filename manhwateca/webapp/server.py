@@ -23,7 +23,15 @@ from manhwateca.webapp.mangaupdates_confirmed_id import confirmed_id_candidates_
 from manhwateca.webapp.notion import notion_status
 from manhwateca.webapp.notion_metadata import metadata_status
 from manhwateca.webapp.notion_sync_candidates import sync_candidates_payload
-from manhwateca.webapp.organization import folder_organization_payload, naming_review_payload, structure_review_payload
+from manhwateca.webapp.organization import (
+    chapter_review_payload,
+    enqueue_organization_decision,
+    folder_organization_payload,
+    naming_review_payload,
+    organization_pending_review_payload,
+    resolve_organization_decision,
+    structure_review_payload,
+)
 from manhwateca.webapp.pending_actions import pending_payload
 from manhwateca.webapp.post_routes import handle_direct_post
 from manhwateca.webapp.releases import (
@@ -98,6 +106,15 @@ def create_handler(project_root, task_manager, workflow_manager=None):
                     self._send_json(folder_organization_payload())
                 except (OSError, RuntimeError, ValueError) as error:
                     self._send_json({"error": str(error)}, status=503)
+                return
+            if path == "/api/organization/chapter-review":
+                try:
+                    self._send_json(chapter_review_payload(project_root))
+                except (OSError, RuntimeError, ValueError) as error:
+                    self._send_json({"error": str(error)}, status=503)
+                return
+            if path == "/api/organization/pending-review":
+                self._send_json(organization_pending_review_payload())
                 return
             if path == "/api/organization/naming-review":
                 try:
@@ -175,6 +192,18 @@ def create_handler(project_root, task_manager, workflow_manager=None):
             path = urlparse(self.path).path
             payload = self._read_json()
             if payload is None:
+                return
+            if path == "/api/organization/decision":
+                try:
+                    self._send_json(enqueue_organization_decision(payload), status=201)
+                except (OSError, RuntimeError, ValueError) as error:
+                    self._send_json({"error": str(error)}, status=400)
+                return
+            if path == "/api/organization/decision/resolve":
+                try:
+                    self._send_json(resolve_organization_decision(payload))
+                except (OSError, RuntimeError, ValueError) as error:
+                    self._send_json({"error": str(error)}, status=400)
                 return
             flow_response = flow_controller.handle_post(path, payload)
             if flow_response:

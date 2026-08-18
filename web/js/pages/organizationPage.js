@@ -1,4 +1,4 @@
-import { catalogOne, getCatalog, getFolderOrganizationReview, getNamingReview, getStructureReview, reconcileAliases } from "../api/libraryApi.js";
+import { catalogOne, createOrganizationDecision, getCatalog, getChapterReview, getFolderOrganizationReview, getNamingReview, getOrganizationPendingReview, getStructureReview, reconcileAliases, resolveOrganizationDecision, getTaskHistory } from "../api/libraryApi.js";
 import { escapeHtml } from "../utils/html.js";
 
 export function initOrganizationPage({
@@ -28,6 +28,15 @@ export function initOrganizationPage({
   let folderReviewSnapshot = null;
   let folderReviewLoading = false;
   let folderReviewError = "";
+  let chapterReviewSnapshot = null;
+  let chapterReviewLoading = false;
+  let chapterReviewError = "";
+  let pendingReviewSnapshot = null;
+  let pendingReviewLoading = false;
+  let pendingReviewError = "";
+  let organizationRunTask = null;
+  let organizationRunLoading = false;
+  let organizationRunPollTimer = null;
   const organizationViewState = new Map();
 
   const organizationPage = document.getElementById("page-organization");
@@ -60,23 +69,7 @@ export function initOrganizationPage({
       filterOptions: ["Todas", "Mover", "Revisar", "Manter"],
       status: "Prévia local",
     },
-    validate_chapters: {
-      title: "Validar capítulos",
-      subtitle: "Verifique lacunas e duplicidades na sequência de capítulos das obras.",
-      listTitle: "Fila de capítulos",
-      listSubtitle: "Obras com sequência válida, lacunas ou duplicidades.",
-      filterOptions: ["Todas", "Inconsistências", "Lacunas", "Duplicados"],
-      status: "Prévia local",
-    },
-    review_pending: {
-      title: "Revisar pendências",
-      subtitle: "Resolva os casos que não puderam ser tratados automaticamente.",
-      listTitle: "Fila de revisão",
-      listSubtitle: "Casos que não puderam ser resolvidos automaticamente.",
-      filterOptions: ["Todas", "Corrigir", "Decidir", "Revisar"],
-      status: "Decisão manual",
-    },
-  };
+    };
 
   function renderCatalogPending(data) {
     if (!elements.organizationCatalogPendingList) return;
@@ -182,41 +175,132 @@ export function initOrganizationPage({
     });
   }
 
-  function ensureTopbarStatus() {
+  function ensureOrganizationRunMeta() {
     const topbar = document.getElementById("topbar");
     if (!topbar) return null;
-    let badge = topbar.querySelector(".organization-topbar-status");
-    if (!badge) {
-      badge = document.createElement("span");
-      badge.className = "organization-topbar-status";
-      topbar.append(badge);
+
+    let meta = topbar.querySelector(".organization-topbar-run");
+    if (!meta) {
+      meta = document.createElement("div");
+      meta.className = "organization-topbar-run";
+      topbar.append(meta);
     }
-    return badge;
+    return meta;
+  }
+
+  function formatOrganizationTaskDate(value) {
+    if (!value) return "--/--";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "--/--";
+    return new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+    }).format(date);
+  }
+
+  function formatOrganizationTaskTime(value) {
+    if (!value) return "--:--:--";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "--:--:--";
+    return new Intl.DateTimeFormat("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(date);
+  }
+
+  function organizationTaskStatus(task) {
+    const status = task?.status || "not_run";
+    const labels = {
+      completed: "Concluída",
+      running: "Em andamento",
+      queued: "Na fila",
+      failed: "Falhou",
+      interrupted: "Interrompida",
+      not_run: "Não executada",
+    };
+    return {
+      key: status,
+      label: labels[status] || status,
+    };
+  }
+
+  function renderOrganizationRunMeta() {
+    const meta = ensureOrganizationRunMeta();
+    if (!meta) return;
+
+    const task = organizationRunTask;
+    const status = organizationTaskStatus(task);
+    const dateValue = task?.finished_at || task?.started_at || task?.created_at;
+
+    meta.hidden = false;
+    meta.innerHTML = `
+      <div class="organization-run-status-row">
+        <span class="organization-run-state organization-run-state--${escapeHtml(status.key)}">
+          <i aria-hidden="true"></i>${escapeHtml(status.label)}
+        </span>
+        <span class="organization-run-date">${escapeHtml(formatOrganizationTaskDate(dateValue))}</span>
+      </div>
+      <div class="organization-run-times">
+        <span>INÍCIO: <b>${escapeHtml(formatOrganizationTaskTime(task?.started_at))}</b></span>
+        <span class="organization-run-separator">•</span>
+        <span>FIM: <b>${escapeHtml(formatOrganizationTaskTime(task?.finished_at))}</b></span>
+      </div>
+    `;
+  }
+
+  function scheduleOrganizationRunPoll(task) {
+    if (organizationRunPollTimer) {
+      window.clearTimeout(organizationRunPollTimer);
+      organizationRunPollTimer = null;
+    }
+    if (!task || !["queued", "running"].includes(task.status)) return;
+
+    organizationRunPollTimer = window.setTimeout(() => {
+      loadOrganizationRunMeta();
+    }, 1500);
+  }
+
+  async function loadOrganizationRunMeta() {
+    if (organizationRunLoading) return;
+    organizationRunLoading = true;
+    try {
+      const { response, payload } = await getTaskHistory();
+      if (!response.ok) return;
+      const tasks = Array.isArray(payload?.tasks) ? payload.tasks : [];
+      organizationRunTask = tasks.find(task => task.action === "catalog_scan") || null;
+      renderOrganizationRunMeta();
+      scheduleOrganizationRunPoll(organizationRunTask);
+    } finally {
+      organizationRunLoading = false;
+    }
   }
 
   function updateTopbar(config) {
     const eyebrow = document.getElementById("pageEyebrow");
     const title = document.getElementById("pageTitle");
     const subtitle = document.getElementById("pageSubtitle");
-    const status = ensureTopbarStatus();
     if (eyebrow) eyebrow.textContent = `ORGANIZAÇÃO / ${config.title.toUpperCase()}`;
     if (title) title.textContent = "Organizar biblioteca local";
     if (subtitle) subtitle.textContent = config.subtitle;
-    if (status) {
-      status.textContent = config.status || "Prévia local";
-      status.hidden = false;
-    }
+    renderOrganizationRunMeta();
+    loadOrganizationRunMeta();
   }
 
   function restoreTopbar() {
     const eyebrow = document.getElementById("pageEyebrow");
     const title = document.getElementById("pageTitle");
     const subtitle = document.getElementById("pageSubtitle");
-    const status = document.querySelector(".organization-topbar-status");
+    const runMeta = document.querySelector(".organization-topbar-run");
     if (eyebrow) eyebrow.textContent = "ARQUIVOS LOCAIS";
     if (title) title.textContent = "Organização";
     if (subtitle) subtitle.textContent = "Revise e aplique padrões com segurança.";
-    if (status) status.hidden = true;
+    if (runMeta) runMeta.hidden = true;
+    if (organizationRunPollTimer) {
+      window.clearTimeout(organizationRunPollTimer);
+      organizationRunPollTimer = null;
+    }
   }
 
   function getPendingItems() {
@@ -389,35 +473,112 @@ export function initOrganizationPage({
       });
     }
 
-    if (subtab === "review_pending") {
-      return getPendingItems().map(item => ({
-        ...item,
-        badge: "Decisão necessária",
-        badgeKind: "warning",
-        filter: item.action ? "Corrigir" : "Decidir",
+    if (subtab === "validate_chapters") {
+      const items = Array.isArray(chapterReviewSnapshot?.items)
+        ? chapterReviewSnapshot.items
+        : [];
+
+      return items.map(item => ({
+        id: item.id,
+        title: item.title,
+        badge: item.badge,
+        badgeKind: item.category === "ok" ? "ok" : "warning",
+        filter: item.filters?.[0] || "OK",
+        filters: item.filters || [],
         meta: [
-          ["Problema", item.kind || "Pendência"],
-          ["Origem", item.title || "Revisão"],
-          ["Impacto", item.action ? "Requer tratamento" : "Decisão manual"],
+          ["Capítulos", String(item.chapters ?? 0)],
+          ["Lacunas", String(item.gap_count ?? 0)],
+          ["Duplicados", String(item.duplicate_count ?? 0)],
         ],
         notice: [
-          "Sem decisão segura",
-          item.detail || "O sistema não conseguiu determinar sozinho o tratamento adequado para esta pendência.",
+          item.issue_title || "Validação de capítulos",
+          item.issue_description || "",
         ],
         boxes: [
-          ["Opção 1", "Ignorar a pendência e continuar."],
-          ["Opção 2", "Corrigir a origem antes da aplicação."],
+          ["Sequência", item.sequence || "—"],
+          ["Ação sugerida", item.suggested_action || "Nenhuma ação necessária."],
         ],
-        action: {
-          label: "Registrar decisão",
-          description: "Escolha como esta pendência deve ser tratada.",
+        action: item.category === "ok" ? {
+          label: "Nenhuma correção",
+          description: "A sequência atual não possui divergências acionáveis.",
+          secondary: null,
+          primary: null,
+          task: "",
+          confirmation: false,
+        } : {
+          label: "Decidir tratamento",
+          description: "A divergência não será alterada automaticamente nesta etapa.",
           secondary: "Ignorar",
           primary: "Sinalizar correção",
           task: "",
           confirmation: false,
-          sourceElement: item.sourceElement,
+          decision: {
+            source: "validate_chapters",
+            source_key: item.source_key,
+            title: item.title,
+            review_category: "correct",
+            kind: item.issue_title || "Divergência de capítulos",
+            detail: item.issue_description || "",
+            impact: item.filters?.includes("Lacunas")
+              ? "Sequência incompleta"
+              : (item.filters?.includes("Duplicados") ? "Sequência sobreposta" : "Requer revisão"),
+            suggested_action: item.suggested_action || "",
+            origin_label: "Validar capítulos",
+            metadata: {
+              gaps: item.gaps || [],
+              duplicate_issues: item.duplicate_issues || [],
+              unparsed_files: item.unparsed_files || [],
+            },
+          },
         },
       }));
+    }
+
+    if (subtab === "review_pending") {
+      const items = Array.isArray(pendingReviewSnapshot?.items)
+        ? pendingReviewSnapshot.items
+        : [];
+
+      return items.map(item => {
+        const filter = item.category === "correct"
+          ? "Corrigir"
+          : (item.category === "decide" ? "Decidir" : "Revisar");
+
+        return {
+          id: item.id,
+          title: item.title,
+          badge: filter === "Corrigir"
+            ? "Correção sinalizada"
+            : (filter === "Decidir" ? "Decisão necessária" : "Revisão necessária"),
+          badgeKind: "warning",
+          filter,
+          meta: [
+            ["Origem", item.origin_label || item.source || "Organização"],
+            ["Tipo", item.kind || "Pendência"],
+            ["Impacto", item.impact || "Requer revisão"],
+          ],
+          notice: [
+            filter === "Revisar" ? "Análise necessária" : "Pendência registrada",
+            item.detail || "Esta pendência precisa ser tratada antes da aplicação final.",
+          ],
+          boxes: [
+            ["Situação", item.detail || "Pendência em aberto."],
+            ["Tratamento sugerido", item.suggested_action || "Revise a origem antes de continuar."],
+          ],
+          action: {
+            label: "Resolver pendência",
+            description: "Confirme se a correção foi concluída ou ignore conscientemente esta pendência.",
+            secondary: "Ignorar",
+            primary: "Marcar resolvida",
+            task: "",
+            confirmation: false,
+            pendingDecision: {
+              source: item.source,
+              title: item.title,
+            },
+          },
+        };
+      });
     }
 
     const definitions = {
@@ -481,7 +642,11 @@ export function initOrganizationPage({
     }
 
     if (subtab === "validate_chapters") {
-      return [["42", "DIVERGÊNCIAS"], ["7", "LACUNAS"], ["6", "DUPLICADOS"]];
+      return [
+        [String(items.filter(item => item.filters?.includes("Divergências")).length), "DIVERGÊNCIAS"],
+        [String(items.filter(item => item.filters?.includes("Lacunas")).length), "LACUNAS"],
+        [String(items.filter(item => item.filters?.includes("Duplicados")).length), "DUPLICADOS"],
+      ];
     }
 
     if (subtab === "review_pending") {
@@ -516,7 +681,11 @@ export function initOrganizationPage({
       .filter(item =>
         !search || String(item.title || "").toLocaleLowerCase("pt-BR").includes(search)
       )
-      .filter(item => state.filter === "Todas" || item.filter === state.filter)
+      .filter(item => {
+        if (state.filter === "Todas") return true;
+        const filters = Array.isArray(item.filters) ? item.filters : [item.filter];
+        return filters.includes(state.filter);
+      })
       .filter(item => {
         if (state.group === "Todas") return true;
         const initial = String(item.title || "")
@@ -582,6 +751,46 @@ export function initOrganizationPage({
     } finally {
       folderReviewLoading = false;
       if (organizationSubtab === "organize_folders") renderOrganizationSubtab();
+    }
+  }
+
+  async function loadChapterReview() {
+    if (chapterReviewLoading) return;
+    chapterReviewLoading = true;
+    chapterReviewError = "";
+    if (organizationSubtab === "validate_chapters") renderOrganizationSubtab();
+
+    try {
+      const { response, payload } = await getChapterReview();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Não foi possível validar os capítulos.");
+      }
+      chapterReviewSnapshot = payload;
+    } catch (error) {
+      chapterReviewError = error?.message || "Não foi possível validar os capítulos.";
+    } finally {
+      chapterReviewLoading = false;
+      if (organizationSubtab === "validate_chapters") renderOrganizationSubtab();
+    }
+  }
+
+  async function loadPendingReview() {
+    if (pendingReviewLoading) return;
+    pendingReviewLoading = true;
+    pendingReviewError = "";
+    if (organizationSubtab === "review_pending") renderOrganizationSubtab();
+
+    try {
+      const { response, payload } = await getOrganizationPendingReview();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Não foi possível carregar as pendências.");
+      }
+      pendingReviewSnapshot = payload;
+    } catch (error) {
+      pendingReviewError = error?.message || "Não foi possível carregar as pendências.";
+    } finally {
+      pendingReviewLoading = false;
+      if (organizationSubtab === "review_pending") renderOrganizationSubtab();
     }
   }
 
@@ -670,7 +879,15 @@ export function initOrganizationPage({
                     ? `<div class="organization-empty-detail"><span class="eyebrow">ANÁLISE</span><h2>Analisando movimentações...</h2><p>Consultando o planner da biblioteca.</p></div>`
                     : folderReviewError && organizationSubtab === "organize_folders" && !folderReviewSnapshot
                       ? `<div class="organization-empty-detail"><span class="eyebrow">ANÁLISE</span><h2>Não foi possível analisar</h2><p>${escapeHtml(folderReviewError)}</p></div>`
-                      : renderOrganizationDetail(selected)}
+                      : chapterReviewLoading && organizationSubtab === "validate_chapters" && !chapterReviewSnapshot
+                        ? `<div class="organization-empty-detail"><span class="eyebrow">VALIDAÇÃO</span><h2>Validando capítulos...</h2><p>Lendo o snapshot físico detalhado da biblioteca.</p></div>`
+                        : chapterReviewError && organizationSubtab === "validate_chapters" && !chapterReviewSnapshot
+                          ? `<div class="organization-empty-detail"><span class="eyebrow">VALIDAÇÃO</span><h2>Não foi possível validar</h2><p>${escapeHtml(chapterReviewError)}</p></div>`
+                          : pendingReviewLoading && organizationSubtab === "review_pending" && !pendingReviewSnapshot
+                            ? `<div class="organization-empty-detail"><span class="eyebrow">REVISÃO</span><h2>Carregando pendências...</h2><p>Consultando a decision_queue da Organização.</p></div>`
+                            : pendingReviewError && organizationSubtab === "review_pending" && !pendingReviewSnapshot
+                              ? `<div class="organization-empty-detail"><span class="eyebrow">REVISÃO</span><h2>Não foi possível carregar</h2><p>${escapeHtml(pendingReviewError)}</p></div>`
+                              : renderOrganizationDetail(selected)}
         </section>
       </div>
     `;
@@ -894,7 +1111,6 @@ export function initOrganizationPage({
     const config = {
       title: "Rastrear biblioteca",
       subtitle: "Localize obras, pastas e capítulos antes de qualquer análise.",
-      status: trackCatalogLoading ? "Atualizando" : "Somente leitura",
     };
     updateTopbar(config);
     setOrganizationMode(true);
@@ -1125,7 +1341,7 @@ export function initOrganizationPage({
     `;
   }
 
-  function handleOrganizationClick(event) {
+  async function handleOrganizationClick(event) {
     if (event.target.closest("[data-organization-track-refresh]")) {
       loadTrackLibrarySnapshot();
       return;
@@ -1158,14 +1374,70 @@ export function initOrganizationPage({
     }
     const taskButton = event.target.closest("[data-organization-task]");
     if (taskButton) {
-      startTask(taskButton.dataset.organizationTask, taskButton.dataset.confirmation === "true");
+      const action = taskButton.dataset.organizationTask;
+      startTask(action, taskButton.dataset.confirmation === "true");
+      if (action === "catalog_scan") {
+        window.setTimeout(() => loadOrganizationRunMeta(), 250);
+      }
       return;
     }
-    if (event.target.closest("[data-organization-secondary]")) return;
+    const secondary = event.target.closest("[data-organization-secondary]");
+    if (secondary) {
+      const selected = getListData(organizationSubtab)[selectedIndex];
+      if (selected?.action?.decision) {
+        try {
+          const payload = {
+            ...selected.action.decision,
+            review_category: selected.action.decision.review_category || "correct",
+          };
+          const { response } = await createOrganizationDecision(payload);
+          if (response.ok) {
+            await resolveOrganizationDecision({
+              source: payload.source,
+              title: payload.title,
+              resolution: "ignored",
+            });
+          }
+        } finally {
+          await loadPendingReview();
+          renderOrganizationSubtab();
+        }
+      } else if (selected?.action?.pendingDecision) {
+        try {
+          await resolveOrganizationDecision({
+            ...selected.action.pendingDecision,
+            resolution: "ignored",
+          });
+        } finally {
+          await loadPendingReview();
+        }
+      }
+      return;
+    }
+
     const primary = event.target.closest("[data-organization-primary]");
     if (!primary) return;
     const selected = getListData(organizationSubtab)[selectedIndex];
     if (!selected?.action) return;
+
+    if (selected.action.decision) {
+      const { response } = await createOrganizationDecision(selected.action.decision);
+      if (response.ok) {
+        await loadPendingReview();
+        renderOrganizationSubtab();
+      }
+      return;
+    }
+
+    if (selected.action.pendingDecision) {
+      await resolveOrganizationDecision({
+        ...selected.action.pendingDecision,
+        resolution: "corrected",
+      });
+      await loadPendingReview();
+      return;
+    }
+
     if (selected.action.task) {
       startTask(selected.action.task, Boolean(selected.action.confirmation));
     } else if (selected.action.sourceElement) {
@@ -1233,6 +1505,16 @@ export function initOrganizationPage({
       if (!folderReviewSnapshot) loadFolderOrganizationReview();
       return;
     }
+    if (subtab === "validate_chapters") {
+      renderOrganizationSubtab();
+      if (!chapterReviewSnapshot) loadChapterReview();
+      return;
+    }
+    if (subtab === "review_pending") {
+      renderOrganizationSubtab();
+      loadPendingReview();
+      return;
+    }
     if (subtabConfig[subtab]) {
       renderOrganizationSubtab();
       return;
@@ -1247,6 +1529,7 @@ export function initOrganizationPage({
     trackCatalogSnapshot = event.detail.data;
     trackCatalogError = "";
     trackCatalogLoading = false;
+    loadOrganizationRunMeta();
     if (organizationSubtab === "track_library") renderTrackLibrary();
     if (organizationSubtab === "review_structure") renderOrganizationSubtab();
   });
@@ -1263,6 +1546,7 @@ export function initOrganizationPage({
   elements.catalogAllPending?.addEventListener("click", () => {
     if (!getNotionUncataloged()) return;
     startTask("catalog_scan", true);
+    window.setTimeout(() => loadOrganizationRunMeta(), 250);
   });
 
   elements.refreshCatalogPending?.addEventListener("click", async () => {

@@ -23,3 +23,23 @@ export function reconcileAliases() {
 export function catalogOne(payload) {
   return postJson("/api/catalog/catalog-one", payload);
 }
+
+export function getChapterReview() {
+  return getJson("/api/organization/chapter-review");
+}
+
+export function getOrganizationPendingReview() {
+  return getJson("/api/organization/pending-review");
+}
+
+export function createOrganizationDecision(payload) {
+  return postJson("/api/organization/decision", payload);
+}
+
+export function resolveOrganizationDecision(payload) {
+  return postJson("/api/organization/decision/resolve", payload);
+}
+
+export function getTaskHistory() {
+  return getJson("/api/tasks");
+}
