@@ -1,4 +1,4 @@
-import { catalogOne, getCatalog, getNamingReview, getStructureReview, reconcileAliases } from "../api/libraryApi.js";
+import { catalogOne, getCatalog, getFolderOrganizationReview, getNamingReview, getStructureReview, reconcileAliases } from "../api/libraryApi.js";
 import { escapeHtml } from "../utils/html.js";
 
 export function initOrganizationPage({
@@ -25,6 +25,9 @@ export function initOrganizationPage({
   let namingReviewSnapshot = null;
   let namingReviewLoading = false;
   let namingReviewError = "";
+  let folderReviewSnapshot = null;
+  let folderReviewLoading = false;
+  let folderReviewError = "";
   const organizationViewState = new Map();
 
   const organizationPage = document.getElementById("page-organization");
@@ -45,16 +48,16 @@ export function initOrganizationPage({
       title: "Padronizar nomes",
       subtitle: "Revise os nomes identificados e confirme as sugestões necessárias.",
       listTitle: "Fila de nomenclatura",
-      listSubtitle: "Arquivos e pastas que podem ter seus nomes padronizados.",
-      filterOptions: ["Todas", "Sugeridos", "Revisar", "Manter"],
+      listSubtitle: "Obras com nomes que podem ser padronizados.",
+      filterOptions: ["Todas", "Sugeridos", "Revisar", "Bloqueios"],
       status: "Prévia local",
     },
     organize_folders: {
       title: "Organizar pastas",
       subtitle: "Revise origem e destino antes de qualquer movimentação.",
       listTitle: "Fila de organização",
-      listSubtitle: "Arquivos e pastas com movimentação proposta.",
-      filterOptions: ["Todas", "Movimentos", "Conflitos", "Manter"],
+      listSubtitle: "Obras com movimentação proposta ou localização para revisão.",
+      filterOptions: ["Todas", "Mover", "Revisar", "Manter"],
       status: "Prévia local",
     },
     validate_chapters: {
@@ -298,29 +301,92 @@ export function initOrganizationPage({
 
     if (subtab === "standardize_names") {
       const items = Array.isArray(namingReviewSnapshot?.items) ? namingReviewSnapshot.items : [];
-      return items.map(item => ({
-        id: item.id,
-        title: item.title,
-        group: item.group || "#",
-        badge: item.badge,
-        badgeKind: item.category === "review" ? "warning" : "ok",
-        filter: item.category === "review" ? "Revisar" : "Sugeridos",
-        meta: [
-          ["Tipo", item.kind === "cover" ? "Capa" : "Capítulo"],
-          ["Obra", item.work || "—"],
-          ["Grupo", item.group || "—"],
-        ],
-        notice: [item.category === "review" ? "Revisão necessária" : "Nome sugerido", item.reason || ""],
-        boxes: [["Antes", item.old_name || "—"], ["Depois", item.new_name || "—"]],
-        action: {
-          label: item.category === "review" ? "Revisar sugestão" : "Confirmar renomeação",
-          description: "A alteração permanece em prévia até a etapa Aplicar organização.",
-          secondary: null,
-          primary: "Gerar preview",
-          task: "rename_preview",
-          confirmation: false,
-        },
-      }));
+      return items.map(item => {
+        const filter = item.category === "blocked"
+          ? "Bloqueios"
+          : (item.category === "review" ? "Revisar" : "Sugeridos");
+        return {
+          id: item.id,
+          title: item.work || item.title,
+          group: item.group || "#",
+          badge: item.badge,
+          badgeKind: item.category === "suggested" ? "ok" : "warning",
+          filter,
+          meta: [
+            ["Arquivos", String(item.files_count ?? 0)],
+            ["Sugestões", String(item.suggestions_count ?? 0)],
+            ["Bloqueios", String(item.blocked_count ?? 0)],
+          ],
+          notice: [
+            item.category === "blocked" ? "Bloqueios de nomenclatura" : "Nomes fora do padrão",
+            item.reason || "",
+          ],
+          changes: Array.isArray(item.changes) ? item.changes : [],
+          action: {
+            label: "Revisar renomeações",
+            description: "Gere uma prévia para conferir as alterações antes da aplicação final.",
+            secondary: null,
+            primary: "Gerar preview",
+            task: "rename_preview",
+            confirmation: false,
+          },
+        };
+      });
+    }
+
+    if (subtab === "organize_folders") {
+      const items = Array.isArray(folderReviewSnapshot?.items)
+        ? folderReviewSnapshot.items
+        : [];
+
+      return items.map(item => {
+        const filter = item.category === "review"
+          ? "Revisar"
+          : (item.category === "keep" ? "Manter" : "Mover");
+
+        return {
+          id: item.id,
+          title: item.title,
+          group: item.group || "",
+          badge: item.badge,
+          badgeKind: item.category === "review" ? "warning" : "ok",
+          filter,
+          meta: [
+            ["Origem", item.source || "—"],
+            ["Destino", item.destination || "—"],
+            ["Conflitos", String(item.conflicts ?? 0)],
+          ],
+          notice: [
+            item.category === "review"
+              ? "Movimentação bloqueada"
+              : (item.category === "keep"
+                  ? "Estrutura já correta"
+                  : "Movimentação proposta"),
+            item.reason || "",
+          ],
+          boxes: [
+            ["Estrutura atual", item.source || "—"],
+            ["Estrutura proposta", item.destination || "—"],
+          ],
+          action: item.category === "move" ? {
+            label: "Revisar movimentação",
+            description: "Gere uma prévia para conferir origem e destino antes da aplicação final.",
+            secondary: null,
+            primary: "Gerar preview",
+            task: "organization_preview",
+            confirmation: false,
+          } : {
+            label: item.category === "review" ? "Revisar conflito" : "Nenhuma movimentação",
+            description: item.category === "review"
+              ? "Resolva o conflito antes de aplicar qualquer movimentação."
+              : "A obra já está na estrutura esperada.",
+            secondary: null,
+            primary: null,
+            task: "",
+            confirmation: false,
+          },
+        };
+      });
     }
 
     if (subtab === "review_pending") {
@@ -355,34 +421,6 @@ export function initOrganizationPage({
     }
 
     const definitions = {
-      organize_folders: {
-        id: "organize_folders",
-        title: "Boredom_01.cbz",
-        badge: "Movimento seguro",
-        badgeKind: "ok",
-        filter: "Movimentos",
-        meta: [
-          ["Origem", "/Downloads"],
-          ["Destino", "/Biblioteca/Boredom"],
-          ["Conflitos", "0"],
-        ],
-        notice: [
-          "Movimentação proposta",
-          "O arquivo será movido para a pasta principal da obra.",
-        ],
-        boxes: [
-          ["Antes", "Downloads/\n└── Boredom_01.cbz"],
-          ["Depois", "Biblioteca/Boredom/\n└── Boredom_01.cbz"],
-        ],
-        action: {
-          label: "Confirmar movimentação",
-          description: "O arquivo só será movido na aplicação final.",
-          secondary: "Ignorar",
-          primary: "Aprovar",
-          task: "organization_preview",
-          confirmation: false,
-        },
-      },
       validate_chapters: {
         id: "validate_chapters",
         title: "Romance in Romance",
@@ -427,13 +465,19 @@ export function initOrganizationPage({
     }
 
     if (subtab === "standardize_names") {
-      const suggested = items.filter(item => item.filter === "Sugeridos").length;
-      const review = items.filter(item => item.filter === "Revisar").length;
-      return [[String(suggested), "SUGERIDOS"], [String(review), "REVISAR"], [String(review), "BLOQUEIOS"]];
+      return [
+        [String(items.filter(item => item.filter === "Sugeridos").length), "SUGERIDOS"],
+        [String(items.filter(item => item.filter === "Revisar").length), "REVISAR"],
+        [String(items.filter(item => item.filter === "Bloqueios").length), "BLOQUEIOS"],
+      ];
     }
 
     if (subtab === "organize_folders") {
-      return [["1", "MOVER"], ["0", "REVISAR"], ["0", "MANTER"]];
+      return [
+        [String(items.filter(item => item.filter === "Mover").length), "MOVER"],
+        [String(items.filter(item => item.filter === "Revisar").length), "REVISAR"],
+        [String(items.filter(item => item.filter === "Manter").length), "MANTER"],
+      ];
     }
 
     if (subtab === "validate_chapters") {
@@ -473,7 +517,15 @@ export function initOrganizationPage({
         !search || String(item.title || "").toLocaleLowerCase("pt-BR").includes(search)
       )
       .filter(item => state.filter === "Todas" || item.filter === state.filter)
-      .filter(item => state.group === "Todas" || String(item.group || "#") === state.group);
+      .filter(item => {
+        if (state.group === "Todas") return true;
+        const initial = String(item.title || "")
+          .trim()
+          .charAt(0)
+          .toLocaleUpperCase("pt-BR");
+        if (state.group === "0–9") return /^[0-9]$/.test(initial);
+        return initial === state.group;
+      });
   }
 
   async function loadStructureReview() {
@@ -510,6 +562,26 @@ export function initOrganizationPage({
     } finally {
       namingReviewLoading = false;
       if (organizationSubtab === "standardize_names") renderOrganizationSubtab();
+    }
+  }
+
+  async function loadFolderOrganizationReview() {
+    if (folderReviewLoading) return;
+    folderReviewLoading = true;
+    folderReviewError = "";
+    if (organizationSubtab === "organize_folders") renderOrganizationSubtab();
+
+    try {
+      const { response, payload } = await getFolderOrganizationReview();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Não foi possível analisar as movimentações.");
+      }
+      folderReviewSnapshot = payload;
+    } catch (error) {
+      folderReviewError = error?.message || "Não foi possível analisar as movimentações.";
+    } finally {
+      folderReviewLoading = false;
+      if (organizationSubtab === "organize_folders") renderOrganizationSubtab();
     }
   }
 
@@ -558,10 +630,10 @@ export function initOrganizationPage({
                    value="${escapeHtml(viewState.search)}"
                    placeholder="BUSCAR POR NOME..."
                    aria-label="Buscar por nome">
-            ${(organizationSubtab === "review_structure" || organizationSubtab === "standardize_names") ? `
+            ${(organizationSubtab === "review_structure" || organizationSubtab === "standardize_names" || organizationSubtab === "organize_folders") ? `
               <select data-organization-group aria-label="Filtrar por grupo alfabético">
-                ${["Todas", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""), "0–9", "#"].map(group => `
-                  <option value="${group}" ${group === viewState.group ? "selected" : ""}>${group === "Todas" ? "GRUPO: TODAS" : `GRUPO: ${group}`}</option>
+                ${["Todas", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""), "0–9"].map(group => `
+                  <option value="${group}" ${group === viewState.group ? "selected" : ""}>${group.toUpperCase()}</option>
                 `).join("")}
               </select>` : ""}
           </div>
@@ -594,7 +666,11 @@ export function initOrganizationPage({
                 ? `<div class="organization-empty-detail"><span class="eyebrow">ANÁLISE</span><h2>Analisando nomes...</h2><p>Consultando o normalizador existente.</p></div>`
                 : namingReviewError && organizationSubtab === "standardize_names" && !namingReviewSnapshot
                   ? `<div class="organization-empty-detail"><span class="eyebrow">ANÁLISE</span><h2>Não foi possível analisar</h2><p>${escapeHtml(namingReviewError)}</p></div>`
-                  : renderOrganizationDetail(selected)}
+                  : folderReviewLoading && organizationSubtab === "organize_folders" && !folderReviewSnapshot
+                    ? `<div class="organization-empty-detail"><span class="eyebrow">ANÁLISE</span><h2>Analisando movimentações...</h2><p>Consultando o planner da biblioteca.</p></div>`
+                    : folderReviewError && organizationSubtab === "organize_folders" && !folderReviewSnapshot
+                      ? `<div class="organization-empty-detail"><span class="eyebrow">ANÁLISE</span><h2>Não foi possível analisar</h2><p>${escapeHtml(folderReviewError)}</p></div>`
+                      : renderOrganizationDetail(selected)}
         </section>
       </div>
     `;
@@ -633,12 +709,92 @@ export function initOrganizationPage({
   }
 
   function formatStructureTree(value) {
-    const paths = String(value || "").split("\n").map(path => path.trim()).filter(Boolean);
+    const paths = String(value || "")
+      .split("\n")
+      .map(path => path.trim())
+      .filter(Boolean)
+      .map(path => path.split(/[\\/]+/).filter(Boolean));
     if (!paths.length) return "—";
-    return paths.map(path => {
-      const parts = path.split(/[\\/]+/).filter(Boolean);
-      return parts.map((part, index) => `${index ? "    ".repeat(index - 1) + "└── " : ""}${part}${index < parts.length - 1 ? "/" : "/"}`).join("\n");
-    }).join("\n\n");
+
+    const root = new Map();
+    for (const parts of paths) {
+      let cursor = root;
+      for (const part of parts) {
+        if (!cursor.has(part)) cursor.set(part, new Map());
+        cursor = cursor.get(part);
+      }
+    }
+
+    const lines = [];
+    const renderChildren = (children, prefix, topLevel = false) => {
+      const entries = [...children.entries()];
+      entries.forEach(([name, nested], index) => {
+        const last = index === entries.length - 1;
+        if (topLevel) {
+          lines.push(`${name}/`);
+          renderChildren(nested, "", false);
+          return;
+        }
+        lines.push(`${prefix}${last ? "└── " : "├── "}${name}/`);
+        renderChildren(nested, `${prefix}${last ? "    " : "│   "}`, false);
+      });
+    };
+
+    renderChildren(root, "", true);
+    return lines.join("\n");
+  }
+
+  function renderNamingDetail(item) {
+    const changes = Array.isArray(item.changes) ? item.changes : [];
+    return `
+      <div class="organization-detail-top">
+        <div>
+          <span class="eyebrow">ITEM SELECIONADO</span>
+          <h2>${escapeHtml(item.title)}</h2>
+        </div>
+        <span class="organization-badge ${item.badgeKind || ""}">${escapeHtml(item.badge || "Revisão")}</span>
+      </div>
+      <div class="organization-meta-grid">
+        ${(item.meta || []).map(([label, value]) => `
+          <article class="organization-meta"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>
+        `).join("")}
+      </div>
+      <section class="organization-notice">
+        <h3>${escapeHtml(item.notice?.[0] || "Nomes fora do padrão")}</h3>
+        <p>${escapeHtml(item.notice?.[1] || "")}</p>
+      </section>
+      <section class="organization-naming-changes">
+        <h3>ALTERAÇÕES PROPOSTAS</h3>
+        <div class="organization-naming-change-list">
+          ${changes.length ? changes.map(change => `
+            <article class="organization-naming-change ${change.category === "blocked" ? "blocked" : ""}">
+              <div>
+                <span>ANTES</span>
+                <strong>${escapeHtml(change.old_name || "—")}</strong>
+              </div>
+              <span class="organization-change-arrow" aria-hidden="true">→</span>
+              <div>
+                <span>DEPOIS</span>
+                <strong>${escapeHtml(change.new_name || "—")}</strong>
+              </div>
+              ${change.category === "blocked" ? '<em>Bloqueio</em>' : change.category === "review" ? '<em>Revisar</em>' : ""}
+            </article>
+          `).join("") : '<p class="organization-naming-empty">Nenhuma alteração proposta.</p>'}
+        </div>
+      </section>
+      <section class="organization-action-bar">
+        <div class="organization-action-copy">
+          <small>PRÓXIMA AÇÃO</small>
+          <strong>${escapeHtml(item.action?.label || "Revisar renomeações")}</strong>
+          <p>${escapeHtml(item.action?.description || "")}</p>
+        </div>
+        <div class="organization-actions">
+          ${item.action?.primary
+            ? `<button type="button" class="primary-action" data-organization-primary>${escapeHtml(item.action.primary)}</button>`
+            : ""}
+        </div>
+      </section>
+    `;
   }
 
   function renderOrganizationDetail(item) {
@@ -651,6 +807,8 @@ export function initOrganizationPage({
         </div>
       `;
     }
+    if (organizationSubtab === "standardize_names") return renderNamingDetail(item);
+
     return `
       <div class="organization-detail-top">
         <div>
@@ -670,7 +828,9 @@ export function initOrganizationPage({
       </section>
       <div class="organization-detail-boxes">
         ${(item.boxes || []).map(([label, value]) => `
-          <article class="organization-detail-box"><h3>${escapeHtml(label)}</h3><p class="${organizationSubtab === "review_structure" ? "organization-tree" : ""}">${organizationSubtab === "review_structure" ? escapeHtml(formatStructureTree(value)) : escapeHtml(value)}</p></article>
+          <article class="organization-detail-box"><h3>${escapeHtml(label)}</h3>${(organizationSubtab === "review_structure" || organizationSubtab === "organize_folders")
+            ? `<pre class="organization-tree">${escapeHtml(formatStructureTree(value))}</pre>`
+            : `<p>${escapeHtml(value)}</p>`}</article>
         `).join("")}
       </div>
       <section class="organization-action-bar">
@@ -1066,6 +1226,11 @@ export function initOrganizationPage({
     if (subtab === "standardize_names") {
       renderOrganizationSubtab();
       if (!namingReviewSnapshot) loadNamingReview();
+      return;
+    }
+    if (subtab === "organize_folders") {
+      renderOrganizationSubtab();
+      if (!folderReviewSnapshot) loadFolderOrganizationReview();
       return;
     }
     if (subtabConfig[subtab]) {

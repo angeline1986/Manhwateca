@@ -226,45 +226,174 @@ def naming_review_payload():
     plan = rename_workflow.build_plan()
     conflicts = rename_workflow.detect_conflicts(plan)
     duplicates = rename_workflow.detect_duplicates(plan)
+    return serialize_naming_review(plan, conflicts, duplicates)
+
+
+def serialize_naming_review(plan, conflicts, duplicates):
     conflict_keys = {
-        (c.get("manga"), c.get("conflict_name"))
-        for c in conflicts
+        (conflict.get("manga"), conflict.get("conflict_name"))
+        for conflict in conflicts
     }
     duplicate_mangas = {
         entry.get("original")
         for duplicate in duplicates
         for entry in duplicate.get("entries", [])
     }
-    items = []
+
+    works = []
     for group, mangas in plan.items():
         for manga, files in mangas.items():
+            changes = []
             for index, item in enumerate(files):
                 conflict = (manga, item.get("new_name")) in conflict_keys
-                needs_review = conflict or manga in duplicate_mangas or bool(item.get("multiple_images"))
-                items.append({
+                blocked = conflict or manga in duplicate_mangas
+                ambiguous = bool(item.get("multiple_images"))
+                category = "blocked" if blocked else ("review" if ambiguous else "suggested")
+                changes.append({
                     "id": f"{group}:{manga}:{index}:{item.get('old_name', '')}",
-                    "title": item.get("old_name") or manga,
-                    "work": manga,
-                    "group": group,
                     "kind": item.get("kind", "arquivo"),
                     "old_name": item.get("old_name", ""),
                     "new_name": item.get("new_name", ""),
                     "old_path": item.get("old_path", ""),
                     "new_path": item.get("new_path", ""),
-                    "category": "review" if needs_review else "suggested",
-                    "badge": "Revisão necessária" if needs_review else "Sugestão disponível",
-                    "reason": (
-                        "Há conflito ou ambiguidade e a renomeação precisa ser revisada."
-                        if needs_review else
-                        "O normalizador encontrou um nome diferente do padrão atual."
-                    ),
+                    "category": category,
                 })
-    items.sort(key=lambda item: (item["work"].casefold(), item["title"].casefold()))
+
+            if not changes:
+                continue
+
+            blocked_count = sum(change["category"] == "blocked" for change in changes)
+            review_count = sum(change["category"] == "review" for change in changes)
+            suggested_count = sum(change["category"] == "suggested" for change in changes)
+
+            if blocked_count:
+                category = "blocked"
+                badge = "Bloqueio encontrado"
+                reason = (
+                    f"{blocked_count} arquivo(s) possuem conflito ou duplicidade e precisam "
+                    "ser revisados antes da aplicação."
+                )
+            elif review_count:
+                category = "review"
+                badge = "Revisão necessária"
+                reason = (
+                    f"{review_count} arquivo(s) possuem ambiguidade e precisam de revisão."
+                )
+            else:
+                category = "suggested"
+                badge = "Sugestão disponível"
+                reason = (
+                    f"{suggested_count} arquivo(s) desta obra possuem sugestões de padronização."
+                )
+
+            works.append({
+                "id": f"{group}:{manga}",
+                "title": manga,
+                "work": manga,
+                "group": group,
+                "category": category,
+                "badge": badge,
+                "reason": reason,
+                "files_count": len(changes),
+                "suggestions_count": suggested_count,
+                "review_count": review_count,
+                "blocked_count": blocked_count,
+                "changes": changes,
+            })
+
+    works.sort(key=lambda item: item["work"].casefold())
     return {
         "summary": {
-            "suggested": sum(i["category"] == "suggested" for i in items),
-            "review": sum(i["category"] == "review" for i in items),
-            "blocked": sum(i["category"] == "review" for i in items),
+            "suggested": sum(item["category"] == "suggested" for item in works),
+            "review": sum(item["category"] == "review" for item in works),
+            "blocked": sum(item["category"] == "blocked" for item in works),
+            "total": len(works),
+        },
+        "items": works,
+    }
+
+
+
+def folder_organization_payload(manga_root=None):
+    root = Path(manga_root or get_required_path_env("MANGA_ROOT")).resolve()
+
+    def detector(path):
+        return is_manga_folder(path, is_group_folder, is_legacy_container)
+
+    folders = find_manga_folders(root, is_group_folder, detector)
+    plan = build_plan(
+        folders,
+        root,
+        get_group,
+        lambda path: get_current_group(path, root),
+    )
+    conflicts = detect_conflicts(plan)
+    duplicates = detect_duplicates_organize(plan)
+    return serialize_folder_organization(plan, conflicts, duplicates, root)
+
+
+def serialize_folder_organization(plan, conflicts, duplicates, root):
+    root = Path(root).resolve()
+
+    conflict_sources = {
+        str(item["source"])
+        for conflict in conflicts
+        for item in conflict.get("items", [])
+    }
+    duplicate_sources = {
+        str(entry.get("source"))
+        for duplicate in duplicates
+        for entry in duplicate.get("entries", [])
+    }
+
+    items = []
+    for plan_item in plan:
+        source = Path(plan_item["source"])
+        destination = Path(plan_item["destination"])
+        source_key = str(source)
+
+        blocked = source_key in conflict_sources or source_key in duplicate_sources
+        movement_required = not bool(plan_item.get("is_correct"))
+
+        if blocked:
+            category = "review"
+            badge = "Revisão necessária"
+            reason = (
+                "Há conflito ou duplicidade no destino esperado. "
+                "A movimentação não deve ser aplicada automaticamente."
+            )
+        elif movement_required:
+            category = "move"
+            badge = "Movimento seguro"
+            reason = (
+                "A obra está fora da pasta esperada e pode ser movimentada "
+                "na aplicação final."
+            )
+        else:
+            category = "keep"
+            badge = "Local correto"
+            reason = "A obra já está na estrutura esperada."
+
+        items.append({
+            "id": f"folder:{source}",
+            "title": plan_item["name"],
+            "group": plan_item.get("group") or "",
+            "category": category,
+            "badge": badge,
+            "source": _display_path(source, root),
+            "destination": _display_path(destination, root),
+            "conflicts": 1 if blocked else 0,
+            "movement_required": movement_required,
+            "reason": reason,
+        })
+
+    items.sort(key=lambda item: item["title"].casefold())
+
+    return {
+        "summary": {
+            "move": sum(item["category"] == "move" for item in items),
+            "review": sum(item["category"] == "review" for item in items),
+            "keep": sum(item["category"] == "keep" for item in items),
             "total": len(items),
         },
         "items": items,

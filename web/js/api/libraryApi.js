@@ -8,6 +8,10 @@ export function getStructureReview() {
   return getJson("/api/organization/structure-review");
 }
 
+export function getFolderOrganizationReview() {
+  return getJson("/api/organization/folder-review");
+}
+
 export function getNamingReview() {
   return getJson("/api/organization/naming-review");
 }

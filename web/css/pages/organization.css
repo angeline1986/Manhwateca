@@ -1153,3 +1153,103 @@
 @media (max-width: 760px) {
   .organization-search-row { grid-template-columns: 1fr; }
 }
+
+/* ORGANIZATION_NAMING_BY_WORK_AND_TREE_20260818 */
+.organization-tree {
+  margin: 0;
+  white-space: pre;
+  overflow-x: auto;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.organization-naming-changes {
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.organization-naming-changes > h3 {
+  margin: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.organization-naming-change-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.organization-naming-change {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.organization-naming-change:last-child {
+  border-bottom: 0;
+}
+
+.organization-naming-change > div {
+  min-width: 0;
+}
+
+.organization-naming-change span:not(.organization-change-arrow) {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.organization-naming-change strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.organization-change-arrow {
+  color: var(--muted);
+  font-weight: 900;
+  text-align: center;
+}
+
+.organization-naming-change em {
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.organization-naming-empty {
+  margin: 0;
+  padding: 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .organization-naming-change {
+    grid-template-columns: 1fr;
+  }
+
+  .organization-change-arrow {
+    text-align: left;
+  }
+}
+
