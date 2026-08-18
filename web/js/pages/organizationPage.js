@@ -1,4 +1,4 @@
-import { catalogOne, createOrganizationDecision, getCatalog, getChapterReview, getFolderOrganizationReview, getNamingReview, getOrganizationPendingReview, getStructureReview, reconcileAliases, resolveOrganizationDecision, getTaskHistory } from "../api/libraryApi.js";
+import { catalogOne, createOrganizationDecision, getCatalog, getChapterReview, getFolderOrganizationReview, getNamingReview, getOrganizationPendingReview, getStructureReview, reconcileAliases, resolveOrganizationDecision } from "../api/libraryApi.js";
 import { escapeHtml } from "../utils/html.js";
 
 export function initOrganizationPage({
@@ -34,10 +34,8 @@ export function initOrganizationPage({
   let pendingReviewSnapshot = null;
   let pendingReviewLoading = false;
   let pendingReviewError = "";
-  let organizationRunTask = null;
-  let organizationRunLoading = false;
-  let organizationRunPollTimer = null;
   const organizationViewState = new Map();
+  let organizationFeedback = null;
 
   const organizationPage = document.getElementById("page-organization");
   const legacyPanels = organizationPage
@@ -175,132 +173,41 @@ export function initOrganizationPage({
     });
   }
 
-  function ensureOrganizationRunMeta() {
+  function ensureTopbarStatus() {
     const topbar = document.getElementById("topbar");
     if (!topbar) return null;
-
-    let meta = topbar.querySelector(".organization-topbar-run");
-    if (!meta) {
-      meta = document.createElement("div");
-      meta.className = "organization-topbar-run";
-      topbar.append(meta);
+    let badge = topbar.querySelector(".organization-topbar-status");
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "organization-topbar-status";
+      topbar.append(badge);
     }
-    return meta;
-  }
-
-  function formatOrganizationTaskDate(value) {
-    if (!value) return "--/--";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "--/--";
-    return new Intl.DateTimeFormat("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-    }).format(date);
-  }
-
-  function formatOrganizationTaskTime(value) {
-    if (!value) return "--:--:--";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "--:--:--";
-    return new Intl.DateTimeFormat("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    }).format(date);
-  }
-
-  function organizationTaskStatus(task) {
-    const status = task?.status || "not_run";
-    const labels = {
-      completed: "Concluída",
-      running: "Em andamento",
-      queued: "Na fila",
-      failed: "Falhou",
-      interrupted: "Interrompida",
-      not_run: "Não executada",
-    };
-    return {
-      key: status,
-      label: labels[status] || status,
-    };
-  }
-
-  function renderOrganizationRunMeta() {
-    const meta = ensureOrganizationRunMeta();
-    if (!meta) return;
-
-    const task = organizationRunTask;
-    const status = organizationTaskStatus(task);
-    const dateValue = task?.finished_at || task?.started_at || task?.created_at;
-
-    meta.hidden = false;
-    meta.innerHTML = `
-      <div class="organization-run-status-row">
-        <span class="organization-run-state organization-run-state--${escapeHtml(status.key)}">
-          <i aria-hidden="true"></i>${escapeHtml(status.label)}
-        </span>
-        <span class="organization-run-date">${escapeHtml(formatOrganizationTaskDate(dateValue))}</span>
-      </div>
-      <div class="organization-run-times">
-        <span>INÍCIO: <b>${escapeHtml(formatOrganizationTaskTime(task?.started_at))}</b></span>
-        <span class="organization-run-separator">•</span>
-        <span>FIM: <b>${escapeHtml(formatOrganizationTaskTime(task?.finished_at))}</b></span>
-      </div>
-    `;
-  }
-
-  function scheduleOrganizationRunPoll(task) {
-    if (organizationRunPollTimer) {
-      window.clearTimeout(organizationRunPollTimer);
-      organizationRunPollTimer = null;
-    }
-    if (!task || !["queued", "running"].includes(task.status)) return;
-
-    organizationRunPollTimer = window.setTimeout(() => {
-      loadOrganizationRunMeta();
-    }, 1500);
-  }
-
-  async function loadOrganizationRunMeta() {
-    if (organizationRunLoading) return;
-    organizationRunLoading = true;
-    try {
-      const { response, payload } = await getTaskHistory();
-      if (!response.ok) return;
-      const tasks = Array.isArray(payload?.tasks) ? payload.tasks : [];
-      organizationRunTask = tasks.find(task => task.action === "catalog_scan") || null;
-      renderOrganizationRunMeta();
-      scheduleOrganizationRunPoll(organizationRunTask);
-    } finally {
-      organizationRunLoading = false;
-    }
+    return badge;
   }
 
   function updateTopbar(config) {
     const eyebrow = document.getElementById("pageEyebrow");
     const title = document.getElementById("pageTitle");
     const subtitle = document.getElementById("pageSubtitle");
+    const status = ensureTopbarStatus();
     if (eyebrow) eyebrow.textContent = `ORGANIZAÇÃO / ${config.title.toUpperCase()}`;
     if (title) title.textContent = "Organizar biblioteca local";
     if (subtitle) subtitle.textContent = config.subtitle;
-    renderOrganizationRunMeta();
-    loadOrganizationRunMeta();
+    if (status) {
+      status.textContent = config.status || "Prévia local";
+      status.hidden = false;
+    }
   }
 
   function restoreTopbar() {
     const eyebrow = document.getElementById("pageEyebrow");
     const title = document.getElementById("pageTitle");
     const subtitle = document.getElementById("pageSubtitle");
-    const runMeta = document.querySelector(".organization-topbar-run");
+    const status = document.querySelector(".organization-topbar-status");
     if (eyebrow) eyebrow.textContent = "ARQUIVOS LOCAIS";
     if (title) title.textContent = "Organização";
     if (subtitle) subtitle.textContent = "Revise e aplique padrões com segurança.";
-    if (runMeta) runMeta.hidden = true;
-    if (organizationRunPollTimer) {
-      window.clearTimeout(organizationRunPollTimer);
-      organizationRunPollTimer = null;
-    }
+    if (status) status.hidden = true;
   }
 
   function getPendingItems() {
@@ -794,6 +701,27 @@ export function initOrganizationPage({
     }
   }
 
+  function renderOrganizationFeedback() {
+    if (!organizationFeedback) return "";
+    const { kind = "success", title, message, actionLabel, targetSubtab } = organizationFeedback;
+
+    return `
+      <div class="organization-feedback ${escapeHtml(kind)}" role="status">
+        <div class="organization-feedback-copy">
+          <strong>${escapeHtml(title || "Ação concluída")}</strong>
+          <span>${escapeHtml(message || "")}</span>
+        </div>
+        ${actionLabel && targetSubtab
+          ? `<button type="button"
+                     class="organization-feedback-action"
+                     data-organization-feedback-go="${escapeHtml(targetSubtab)}">
+               ${escapeHtml(actionLabel)}
+             </button>`
+          : ""}
+      </div>
+    `;
+  }
+
   function renderOrganizationSubtab() {
     const config = subtabConfig[organizationSubtab];
     if (!config) return;
@@ -819,6 +747,7 @@ export function initOrganizationPage({
         </div>
         <span class="organization-stage-status">${escapeHtml(config.status || "Prévia local")}</span>
       </header>
+      ${renderOrganizationFeedback()}
       <div class="organization-split">
         <aside class="organization-list-panel">
           <h3>${escapeHtml(config.listTitle)}</h3>
@@ -1111,6 +1040,7 @@ export function initOrganizationPage({
     const config = {
       title: "Rastrear biblioteca",
       subtitle: "Localize obras, pastas e capítulos antes de qualquer análise.",
+      status: trackCatalogLoading ? "Atualizando" : "Somente leitura",
     };
     updateTopbar(config);
     setOrganizationMode(true);
@@ -1342,6 +1272,15 @@ export function initOrganizationPage({
   }
 
   async function handleOrganizationClick(event) {
+    const feedbackGo = event.target.closest("[data-organization-feedback-go]");
+    if (feedbackGo) {
+      organizationFeedback = null;
+      setSubtab(feedbackGo.dataset.organizationFeedbackGo);
+      window.dispatchEvent(new CustomEvent("manhwateca:organization-subtab", {
+        detail: { subtab: feedbackGo.dataset.organizationFeedbackGo },
+      }));
+      return;
+    }
     if (event.target.closest("[data-organization-track-refresh]")) {
       loadTrackLibrarySnapshot();
       return;
@@ -1374,11 +1313,7 @@ export function initOrganizationPage({
     }
     const taskButton = event.target.closest("[data-organization-task]");
     if (taskButton) {
-      const action = taskButton.dataset.organizationTask;
-      startTask(action, taskButton.dataset.confirmation === "true");
-      if (action === "catalog_scan") {
-        window.setTimeout(() => loadOrganizationRunMeta(), 250);
-      }
+      startTask(taskButton.dataset.organizationTask, taskButton.dataset.confirmation === "true");
       return;
     }
     const secondary = event.target.closest("[data-organization-secondary]");
@@ -1423,7 +1358,21 @@ export function initOrganizationPage({
     if (selected.action.decision) {
       const { response } = await createOrganizationDecision(selected.action.decision);
       if (response.ok) {
+        organizationFeedback = {
+          kind: "success",
+          title: "Correção sinalizada",
+          message: "A pendência foi adicionada à fila Revisar pendências.",
+          actionLabel: "Ir para Revisar pendências",
+          targetSubtab: "review_pending",
+        };
         await loadPendingReview();
+        renderOrganizationSubtab();
+      } else {
+        organizationFeedback = {
+          kind: "error",
+          title: "Não foi possível sinalizar",
+          message: "A pendência não foi registrada. Tente novamente.",
+        };
         renderOrganizationSubtab();
       }
       return;
@@ -1529,7 +1478,6 @@ export function initOrganizationPage({
     trackCatalogSnapshot = event.detail.data;
     trackCatalogError = "";
     trackCatalogLoading = false;
-    loadOrganizationRunMeta();
     if (organizationSubtab === "track_library") renderTrackLibrary();
     if (organizationSubtab === "review_structure") renderOrganizationSubtab();
   });
@@ -1546,7 +1494,6 @@ export function initOrganizationPage({
   elements.catalogAllPending?.addEventListener("click", () => {
     if (!getNotionUncataloged()) return;
     startTask("catalog_scan", true);
-    window.setTimeout(() => loadOrganizationRunMeta(), 250);
   });
 
   elements.refreshCatalogPending?.addEventListener("click", async () => {
