@@ -1,4 +1,4 @@
-import { catalogOne, reconcileAliases } from "../api/libraryApi.js";
+import { catalogOne, getCatalog, getNamingReview, getStructureReview, reconcileAliases } from "../api/libraryApi.js";
 import { escapeHtml } from "../utils/html.js";
 
 export function initOrganizationPage({
@@ -16,6 +16,16 @@ export function initOrganizationPage({
   let selectedIndex = 0;
   let organizationCheckedKeys = new Set();
   let organizationWorkspace = null;
+  let trackCatalogSnapshot = null;
+  let trackCatalogLoading = false;
+  let trackCatalogError = "";
+  let structureReviewSnapshot = null;
+  let structureReviewLoading = false;
+  let structureReviewError = "";
+  let namingReviewSnapshot = null;
+  let namingReviewLoading = false;
+  let namingReviewError = "";
+  const organizationViewState = new Map();
 
   const organizationPage = document.getElementById("page-organization");
   const legacyPanels = organizationPage
@@ -28,7 +38,7 @@ export function initOrganizationPage({
       subtitle: "As informações detalhadas da divergência estão no painel à direita.",
       listTitle: "Fila de estrutura",
       listSubtitle: "Obras identificadas no snapshot.",
-      filterOptions: ["Todas", "Problemas", "Duplicatas", "OK"],
+      filterOptions: ["Todas", "Divergências", "Duplicatas", "OK"],
       status: "Prévia local",
     },
     standardize_names: {
@@ -227,31 +237,87 @@ export function initOrganizationPage({
 
   function getListData(subtab) {
     if (subtab === "review_structure") {
-      return catalogPendingItems.map((name, index) => ({
-        id: `structure-${index}`,
-        title: name,
-        badge: "Revisão necessária",
-        badgeKind: "warning",
-        filter: "Problemas",
+      const items = Array.isArray(structureReviewSnapshot?.items)
+        ? structureReviewSnapshot.items
+        : [];
+
+      return items.map(item => {
+        const category = item.category || "ok";
+        const filter = category === "duplicate"
+          ? "Duplicatas"
+          : (category === "divergence" ? "Divergências" : "OK");
+        const currentPaths = Array.isArray(item.current_paths)
+          ? item.current_paths.join("\n")
+          : "";
+        const suggested = item.expected_path || "Manter estrutura atual";
+        const needsPreview = item.action === "preview";
+
+        return {
+          id: item.id,
+          title: item.title,
+          badge: item.badge,
+          badgeKind: category === "ok" ? "ok" : "warning",
+          filter,
+          group: item.expected_group || item.current_group || "#",
+          meta: [
+            ["Estrutura atual", item.current_structure || "—"],
+            ["Estrutura esperada", item.expected_structure || "—"],
+            ["Arquivos", String(item.files ?? 0)],
+          ],
+          notice: [
+            item.issue_title || "Divergência identificada",
+            item.issue_description || "",
+          ],
+          boxes: [
+            ["Estrutura atual", currentPaths || "Nenhum caminho informado."],
+            ["Estrutura sugerida", suggested],
+          ],
+          action: needsPreview ? {
+            label: "Analisar estrutura",
+            description: (
+              "O planner identificou a divergência. Gere o preview completo "
+              + "antes de tomar qualquer decisão."
+            ),
+            secondary: null,
+            primary: "Gerar preview",
+            task: "organization_preview",
+            confirmation: false,
+          } : {
+            label: "Nenhuma ação estrutural",
+            description: item.movement_required
+              ? "Sem conflito estrutural. A movimentação, se necessária, será tratada em Organizar pastas."
+              : "A estrutura atual não requer correção.",
+            secondary: null,
+            primary: null,
+            task: "",
+            confirmation: false,
+          },
+        };
+      });
+    }
+
+    if (subtab === "standardize_names") {
+      const items = Array.isArray(namingReviewSnapshot?.items) ? namingReviewSnapshot.items : [];
+      return items.map(item => ({
+        id: item.id,
+        title: item.title,
+        group: item.group || "#",
+        badge: item.badge,
+        badgeKind: item.category === "review" ? "warning" : "ok",
+        filter: item.category === "review" ? "Revisar" : "Sugeridos",
         meta: [
-          ["Estrutura atual", "2 pastas"],
-          ["Estrutura esperada", "1 pasta"],
-          ["Arquivos", "A conferir"],
+          ["Tipo", item.kind === "cover" ? "Capa" : "Capítulo"],
+          ["Obra", item.work || "—"],
+          ["Grupo", item.group || "—"],
         ],
-        notice: [
-          "Problema identificado",
-          "A estrutura encontrada precisa ser conferida antes de continuar.",
-        ],
-        boxes: [
-          ["Estrutura atual", name],
-          ["Estrutura sugerida", "Consolidar a obra no padrão da biblioteca."],
-        ],
+        notice: [item.category === "review" ? "Revisão necessária" : "Nome sugerido", item.reason || ""],
+        boxes: [["Antes", item.old_name || "—"], ["Depois", item.new_name || "—"]],
         action: {
-          label: "Unificar estrutura",
-          description: "A consolidação será executada somente na etapa Aplicar organização.",
-          secondary: "Ignorar",
-          primary: "Aprovar",
-          task: "organization_preview",
+          label: item.category === "review" ? "Revisar sugestão" : "Confirmar renomeação",
+          description: "A alteração permanece em prévia até a etapa Aplicar organização.",
+          secondary: null,
+          primary: "Gerar preview",
+          task: "rename_preview",
           confirmation: false,
         },
       }));
@@ -289,34 +355,6 @@ export function initOrganizationPage({
     }
 
     const definitions = {
-      standardize_names: {
-        id: "standardize_names",
-        title: "Boredom_01.cbz",
-        badge: "Sugestão disponível",
-        badgeKind: "ok",
-        filter: "Sugeridos",
-        meta: [
-          ["Tipo", "Capítulo"],
-          ["Obra", "Boredom"],
-          ["Confiança", "Alta"],
-        ],
-        notice: [
-          "Nome sugerido",
-          "Boredom - Capítulo 001.cbz",
-        ],
-        boxes: [
-          ["Antes", "Boredom_01.cbz"],
-          ["Depois", "Boredom - Capítulo 001.cbz"],
-        ],
-        action: {
-          label: "Confirmar renomeação",
-          description: "A alteração ficará em prévia até a aplicação final.",
-          secondary: "Ignorar",
-          primary: "Aprovar",
-          task: "rename_preview",
-          confirmation: false,
-        },
-      },
       organize_folders: {
         id: "organize_folders",
         title: "Boredom_01.cbz",
@@ -381,11 +419,17 @@ export function initOrganizationPage({
 
   function getKpis(subtab, items) {
     if (subtab === "review_structure") {
-      return [[String(items.length), "DIVERGÊNCIAS"], ["0", "DUPLICATAS"], ["0", "OK"]];
+      return [
+        [String(items.filter(item => item.filter === "Divergências").length), "DIVERGÊNCIAS"],
+        [String(items.filter(item => item.filter === "Duplicatas").length), "DUPLICATAS"],
+        [String(items.filter(item => item.filter === "OK").length), "OK"],
+      ];
     }
 
     if (subtab === "standardize_names") {
-      return [["1", "SUGERIDOS"], ["0", "REVISAR"], ["0", "MANTER"]];
+      const suggested = items.filter(item => item.filter === "Sugeridos").length;
+      const review = items.filter(item => item.filter === "Revisar").length;
+      return [[String(suggested), "SUGERIDOS"], [String(review), "REVISAR"], [String(review), "BLOQUEIOS"]];
     }
 
     if (subtab === "organize_folders") {
@@ -410,6 +454,65 @@ export function initOrganizationPage({
     return [];
   }
 
+  function organizationStateFor(subtab) {
+    if (!organizationViewState.has(subtab)) {
+      organizationViewState.set(subtab, {
+        search: "",
+        filter: "Todas",
+        quantity: 5,
+        group: "Todas",
+      });
+    }
+    return organizationViewState.get(subtab);
+  }
+
+  function filteredOrganizationItems(items, state) {
+    const search = String(state.search || "").trim().toLocaleLowerCase("pt-BR");
+    return items
+      .filter(item =>
+        !search || String(item.title || "").toLocaleLowerCase("pt-BR").includes(search)
+      )
+      .filter(item => state.filter === "Todas" || item.filter === state.filter)
+      .filter(item => state.group === "Todas" || String(item.group || "#") === state.group);
+  }
+
+  async function loadStructureReview() {
+    if (structureReviewLoading) return;
+    structureReviewLoading = true;
+    structureReviewError = "";
+    if (organizationSubtab === "review_structure") renderOrganizationSubtab();
+
+    try {
+      const { response, payload } = await getStructureReview();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Não foi possível analisar a estrutura.");
+      }
+      structureReviewSnapshot = payload;
+    } catch (error) {
+      structureReviewError = error?.message || "Não foi possível analisar a estrutura.";
+    } finally {
+      structureReviewLoading = false;
+      if (organizationSubtab === "review_structure") renderOrganizationSubtab();
+    }
+  }
+
+  async function loadNamingReview() {
+    if (namingReviewLoading) return;
+    namingReviewLoading = true;
+    namingReviewError = "";
+    if (organizationSubtab === "standardize_names") renderOrganizationSubtab();
+    try {
+      const { response, payload } = await getNamingReview();
+      if (!response.ok) throw new Error(payload?.error || "Não foi possível analisar os nomes.");
+      namingReviewSnapshot = payload;
+    } catch (error) {
+      namingReviewError = error?.message || "Não foi possível analisar os nomes.";
+    } finally {
+      namingReviewLoading = false;
+      if (organizationSubtab === "standardize_names") renderOrganizationSubtab();
+    }
+  }
+
   function renderOrganizationSubtab() {
     const config = subtabConfig[organizationSubtab];
     if (!config) return;
@@ -422,6 +525,9 @@ export function initOrganizationPage({
     selectedIndex = Math.min(selectedIndex, Math.max(0, items.length - 1));
     const selected = items[selectedIndex] || null;
     const kpis = getKpis(organizationSubtab, items);
+    const viewState = organizationStateFor(organizationSubtab);
+    const filtered = filteredOrganizationItems(items, viewState);
+    const visible = filtered.slice(0, viewState.quantity);
 
     workspace.innerHTML = `
       <header class="organization-workspace-head">
@@ -447,26 +553,48 @@ export function initOrganizationPage({
             `).join("")}
           </div>
           <div class="organization-search-row">
-            <input type="search" data-organization-search placeholder="BUSCAR POR NOME..." aria-label="Buscar por nome">
+            <input type="search"
+                   data-organization-search
+                   value="${escapeHtml(viewState.search)}"
+                   placeholder="BUSCAR POR NOME..."
+                   aria-label="Buscar por nome">
+            ${(organizationSubtab === "review_structure" || organizationSubtab === "standardize_names") ? `
+              <select data-organization-group aria-label="Filtrar por grupo alfabético">
+                ${["Todas", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""), "0–9", "#"].map(group => `
+                  <option value="${group}" ${group === viewState.group ? "selected" : ""}>${group === "Todas" ? "GRUPO: TODAS" : `GRUPO: ${group}`}</option>
+                `).join("")}
+              </select>` : ""}
           </div>
           <div class="organization-filter-row">
             <select data-organization-filter aria-label="Filtrar itens">
-              ${config.filterOptions.map(option => `<option value="${escapeHtml(option)}">${escapeHtml(option.toUpperCase())}</option>`).join("")}
+              ${config.filterOptions.map(option => `
+                <option value="${escapeHtml(option)}" ${option === viewState.filter ? "selected" : ""}>
+                  ${escapeHtml(option.toUpperCase())}
+                </option>
+              `).join("")}
             </select>
             <select data-organization-quantity aria-label="Quantidade de itens">
-              <option value="5" selected>5</option>
-              <option value="10">10</option>
+              <option value="5" ${viewState.quantity === 5 ? "selected" : ""}>5</option>
+              <option value="10" ${viewState.quantity === 10 ? "selected" : ""}>10</option>
             </select>
             <label class="organization-select-visible" title="Selecionar visíveis">
               <input type="checkbox" data-organization-select-all aria-label="Selecionar visíveis">
             </label>
           </div>
           <div class="organization-item-list" data-organization-list>
-            ${renderOrganizationItems(items.slice(0, 5))}
+            ${renderOrganizationItems(visible)}
           </div>
         </aside>
         <section class="organization-detail-panel" data-organization-detail>
-          ${renderOrganizationDetail(selected)}
+          ${structureReviewLoading && organizationSubtab === "review_structure" && !structureReviewSnapshot
+            ? `<div class="organization-empty-detail"><span class="eyebrow">ANÁLISE</span><h2>Analisando estrutura...</h2><p>Consultando o planner da biblioteca.</p></div>`
+            : structureReviewError && organizationSubtab === "review_structure" && !structureReviewSnapshot
+              ? `<div class="organization-empty-detail"><span class="eyebrow">ANÁLISE</span><h2>Não foi possível analisar</h2><p>${escapeHtml(structureReviewError)}</p></div>`
+              : namingReviewLoading && organizationSubtab === "standardize_names" && !namingReviewSnapshot
+                ? `<div class="organization-empty-detail"><span class="eyebrow">ANÁLISE</span><h2>Analisando nomes...</h2><p>Consultando o normalizador existente.</p></div>`
+                : namingReviewError && organizationSubtab === "standardize_names" && !namingReviewSnapshot
+                  ? `<div class="organization-empty-detail"><span class="eyebrow">ANÁLISE</span><h2>Não foi possível analisar</h2><p>${escapeHtml(namingReviewError)}</p></div>`
+                  : renderOrganizationDetail(selected)}
         </section>
       </div>
     `;
@@ -504,6 +632,15 @@ export function initOrganizationPage({
     }).join("");
   }
 
+  function formatStructureTree(value) {
+    const paths = String(value || "").split("\n").map(path => path.trim()).filter(Boolean);
+    if (!paths.length) return "—";
+    return paths.map(path => {
+      const parts = path.split(/[\\/]+/).filter(Boolean);
+      return parts.map((part, index) => `${index ? "    ".repeat(index - 1) + "└── " : ""}${part}${index < parts.length - 1 ? "/" : "/"}`).join("\n");
+    }).join("\n\n");
+  }
+
   function renderOrganizationDetail(item) {
     if (!item) {
       return `
@@ -533,7 +670,7 @@ export function initOrganizationPage({
       </section>
       <div class="organization-detail-boxes">
         ${(item.boxes || []).map(([label, value]) => `
-          <article class="organization-detail-box"><h3>${escapeHtml(label)}</h3><p>${escapeHtml(value)}</p></article>
+          <article class="organization-detail-box"><h3>${escapeHtml(label)}</h3><p class="${organizationSubtab === "review_structure" ? "organization-tree" : ""}">${organizationSubtab === "review_structure" ? escapeHtml(formatStructureTree(value)) : escapeHtml(value)}</p></article>
         `).join("")}
       </div>
       <section class="organization-action-bar">
@@ -543,74 +680,211 @@ export function initOrganizationPage({
           <p>${escapeHtml(item.action?.description || "")}</p>
         </div>
         <div class="organization-actions">
-          <button type="button" class="secondary-action" data-organization-secondary>${escapeHtml(item.action?.secondary || "Voltar")}</button>
-          <button type="button" class="primary-action" data-organization-primary>${escapeHtml(item.action?.primary || "Continuar")}</button>
+          ${item.action?.secondary
+            ? `<button type="button" class="secondary-action" data-organization-secondary>${escapeHtml(item.action.secondary)}</button>`
+            : ""}
+          ${item.action?.primary
+            ? `<button type="button" class="primary-action" data-organization-primary>${escapeHtml(item.action.primary)}</button>`
+            : ""}
         </div>
       </section>
     `;
   }
 
+  function catalogSnapshotMetrics(data) {
+    const summary = data?.summary || {};
+    const changes = data?.changes || {};
+    return {
+      works: Number(summary.total || 0),
+      chapters: Number(summary.main_caps || 0),
+      review: Number(summary.review || 0),
+      unparsed: Number(summary.unparsed || 0),
+      added: Array.isArray(changes.new) ? changes.new.length : 0,
+      updated: Array.isArray(changes.updated) ? changes.updated.length : 0,
+      removed: Array.isArray(changes.removed) ? changes.removed.length : 0,
+      source: data?.source?.label || "Catálogo local",
+      sourceDetail: data?.source?.detail || "",
+    };
+  }
+
+  async function loadTrackLibrarySnapshot() {
+    if (trackCatalogLoading) return;
+    trackCatalogLoading = true;
+    trackCatalogError = "";
+    if (organizationSubtab === "track_library") renderTrackLibrary();
+
+    try {
+      const { response, payload } = await getCatalog();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Não foi possível carregar o snapshot da biblioteca.");
+      }
+      trackCatalogSnapshot = payload;
+    } catch (error) {
+      trackCatalogError = error?.message || "Não foi possível carregar o snapshot da biblioteca.";
+    } finally {
+      trackCatalogLoading = false;
+      if (organizationSubtab === "track_library") renderTrackLibrary();
+    }
+  }
+
   function renderTrackLibrary() {
     const workspace = ensureOrganizationWorkspace();
     if (!workspace) return;
+
     const config = {
       title: "Rastrear biblioteca",
       subtitle: "Localize obras, pastas e capítulos antes de qualquer análise.",
-      status: "Somente leitura",
+      status: trackCatalogLoading ? "Atualizando" : "Somente leitura",
     };
     updateTopbar(config);
     setOrganizationMode(true);
+
+    if (trackCatalogLoading && !trackCatalogSnapshot) {
+      workspace.innerHTML = `
+        <header class="organization-workspace-head">
+          <div>
+            <span class="eyebrow">ORGANIZAÇÃO LOCAL</span>
+            <h2>Rastrear biblioteca</h2>
+            <p>Leia o estado atual da biblioteca sem mover ou renomear arquivos.</p>
+          </div>
+          <span class="organization-stage-status">Atualizando</span>
+        </header>
+        <section class="organization-full-content organization-track-content">
+          <div class="organization-track-state">
+            <strong>Carregando snapshot atual...</strong>
+            <p>Consultando o catálogo já mantido pela Manhwateca.</p>
+          </div>
+        </section>
+      `;
+      return;
+    }
+
+    if (trackCatalogError && !trackCatalogSnapshot) {
+      workspace.innerHTML = `
+        <header class="organization-workspace-head">
+          <div>
+            <span class="eyebrow">ORGANIZAÇÃO LOCAL</span>
+            <h2>Rastrear biblioteca</h2>
+            <p>Leia o estado atual da biblioteca sem mover ou renomear arquivos.</p>
+          </div>
+          <span class="organization-stage-status">Indisponível</span>
+        </header>
+        <section class="organization-full-content organization-track-content">
+          <div class="organization-track-state error">
+            <strong>Não foi possível carregar o snapshot.</strong>
+            <p>${escapeHtml(trackCatalogError)}</p>
+            <button type="button" class="secondary-action" data-organization-track-refresh>Tentar novamente</button>
+          </div>
+        </section>
+      `;
+      return;
+    }
+
+    const metrics = catalogSnapshotMetrics(trackCatalogSnapshot);
+    const hasSnapshot = Boolean(trackCatalogSnapshot);
+    const changeTotal = metrics.added + metrics.updated + metrics.removed;
+
     workspace.innerHTML = `
       <header class="organization-workspace-head">
         <div>
           <span class="eyebrow">ORGANIZAÇÃO LOCAL</span>
           <h2>Rastrear biblioteca</h2>
-          <p>Escolha uma origem para revisar o conteúdo identificado.</p>
+          <p>Leia o estado atual da biblioteca sem mover ou renomear arquivos.</p>
         </div>
-        <span class="organization-stage-status">Somente leitura</span>
+        <span class="organization-stage-status">${trackCatalogLoading ? "Atualizando" : "Somente leitura"}</span>
       </header>
+
       <section class="organization-full-content organization-track-content">
-        <p class="organization-full-lead">Rastreamento das pastas e criação de um snapshot sem mover ou renomear arquivos.</p>
+        <p class="organization-full-lead">
+          O rastreamento reutiliza o catálogo atual da Manhwateca. Uma nova leitura atualiza o PostgreSQL e os indicadores da Biblioteca.
+        </p>
 
         <section class="organization-progress-card">
           <div class="organization-progress-head">
-            <strong>Snapshot local</strong>
-            <span>${catalogPendingItems.length ? "Disponível" : "Pronto para atualizar"}</span>
+            <div>
+              <strong>${hasSnapshot ? "Snapshot concluído" : "Snapshot não carregado"}</strong>
+              <small title="${escapeHtml(metrics.sourceDetail)}">Fonte: ${escapeHtml(metrics.source)}</small>
+            </div>
+            <span>${hasSnapshot ? "100%" : "—"}</span>
           </div>
-          <div class="organization-progress"><div class="organization-progress-bar"></div></div>
+
+          <div class="organization-progress" aria-label="Estado do snapshot">
+            <div class="organization-progress-bar" style="width:${hasSnapshot ? "100%" : "0%"}"></div>
+          </div>
+
           <div class="organization-timeline">
             <div class="organization-step">
               <span class="organization-step-marker">✓</span>
-              <div><b>Pastas lidas</b><small>A biblioteca local foi disponibilizada para revisão.</small></div>
-              <span class="organization-step-status">OK</span>
+              <div>
+                <b>Obras catalogadas</b>
+                <small>${metrics.works} obra(s) disponíveis no catálogo atual.</small>
+              </div>
+              <span class="organization-step-status">${metrics.works}</span>
             </div>
+
             <div class="organization-step">
               <span class="organization-step-marker">✓</span>
-              <div><b>Obras agrupadas</b><small>As próximas etapas usam os dados já carregados pelo catálogo.</small></div>
-              <span class="organization-step-status">OK</span>
+              <div>
+                <b>Capítulos indexados</b>
+                <small>${metrics.chapters} capítulo(s) contabilizados no snapshot atual.</small>
+              </div>
+              <span class="organization-step-status">${metrics.chapters}</span>
             </div>
+
             <div class="organization-step">
-              <span class="organization-step-marker">✓</span>
-              <div><b>Pendências identificadas</b><small>${catalogPendingItems.length} pasta(s) fora do catálogo aguardando revisão.</small></div>
-              <span class="organization-step-status">${catalogPendingItems.length}</span>
+              <span class="organization-step-marker">${metrics.review ? "!" : "✓"}</span>
+              <div>
+                <b>Conferências necessárias</b>
+                <small>${metrics.review
+                  ? `${metrics.review} obra(s) possuem ocorrências que precisam de revisão.`
+                  : "Nenhuma conferência foi indicada pelo catálogo atual."}</small>
+              </div>
+              <span class="organization-step-status ${metrics.review ? "neutral" : ""}">${metrics.review}</span>
             </div>
+
             <div class="organization-step">
-              <span class="organization-step-marker">✓</span>
-              <div><b>Snapshot disponível</b><small>Revisar estrutura pode usar esta fotografia da biblioteca.</small></div>
-              <span class="organization-step-status neutral">Snapshot</span>
+              <span class="organization-step-marker">${metrics.unparsed ? "!" : "✓"}</span>
+              <div>
+                <b>Arquivos não interpretados</b>
+                <small>${metrics.unparsed
+                  ? `${metrics.unparsed} arquivo(s) não foram interpretados pelo catálogo.`
+                  : "Nenhum arquivo não interpretado foi informado."}</small>
+              </div>
+              <span class="organization-step-status ${metrics.unparsed ? "neutral" : ""}">${metrics.unparsed}</span>
             </div>
           </div>
         </section>
 
+        <div class="organization-track-changes">
+          <span>Última catalogação</span>
+          <strong>${changeTotal
+            ? `${metrics.added} nova(s) · ${metrics.updated} alterada(s) · ${metrics.removed} removida(s)`
+            : "Nenhuma mudança registrada"}</strong>
+        </div>
+
         <section class="organization-full-action">
           <div class="organization-action-copy">
             <small>PRÓXIMA AÇÃO</small>
-            <strong>Usar o snapshot disponível</strong>
-            <p>Você pode rastrear novamente ou avançar para revisar a estrutura identificada.</p>
+            <strong>${hasSnapshot ? "Usar o snapshot concluído" : "Rastrear biblioteca"}</strong>
+            <p>${hasSnapshot
+              ? "Avance para revisar a estrutura identificada ou execute uma nova leitura da biblioteca."
+              : "Execute uma leitura para atualizar o catálogo antes de continuar."}</p>
           </div>
+
           <div class="organization-actions">
-            <button type="button" class="secondary-action" data-organization-task="catalog_scan" data-confirmation="true">Rastrear novamente</button>
-            <button type="button" class="primary-action" data-organization-go="review_structure">Usar snapshot</button>
+            <button type="button"
+                    class="secondary-action"
+                    data-organization-task="catalog_scan"
+                    data-confirmation="true"
+                    ${trackCatalogLoading ? "disabled" : ""}>
+              ${trackCatalogLoading ? "Rastreando..." : "Rastrear novamente"}
+            </button>
+            <button type="button"
+                    class="primary-action"
+                    data-organization-go="review_structure"
+                    ${hasSnapshot ? "" : "disabled"}>
+              Usar snapshot
+            </button>
           </div>
         </section>
       </section>
@@ -692,6 +966,10 @@ export function initOrganizationPage({
   }
 
   function handleOrganizationClick(event) {
+    if (event.target.closest("[data-organization-track-refresh]")) {
+      loadTrackLibrarySnapshot();
+      return;
+    }
     const itemCheckbox = event.target.closest("[data-organization-item-checkbox]");
     if (itemCheckbox) {
       const key = itemCheckbox.dataset.organizationKey || "";
@@ -738,16 +1016,24 @@ export function initOrganizationPage({
   function handleOrganizationFilterChange(event) {
     const workspace = ensureOrganizationWorkspace();
     if (!workspace || !subtabConfig[organizationSubtab]) return;
-    const search = workspace.querySelector("[data-organization-search]")?.value?.trim().toLowerCase() || "";
-    const quantity = Number.parseInt(workspace.querySelector("[data-organization-quantity]")?.value || "5", 10);
-    const activeFilter = workspace.querySelector("[data-organization-filter]")?.value || "Todas";
-    const allItems = getListData(organizationSubtab);
-    const filtered = allItems
-      .filter(item => item.title.toLowerCase().includes(search))
-      .filter(item => activeFilter === "Todas" || item.filter === activeFilter)
-      .slice(0, quantity);
+
+    const state = organizationStateFor(organizationSubtab);
+    state.search = workspace.querySelector("[data-organization-search]")?.value || "";
+    state.quantity = Number.parseInt(
+      workspace.querySelector("[data-organization-quantity]")?.value || "5",
+      10
+    );
+    state.filter = workspace.querySelector("[data-organization-filter]")?.value || "Todas";
+    state.group = workspace.querySelector("[data-organization-group]")?.value || "Todas";
+
+    const visible = filteredOrganizationItems(
+      getListData(organizationSubtab),
+      state
+    ).slice(0, state.quantity);
+
     const list = workspace.querySelector("[data-organization-list]");
-    if (list) list.innerHTML = renderOrganizationItems(filtered);
+    if (list) list.innerHTML = renderOrganizationItems(visible);
+
     if (event.target.matches("[data-organization-select-all]")) {
       list?.querySelectorAll("[data-organization-item-checkbox]").forEach(input => {
         input.checked = event.target.checked;
@@ -765,10 +1051,21 @@ export function initOrganizationPage({
     organizationCheckedKeys = new Set();
     if (subtab === "track_library") {
       renderTrackLibrary();
+      loadTrackLibrarySnapshot();
       return;
     }
     if (subtab === "apply_organization") {
       renderApplyOrganization();
+      return;
+    }
+    if (subtab === "review_structure") {
+      renderOrganizationSubtab();
+      if (!structureReviewSnapshot) loadStructureReview();
+      return;
+    }
+    if (subtab === "standardize_names") {
+      renderOrganizationSubtab();
+      if (!namingReviewSnapshot) loadNamingReview();
       return;
     }
     if (subtabConfig[subtab]) {
@@ -779,9 +1076,24 @@ export function initOrganizationPage({
     restoreTopbar();
   }
 
+
+  window.addEventListener("manhwateca:catalog-loaded", event => {
+    if (!event.detail?.data) return;
+    trackCatalogSnapshot = event.detail.data;
+    trackCatalogError = "";
+    trackCatalogLoading = false;
+    if (organizationSubtab === "track_library") renderTrackLibrary();
+    if (organizationSubtab === "review_structure") renderOrganizationSubtab();
+  });
+
   window.addEventListener("manhwateca:organization-subtab", event => {
     setSubtab(event.detail?.subtab || "track_library");
   });
+
+  if (location.hash === "#organization-v2" && !organizationSubtab) {
+    const active = document.querySelector("[data-sidebar-organization-subtab].active");
+    setSubtab(active?.dataset.sidebarOrganizationSubtab || "track_library");
+  }
 
   elements.catalogAllPending?.addEventListener("click", () => {
     if (!getNotionUncataloged()) return;

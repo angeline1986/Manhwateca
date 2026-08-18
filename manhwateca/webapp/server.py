@@ -23,6 +23,7 @@ from manhwateca.webapp.mangaupdates_confirmed_id import confirmed_id_candidates_
 from manhwateca.webapp.notion import notion_status
 from manhwateca.webapp.notion_metadata import metadata_status
 from manhwateca.webapp.notion_sync_candidates import sync_candidates_payload
+from manhwateca.webapp.organization import naming_review_payload, structure_review_payload
 from manhwateca.webapp.pending_actions import pending_payload
 from manhwateca.webapp.post_routes import handle_direct_post
 from manhwateca.webapp.releases import (
@@ -85,6 +86,18 @@ def create_handler(project_root, task_manager, workflow_manager=None):
                         latest_changes=task_manager.latest_catalog_changes(),
                     )
                 )
+                return
+            if path == "/api/organization/structure-review":
+                try:
+                    self._send_json(structure_review_payload())
+                except (OSError, RuntimeError, ValueError) as error:
+                    self._send_json({"error": str(error)}, status=503)
+                return
+            if path == "/api/organization/naming-review":
+                try:
+                    self._send_json(naming_review_payload())
+                except (OSError, RuntimeError, ValueError) as error:
+                    self._send_json({"error": str(error)}, status=503)
                 return
             if path == "/api/editorial":
                 self._send_json(dashboard_payload(project_root))

@@ -99,3 +99,18 @@ Observação importante
 Os números e detalhes que não existem na interface atual não foram inventados.
 O layout mantém a riqueza visual da referência, mas usa os estados e ações que o
 frontend atual consegue representar.
+
+
+| Funcionalidade antiga                       | Backend/ação existente                                         | Nova tela mais adequada                         | Reuso                                  |
+| ------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------- |
+| **Catalogar biblioteca**                    | `catalog_scan` → `scripts/scan.py`                             | **Rastrear biblioteca**                         | **Alto**                               |
+| **Obras Fora do Catálogo**                  | `/api/catalog`, `catalog_single_work()`, `catalogPendingItems` | **Rastrear biblioteca** + **Revisar estrutura** | **Alto**                               |
+| **Organização de Pastas — Preview**         | `organization_preview` → `scripts/organize.py`                 | **Organizar pastas**                            | **Muito alto**                         |
+| **Organização de Pastas — Aplicar**         | `apply_organization` → `scripts/organize.py --apply`           | **Aplicar organização**                         | **Muito alto**                         |
+| **Padronização — Preview**                  | `rename_preview` → `scripts/rename_files.py`                   | **Padronizar nomes**                            | **Muito alto**                         |
+| **Padronização — Aplicar**                  | `apply_renaming` → `scripts/rename_files.py --apply`           | **Aplicar organização**                         | **Muito alto**                         |
+| **Auditoria de capítulos**                  | `chapter_audit` → `scripts/chapter_audit.py`                   | **Validar capítulos**                           | **Muito alto**                         |
+| **Registrar ajuste da revisão**             | `POST /api/review-notes` → `save_review_note()`                | **Revisar pendências**                          | **Médio**                              |
+| **Pendências acionáveis**                   | `/api/pending` → `pending_payload()`                           | **Revisar pendências**                          | **Alto**, mas mistura domínios         |
+| **Correspondências pendentes MangaUpdates** | `decision_queue`, endpoints `/api/mangaupdates/decisions/*`    | **Não deveria ser núcleo de Organização local** | **Baixo para as novas páginas locais** |
+| **Catalogar Tudo / Catalogar obra**         | `catalog_scan` / `/api/catalog/catalog-one`                    | **Rastrear biblioteca**                         | **Alto**                               |

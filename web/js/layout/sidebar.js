@@ -4,6 +4,8 @@ export function initSidebar() {
   const menuToggle = document.getElementById("menuToggle");
   const backButton = document.getElementById("backButton");
   const menuLabel = document.getElementById("menuLabel");
+  const organizationPageButton = document.querySelector('[data-page="organization-v2"]');
+  let openingOrganizationSubtab = false;
 
   function closeSidebar() {
     sidebar?.classList.remove("open");
@@ -21,6 +23,22 @@ export function initSidebar() {
     }
   }
 
+  function markOrganizationSubtab(subtab) {
+    document.querySelectorAll("[data-sidebar-organization-subtab]").forEach(button =>
+      button.classList.toggle(
+        "active",
+        button.dataset.sidebarOrganizationSubtab === subtab
+      )
+    );
+  }
+
+  function emitOrganizationSubtab(subtab) {
+    window.dispatchEvent(new CustomEvent(
+      "manhwateca:organization-subtab",
+      { detail: { subtab } }
+    ));
+  }
+
   function selectFlowSubtab(subtab) {
     setContext("flows");
     document.querySelector('[data-page="flows"]')?.click();
@@ -32,11 +50,11 @@ export function initSidebar() {
 
   function selectOrganizationSubtab(subtab) {
     setContext("organization");
-    document.querySelector('[data-page="organization-v2"]')?.click();
-    document.querySelectorAll("[data-sidebar-organization-subtab]").forEach(button =>
-      button.classList.toggle("active", button.dataset.sidebarOrganizationSubtab === subtab)
-    );
-    window.dispatchEvent(new CustomEvent("manhwateca:organization-subtab", { detail: { subtab } }));
+    markOrganizationSubtab(subtab);
+    openingOrganizationSubtab = true;
+    organizationPageButton?.click();
+    openingOrganizationSubtab = false;
+    emitOrganizationSubtab(subtab);
   }
 
   function setSidebarCollapsed(collapsed) {
@@ -61,23 +79,40 @@ export function initSidebar() {
   );
 
   backButton?.addEventListener("click", () => setContext(null));
+
   document.querySelector('[data-page="flows"]')?.addEventListener("click", () =>
     setContext("flows")
   );
-  document.querySelector('[data-page="organization-v2"]')?.addEventListener("click", () =>
-    setContext("organization")
-  );
+
+  organizationPageButton?.addEventListener("click", () => {
+    setContext("organization");
+    if (openingOrganizationSubtab) return;
+
+    const subtab = "track_library";
+    markOrganizationSubtab(subtab);
+    queueMicrotask(() => emitOrganizationSubtab(subtab));
+  });
+
   document.querySelectorAll("[data-sidebar-flow-subtab]").forEach(button =>
-    button.addEventListener("click", () => selectFlowSubtab(button.dataset.sidebarFlowSubtab))
+    button.addEventListener("click", () =>
+      selectFlowSubtab(button.dataset.sidebarFlowSubtab)
+    )
   );
+
   document.querySelectorAll("[data-sidebar-organization-subtab]").forEach(button =>
-    button.addEventListener("click", () => selectOrganizationSubtab(button.dataset.sidebarOrganizationSubtab))
+    button.addEventListener("click", () =>
+      selectOrganizationSubtab(button.dataset.sidebarOrganizationSubtab)
+    )
   );
+
   document.addEventListener("click", event => {
     const subtab = event.target.closest("[data-flow-subtab]");
     if (!subtab) return;
     document.querySelectorAll("[data-sidebar-flow-subtab]").forEach(button =>
-      button.classList.toggle("active", button.dataset.sidebarFlowSubtab === subtab.dataset.flowSubtab)
+      button.classList.toggle(
+        "active",
+        button.dataset.sidebarFlowSubtab === subtab.dataset.flowSubtab
+      )
     );
   });
 

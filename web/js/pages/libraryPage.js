@@ -110,6 +110,11 @@ export function initLibraryPage({ elements, onAction }) {
     ].join("");
     renderChanges(data.changes);
     renderCatalog(catalog);
+
+    window.dispatchEvent(new CustomEvent("manhwateca:catalog-loaded", {
+      detail: { data },
+    }));
+    return data;
   }
 
   elements.catalogSearch.addEventListener("input", () => {
