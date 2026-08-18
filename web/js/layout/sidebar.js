@@ -120,5 +120,20 @@ export function initSidebar() {
     localStorage.getItem("manhwateca-sidebar-collapsed") === "true"
   );
 
+  const legacyOrganizationButton =
+    document.querySelector('[data-page="organization"]');
+
+  legacyOrganizationButton?.addEventListener("click", () => {
+    setContext(null);
+
+    document.querySelectorAll("[data-sidebar-organization-subtab]").forEach(button => {
+      button.classList.remove("active");
+    });
+
+    window.dispatchEvent(
+      new CustomEvent("manhwateca:organization-legacy")
+    );
+  });
+
   return { closeSidebar, setSidebarCollapsed };
 }

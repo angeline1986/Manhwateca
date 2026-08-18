@@ -67,7 +67,23 @@ export function initOrganizationPage({
       filterOptions: ["Todas", "Mover", "Revisar", "Manter"],
       status: "Prévia local",
     },
-    };
+    validate_chapters: {
+      title: "Validar capítulos",
+      subtitle: "Verifique lacunas, duplicidades e divergências na sequência de capítulos.",
+      listTitle: "Fila de capítulos",
+      listSubtitle: "Obras com sequência válida, lacunas ou duplicidades.",
+      filterOptions: ["Todas", "Divergências", "Lacunas", "Duplicados"],
+      status: "Prévia local",
+    },
+    review_pending: {
+      title: "Revisar pendências",
+      subtitle: "Resolva os casos que não puderam ser concluídos automaticamente.",
+      listTitle: "Fila de revisão",
+      listSubtitle: "Casos que ainda precisam de correção, decisão ou revisão.",
+      filterOptions: ["Todas", "Corrigir", "Decidir", "Revisar"],
+      status: "Decisão manual",
+    },
+  };
 
   function renderCatalogPending(data) {
     if (!elements.organizationCatalogPendingList) return;
@@ -189,14 +205,12 @@ export function initOrganizationPage({
     const eyebrow = document.getElementById("pageEyebrow");
     const title = document.getElementById("pageTitle");
     const subtitle = document.getElementById("pageSubtitle");
-    const status = ensureTopbarStatus();
+    const staticStatus = document.querySelector(".organization-topbar-status");
+
     if (eyebrow) eyebrow.textContent = `ORGANIZAÇÃO / ${config.title.toUpperCase()}`;
     if (title) title.textContent = "Organizar biblioteca local";
     if (subtitle) subtitle.textContent = config.subtitle;
-    if (status) {
-      status.textContent = config.status || "Prévia local";
-      status.hidden = false;
-    }
+    if (staticStatus) staticStatus.hidden = true;
   }
 
   function restoreTopbar() {
@@ -745,7 +759,6 @@ export function initOrganizationPage({
           <h2>${escapeHtml(config.title)}</h2>
           <p>${escapeHtml(config.subtitle)}</p>
         </div>
-        <span class="organization-stage-status">${escapeHtml(config.status || "Prévia local")}</span>
       </header>
       ${renderOrganizationFeedback()}
       <div class="organization-split">
@@ -1217,7 +1230,6 @@ export function initOrganizationPage({
           <h2>Aplicar organização</h2>
           <p>Revise o impacto das alterações antes da confirmação final.</p>
         </div>
-        <span class="organization-stage-status">Pronto para aplicar</span>
       </header>
 
       <section class="organization-full-content organization-apply-content">
@@ -1480,6 +1492,18 @@ export function initOrganizationPage({
     trackCatalogLoading = false;
     if (organizationSubtab === "track_library") renderTrackLibrary();
     if (organizationSubtab === "review_structure") renderOrganizationSubtab();
+  });
+
+  function showLegacyOrganization() {
+    organizationSubtab = null;
+    selectedIndex = 0;
+    organizationCheckedKeys = new Set();
+    setOrganizationMode(false);
+    restoreTopbar();
+  }
+
+  window.addEventListener("manhwateca:organization-legacy", () => {
+    showLegacyOrganization();
   });
 
   window.addEventListener("manhwateca:organization-subtab", event => {
