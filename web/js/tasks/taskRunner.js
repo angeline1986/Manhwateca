@@ -142,15 +142,6 @@ export function initTaskRunner({ elements, callbacks, showPage, getNotionUncatal
     const notion = task.metrics?.notion || {};
     const items = task.metrics?.items || {};
 
-    if (task.action === "catalog_scan") {
-      return {
-        label: "Ver pendências de catálogo",
-        page: "organization",
-        panel: "organizationCatalogPendingPanel",
-        text: "Confira quais pastas do Drive ainda não aparecem no PostgreSQL.",
-      };
-    }
-
     if (task.action === "notion_simulate_batch" && (notion.pending || 0) > 0) {
       return {
         label: "Importar lote",

@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 from manhwateca.webapp.actions import SAFE_ACTIONS, build_command
-from manhwateca.webapp.catalog import compare_catalogs, load_catalog
+from manhwateca.webapp.catalog import catalog_payload, compare_catalogs
 from manhwateca.webapp.mangaupdates import review_payload
 from manhwateca.webapp.notion import notion_status
 
@@ -43,7 +43,7 @@ class TaskManager:
             task = self._new_task(action)
             task["_parameters"] = parameters or {}
             if action == "catalog_scan":
-                task["_catalog_before"] = load_catalog(self.project_root)
+                task["_catalog_before"] = _active_catalog_snapshot(self.project_root)
             self.tasks[task["id"]] = task
             self._save_history()
         thread = threading.Thread(target=self._execute, args=(task["id"],), daemon=True)
@@ -108,7 +108,7 @@ class TaskManager:
             if task["action"] == "catalog_scan" and status == "completed":
                 task["catalog_changes"] = compare_catalogs(
                     task.pop("_catalog_before", []),
-                    load_catalog(self.project_root),
+                    _active_catalog_snapshot(self.project_root),
                 )
             else:
                 task.pop("_catalog_before", None)
@@ -183,6 +183,11 @@ class TaskManager:
 
 def _now():
     return datetime.now().astimezone().isoformat(timespec="seconds")
+
+def _active_catalog_snapshot(project_root):
+    payload = catalog_payload(project_root)
+    mangas = payload.get("mangas", [])
+    return mangas if isinstance(mangas, list) else []
 
 def _messages(stdout, stderr):
     lines = []

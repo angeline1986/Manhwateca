@@ -9,7 +9,24 @@ from pathlib import Path
 from unittest.mock import patch
 
 from manhwateca.webapp.actions import SAFE_ACTIONS
+from manhwateca.webapp.catalog import catalog_payload
+from manhwateca.webapp.post_routes import handle_direct_post
 from manhwateca.webapp.tasks import TaskManager
+
+
+class CatalogRecord:
+    def __init__(self, title, latest=1):
+        self.title = title
+        self.alternative_title = None
+        self.last_read_chapter = 0
+        self.latest_available_chapter = latest
+        self.size_label = "Curto"
+        self.count_status = "OK"
+        self.latest_mangaupdates_chapter = None
+        self.cover_url = None
+        self.reading_status = "Quero Ler"
+        self.personal_rank = "Normal"
+        self.themes = []
 
 
 class WebTaskTests(unittest.TestCase):
@@ -227,6 +244,77 @@ class WebTaskTests(unittest.TestCase):
         self.assertNotIn("_catalog_before", saved)
         self.assertEqual(["Beta"], completed["catalog_changes"]["new"])
         self.assertEqual("Alpha", completed["catalog_changes"]["updated"][0]["nome"])
+
+    def test_catalog_scan_compares_active_catalog_source(self):
+        state = {"after": False}
+
+        def active_source(_project_root, *_args, **_kwargs):
+            titles = ["Alpha", "Beta"] if state["after"] else ["Alpha"]
+            records = [CatalogRecord(title) for title in titles]
+            return {
+                "kind": "postgresql",
+                "label": "PostgreSQL",
+                "detail": "vw_mangas",
+                "count": len(records),
+                "mangas": records,
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            catalog = root / "data/mangas.json"
+            catalog.parent.mkdir()
+            catalog.write_text(
+                json.dumps([
+                    {"nome": "Alpha", "main_caps": 1},
+                    {"nome": "Beta", "main_caps": 1},
+                ]),
+                encoding="utf-8",
+            )
+
+            def save_to_database(*_args, **_kwargs):
+                state["after"] = True
+                return subprocess.CompletedProcess([], 0, "", "")
+
+            history = root / "reports/logs/tasks.json"
+            with patch("manhwateca.webapp.catalog.active_catalog_source", active_source):
+                manager = TaskManager(
+                    root,
+                    history_path=history,
+                    process_runner=save_to_database,
+                )
+                started = manager.start("catalog_scan")
+                completed = self._wait(manager, started["id"])
+                restarted = TaskManager(
+                    root,
+                    history_path=history,
+                    process_runner=save_to_database,
+                )
+                api_payload = catalog_payload(
+                    root,
+                    latest_changes=restarted.latest_catalog_changes(),
+                )
+
+            saved = json.loads(history.read_text(encoding="utf-8"))[0]
+
+        self.assertEqual(["Beta"], completed["catalog_changes"]["new"])
+        self.assertEqual(["Beta"], saved["catalog_changes"]["new"])
+        self.assertEqual(["Beta"], restarted.latest_catalog_changes()["new"])
+        self.assertEqual(["Beta"], api_payload["changes"]["new"])
+
+    def test_catalog_one_route_still_delegates_to_catalog_single_work(self):
+        with patch(
+            "manhwateca.webapp.post_routes.catalog_single_work",
+            return_value={"saved": 1, "work": "Beta", "path": "/library/Beta"},
+        ) as catalog_single:
+            payload, status = handle_direct_post(
+                "/api/catalog/catalog-one",
+                {"name": "Beta"},
+                Path("."),
+            )
+
+        self.assertEqual(200, status)
+        self.assertEqual("Beta", payload["work"])
+        catalog_single.assert_called_once_with("Beta")
 
     def test_notion_writes_require_exact_confirmation(self):
         with tempfile.TemporaryDirectory() as directory:

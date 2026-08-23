@@ -1026,6 +1026,41 @@ export function initOrganizationPage({
     };
   }
 
+  function catalogChangeName(item) {
+    if (typeof item === "string") return item;
+    return item?.nome || item?.name || item?.title || "Obra sem nome";
+  }
+
+  function renderCatalogChangeGroup(title, items) {
+    if (!items.length) return "";
+    return `
+      <section class="organization-track-change-group">
+        <strong>${escapeHtml(title)}</strong>
+        <ul>
+          ${items.map(item => `<li>${escapeHtml(catalogChangeName(item))}</li>`).join("")}
+        </ul>
+      </section>
+    `;
+  }
+
+  function renderCatalogChangeDetails(data) {
+    const changes = data?.changes || {};
+    const added = Array.isArray(changes.new) ? changes.new : [];
+    const updated = Array.isArray(changes.updated) ? changes.updated : [];
+    const removed = Array.isArray(changes.removed) ? changes.removed : [];
+    if (!added.length && !updated.length && !removed.length) return "";
+    return `
+      <details class="organization-track-change-details">
+        <summary>Ver detalhes da última catalogação</summary>
+        <div class="organization-track-change-groups">
+          ${renderCatalogChangeGroup("NOVAS", added)}
+          ${renderCatalogChangeGroup("ALTERADAS", updated)}
+          ${renderCatalogChangeGroup("REMOVIDAS", removed)}
+        </div>
+      </details>
+    `;
+  }
+
   async function loadTrackLibrarySnapshot() {
     if (trackCatalogLoading) return;
     trackCatalogLoading = true;
@@ -1180,6 +1215,7 @@ export function initOrganizationPage({
             ? `${metrics.added} nova(s) · ${metrics.updated} alterada(s) · ${metrics.removed} removida(s)`
             : "Nenhuma mudança registrada"}</strong>
         </div>
+        ${renderCatalogChangeDetails(trackCatalogSnapshot)}
 
         <section class="organization-full-action">
           <div class="organization-action-copy">
