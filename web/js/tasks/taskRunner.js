@@ -10,6 +10,16 @@ export function initTaskRunner({ elements, callbacks, showPage, getNotionUncatal
   let lastMetadataTask;
   const taskToast = initTaskToast({ elements, taskNextStep, taskCompletionSummary });
 
+  function setConfirmationCancelVisible(visible) {
+    const cancelButton = elements.confirmationDialog.querySelector('[value="cancel"]');
+    if (cancelButton) cancelButton.hidden = !visible;
+  }
+
+  function setConfirmationEyebrow(text) {
+    const eyebrow = elements.confirmationDialog.querySelector(".eyebrow");
+    if (eyebrow) eyebrow.textContent = text;
+  }
+
   function confirmTask(action) {
     const notionWrite = [
       "notion_apply_batch",
@@ -17,13 +27,31 @@ export function initTaskRunner({ elements, callbacks, showPage, getNotionUncatal
       "notion_csv_apply",
     ].includes(action);
     const massCatalog = action === "catalog_scan";
+    const uncataloged = massCatalog ? getNotionUncataloged() : 0;
+    if (massCatalog && uncataloged <= 0) {
+      setConfirmationEyebrow("INFORMAÇÃO");
+      setConfirmationCancelVisible(false);
+      elements.confirmationTitle.textContent = "Nenhuma nova obra encontrada";
+      elements.confirmationText.textContent =
+        "A biblioteca já está atualizada.";
+      elements.confirmationDialog.showModal();
+      return new Promise(resolve => {
+        elements.confirmationDialog.addEventListener("close", () => {
+          setConfirmationEyebrow("CONFIRMAÇÃO");
+          setConfirmationCancelVisible(true);
+          resolve(false);
+        }, { once: true });
+      });
+    }
+    setConfirmationEyebrow("CONFIRMAÇÃO");
+    setConfirmationCancelVisible(true);
     elements.confirmationTitle.textContent = massCatalog
       ? "Confirmar Catalogação em Massa"
       : notionWrite
       ? "Confirmar alteração no Notion"
       : "Confirmar alteração na biblioteca";
     elements.confirmationText.textContent = massCatalog
-      ? `Você está prestes a registrar ${getNotionUncataloged()} nova(s) obra(s) no banco de dados. Deseja prosseguir?`
+      ? `Foi encontrada ${uncataloged} nova ${uncataloged === 1 ? "obra" : "obras"} para catalogação. Deseja prosseguir?`
       : notionWrite
       ? "Esta ação enviará alterações ao Notion. Deseja continuar?"
       : "Esta ação alterará arquivos ou pastas da biblioteca. Deseja continuar?";
@@ -258,6 +286,10 @@ export function initTaskRunner({ elements, callbacks, showPage, getNotionUncatal
   }
 
   function taskCompletionSummary(task) {
+    if (task.action === "catalog_scan") {
+      return "Catalogação concluída com sucesso.";
+    }
+
     const parts = [];
     const mangaupdates = task.metrics?.mangaupdates || {};
     if (typeof mangaupdates.processed === "number") parts.push(`Processadas: ${mangaupdates.processed}`);

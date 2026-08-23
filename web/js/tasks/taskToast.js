@@ -22,7 +22,12 @@ export function initTaskToast({ elements, taskNextStep, taskCompletionSummary })
       : "A tarefa não foi concluída. Consulte o resultado para entender o motivo.";
     const next = completed ? taskNextStep(task) : null;
     const report = (task.reports || [])[0];
-    if (next) {
+    if (completed && task.action === "catalog_scan") {
+      elements.taskResultLink.hidden = true;
+      elements.viewTaskProgress.hidden = true;
+      delete elements.viewTaskProgress.dataset.nextPage;
+      delete elements.viewTaskProgress.dataset.nextPanel;
+    } else if (next) {
       elements.taskResultLink.hidden = true;
       elements.viewTaskProgress.hidden = false;
       elements.viewTaskProgress.textContent = next.label;
