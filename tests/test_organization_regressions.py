@@ -74,5 +74,20 @@ class OrganizationRegressionTest(unittest.TestCase):
         self.assertIn("finished_at", self.org)
         self.assertIn("showCatalogMeta: true", self.org)
 
+    def test_structure_review_visual_copy_keeps_structural_contract(self):
+        self.assertIn('"DUPLICIDADE"', self.org)
+        self.assertIn('item.filter === "Duplicatas"', self.org)
+        self.assertIn('item.filter === "Divergências"', self.org)
+        self.assertIn('item.filter === "OK"', self.org)
+        self.assertIn('["Localização atual", item.current_structure || "—"]', self.org)
+        self.assertIn('["Localização esperada", item.expected_structure || "—"]', self.org)
+        self.assertIn('label: "Nenhuma ação estrutural"', self.org)
+        self.assertIn('notice: null', self.org)
+        self.assertIn('${item.notice ? `', self.org)
+
+        structure_block = self.org.split('if (subtab === "standardize_names")')[0]
+        self.assertNotIn('["Arquivos", String(item.files ?? 0)]', structure_block)
+        self.assertNotIn('item.issue_title || "Divergência identificada"', structure_block)
+
 if __name__ == "__main__":
     unittest.main()

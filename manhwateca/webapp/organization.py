@@ -82,6 +82,10 @@ def serialize_structure_review(plan, conflicts, duplicates, root):
             items.append(_conflict_item(plan_item, item_conflicts, root))
             continue
 
+        if not bool(plan_item.get("is_correct")):
+            items.append(_movement_item(plan_item, conflicts, duplicates, root))
+            continue
+
         items.append(_ok_item(plan_item, conflicts, duplicates, root))
 
     items.sort(key=lambda item: item["title"].casefold())
@@ -161,7 +165,7 @@ def _conflict_item(item, item_conflicts, root):
         "files": int(item.get("total_caps", 0) or 0),
         "current_paths": paths,
         "expected_path": _display_path(destination, root),
-        "issue_title": "Divergência identificada",
+        "issue_title": "Divergência de estrutura",
         "issue_description": description,
         "current_group": item.get("current_group") or "",
         "expected_group": item.get("group") or "",
@@ -170,16 +174,33 @@ def _conflict_item(item, item_conflicts, root):
     }
 
 
+def _movement_item(item, conflicts, duplicates, root):
+    return {
+        "id": f"movement:{item['source']}",
+        "title": item["name"],
+        "category": "divergence",
+        "status": determine_status(item, conflicts, duplicates),
+        "badge": "Revisão necessária",
+        "current_structure": "1 pasta",
+        "expected_structure": "1 pasta",
+        "files": int(item.get("total_caps", 0) or 0),
+        "current_paths": [_display_path(Path(item["source"]), root)],
+        "expected_path": _display_path(Path(item["destination"]), root),
+        "issue_title": "Divergência de estrutura",
+        "issue_description": (
+            "A obra está fora da pasta/grupo esperado. Revise a movimentação "
+            "em Organizar pastas."
+        ),
+        "current_group": item.get("current_group") or "",
+        "expected_group": item.get("group") or "",
+        "movement_required": True,
+        "action": "none",
+    }
+
+
 def _ok_item(item, conflicts, duplicates, root):
     status = determine_status(item, conflicts, duplicates)
-    movement_required = not bool(item.get("is_correct"))
-    if movement_required:
-        description = (
-            "Nenhum conflito estrutural foi identificado. A pasta pode precisar "
-            "de movimentação alfabética, que será tratada em Organizar pastas."
-        )
-    else:
-        description = "A estrutura atual não possui conflito estrutural."
+    description = "A obra já está na pasta e no grupo esperados."
 
     return {
         "id": f"ok:{item['source']}",
@@ -196,7 +217,7 @@ def _ok_item(item, conflicts, duplicates, root):
         "issue_description": description,
         "current_group": item.get("current_group") or "",
         "expected_group": item.get("group") or "",
-        "movement_required": movement_required,
+        "movement_required": False,
         "action": "none",
     }
 
@@ -213,7 +234,7 @@ def _conflict_description(reasons):
         return (
             "O destino esperado já existe e é diferente da pasta encontrada."
         )
-    return "O planner identificou um conflito estrutural que precisa de revisão."
+    return "A obra está fora da pasta/grupo esperado."
 
 
 def _display_path(path, root):

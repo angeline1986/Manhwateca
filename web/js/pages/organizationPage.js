@@ -46,9 +46,9 @@ export function initOrganizationPage({
   const subtabConfig = {
     review_structure: {
       title: "Revisar estrutura",
-      subtitle: "As informações detalhadas da divergência estão no painel à direita.",
+      subtitle: "Confira se cada obra está na pasta e no grupo esperados.",
       listTitle: "Fila de estrutura",
-      listSubtitle: "Obras identificadas no snapshot.",
+      listSubtitle: "Obras analisadas quanto à organização de pastas.",
       filterOptions: ["Todas", "Divergências", "Duplicatas", "OK"],
       status: "Prévia local",
     },
@@ -277,22 +277,18 @@ export function initOrganizationPage({
           filter,
           group: item.expected_group || item.current_group || "#",
           meta: [
-            ["Estrutura atual", item.current_structure || "—"],
-            ["Estrutura esperada", item.expected_structure || "—"],
-            ["Arquivos", String(item.files ?? 0)],
+            ["Localização atual", item.current_structure || "—"],
+            ["Localização esperada", item.expected_structure || "—"],
           ],
-          notice: [
-            item.issue_title || "Divergência identificada",
-            item.issue_description || "",
-          ],
+          notice: null,
           boxes: [
-            ["Estrutura atual", currentPaths || "Nenhum caminho informado."],
-            ["Estrutura sugerida", suggested],
+            ["Localização atual", currentPaths || "Nenhum caminho informado."],
+            ["Localização esperada", suggested],
           ],
           action: needsPreview ? {
             label: "Analisar estrutura",
             description: (
-              "O planner identificou a divergência. Gere o preview completo "
+              "Foi identificada uma divergência de pasta ou grupo. Gere o preview completo "
               + "antes de tomar qualquer decisão."
             ),
             secondary: null,
@@ -302,8 +298,8 @@ export function initOrganizationPage({
           } : {
             label: "Nenhuma ação estrutural",
             description: item.movement_required
-              ? "Sem conflito estrutural. A movimentação, se necessária, será tratada em Organizar pastas."
-              : "A estrutura atual não requer correção.",
+              ? "A obra está fora da pasta/grupo esperado. Revise a movimentação em Organizar pastas."
+              : "Nenhuma correção estrutural necessária.",
             secondary: null,
             primary: null,
             task: "",
@@ -550,7 +546,7 @@ export function initOrganizationPage({
     if (subtab === "review_structure") {
       return [
         [String(items.filter(item => item.filter === "Divergências").length), "DIVERGÊNCIAS"],
-        [String(items.filter(item => item.filter === "Duplicatas").length), "DUPLICATAS"],
+        [String(items.filter(item => item.filter === "Duplicatas").length), "DUPLICIDADE"],
         [String(items.filter(item => item.filter === "OK").length), "OK"],
       ];
     }
@@ -990,10 +986,12 @@ export function initOrganizationPage({
           <article class="organization-meta"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>
         `).join("")}
       </div>
-      <section class="organization-notice">
-        <h3>${escapeHtml(item.notice?.[0] || "Informação")}</h3>
-        <p>${escapeHtml(item.notice?.[1] || "")}</p>
-      </section>
+      ${item.notice ? `
+        <section class="organization-notice">
+          <h3>${escapeHtml(item.notice?.[0] || "Informação")}</h3>
+          <p>${escapeHtml(item.notice?.[1] || "")}</p>
+        </section>
+      ` : ""}
       <div class="organization-detail-boxes">
         ${(item.boxes || []).map(([label, value]) => `
           <article class="organization-detail-box"><h3>${escapeHtml(label)}</h3>${(organizationSubtab === "review_structure" || organizationSubtab === "organize_folders")

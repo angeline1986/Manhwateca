@@ -1,3 +1,4 @@
+import unicodedata
 from collections import defaultdict
 from pathlib import Path
 
@@ -19,12 +20,20 @@ def build_plan(manga_folders, manga_root, get_group, get_current_group):
             "group": group,
             "current_group": get_current_group(manga_folder),
             "exists": destination.exists(),
-            "is_correct": manga_folder == destination,
+            "is_correct": _same_structural_path(manga_folder, destination),
             "main_caps": chapter_data["main_caps"],
             "side_caps": chapter_data["side_caps"],
             "total_caps": chapter_data["total_caps"],
         })
     return plan
+
+
+def _same_structural_path(source, destination):
+    return _normalized_path(source) == _normalized_path(destination)
+
+
+def _normalized_path(path):
+    return unicodedata.normalize("NFC", str(Path(path)))
 
 
 def detect_conflicts(plan):
