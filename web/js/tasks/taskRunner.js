@@ -20,6 +20,11 @@ export function initTaskRunner({ elements, callbacks, showPage, getNotionUncatal
     if (eyebrow) eyebrow.textContent = text;
   }
 
+  function setConfirmationButton(label) {
+    const confirmButton = elements.confirmationDialog.querySelector('[value="confirm"]');
+    if (confirmButton) confirmButton.textContent = label;
+  }
+
   function confirmTask(action) {
     const notionWrite = [
       "notion_apply_batch",
@@ -31,6 +36,7 @@ export function initTaskRunner({ elements, callbacks, showPage, getNotionUncatal
     if (massCatalog && uncataloged <= 0) {
       setConfirmationEyebrow("INFORMAÇÃO");
       setConfirmationCancelVisible(false);
+      setConfirmationButton("Fechar");
       elements.confirmationTitle.textContent = "Nenhuma nova obra encontrada";
       elements.confirmationText.textContent =
         "A biblioteca já está atualizada.";
@@ -39,19 +45,23 @@ export function initTaskRunner({ elements, callbacks, showPage, getNotionUncatal
         elements.confirmationDialog.addEventListener("close", () => {
           setConfirmationEyebrow("CONFIRMAÇÃO");
           setConfirmationCancelVisible(true);
+          setConfirmationButton("Confirmar");
           resolve(false);
         }, { once: true });
       });
     }
     setConfirmationEyebrow("CONFIRMAÇÃO");
     setConfirmationCancelVisible(true);
+    setConfirmationButton("Confirmar");
     elements.confirmationTitle.textContent = massCatalog
-      ? "Confirmar Catalogação em Massa"
+      ? "Confirmar Catalogação"
       : notionWrite
       ? "Confirmar alteração no Notion"
       : "Confirmar alteração na biblioteca";
     elements.confirmationText.textContent = massCatalog
-      ? `Foi encontrada ${uncataloged} nova ${uncataloged === 1 ? "obra" : "obras"} para catalogação. Deseja prosseguir?`
+      ? uncataloged === 1
+        ? "Foi encontrada 1 nova obra para catalogação. Deseja prosseguir?"
+        : `Foram encontradas ${uncataloged} novas obras para catalogação. Deseja prosseguir?`
       : notionWrite
       ? "Esta ação enviará alterações ao Notion. Deseja continuar?"
       : "Esta ação alterará arquivos ou pastas da biblioteca. Deseja continuar?";

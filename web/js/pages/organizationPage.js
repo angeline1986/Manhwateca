@@ -1,4 +1,4 @@
-import { catalogOne, createOrganizationDecision, getCatalog, getChapterReview, getFolderOrganizationReview, getNamingReview, getOrganizationPendingReview, getStructureReview, reconcileAliases, resolveOrganizationDecision } from "../api/libraryApi.js";
+import { catalogOne, createOrganizationDecision, getCatalog, getChapterReview, getFolderOrganizationReview, getNamingReview, getOrganizationPendingReview, getStructureReview, getTaskHistory, reconcileAliases, resolveOrganizationDecision } from "../api/libraryApi.js";
 import { escapeHtml } from "../utils/html.js";
 
 export function initOrganizationPage({
@@ -19,6 +19,7 @@ export function initOrganizationPage({
   let trackCatalogSnapshot = null;
   let trackCatalogLoading = false;
   let trackCatalogError = "";
+  let latestCatalogTask = null;
   let structureReviewSnapshot = null;
   let structureReviewLoading = false;
   let structureReviewError = "";
@@ -202,26 +203,34 @@ export function initOrganizationPage({
   }
 
   function updateTopbar(config) {
+    const topbar = document.getElementById("topbar");
     const eyebrow = document.getElementById("pageEyebrow");
     const title = document.getElementById("pageTitle");
     const subtitle = document.getElementById("pageSubtitle");
     const staticStatus = document.querySelector(".organization-topbar-status");
+    const meta = document.getElementById("flowsCurrentMeta");
 
+    topbar?.classList.toggle("organization", Boolean(config.showCatalogMeta));
     if (eyebrow) eyebrow.textContent = `ORGANIZAÇÃO / ${config.title.toUpperCase()}`;
     if (title) title.textContent = "Organizar biblioteca local";
     if (subtitle) subtitle.textContent = config.subtitle;
     if (staticStatus) staticStatus.hidden = true;
+    if (meta) meta.innerHTML = config.showCatalogMeta ? renderCatalogTaskMeta() : "";
   }
 
   function restoreTopbar() {
+    const topbar = document.getElementById("topbar");
     const eyebrow = document.getElementById("pageEyebrow");
     const title = document.getElementById("pageTitle");
     const subtitle = document.getElementById("pageSubtitle");
     const status = document.querySelector(".organization-topbar-status");
+    const meta = document.getElementById("flowsCurrentMeta");
+    topbar?.classList.remove("organization");
     if (eyebrow) eyebrow.textContent = "ARQUIVOS LOCAIS";
     if (title) title.textContent = "Organização";
     if (subtitle) subtitle.textContent = "Revise e aplique padrões com segurança.";
     if (status) status.hidden = true;
+    if (meta) meta.innerHTML = "";
   }
 
   function getPendingItems() {
@@ -1026,6 +1035,54 @@ export function initOrganizationPage({
     };
   }
 
+  function shortDate(value) {
+    if (!value) return "Sem registro";
+    return new Date(value).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+    });
+  }
+
+  function shortTime(value) {
+    if (!value) return "--:--:--";
+    return new Date(value).toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }
+
+  function renderCatalogTaskMeta() {
+    if (!latestCatalogTask) {
+      return `
+        <div class="status-minimalist">
+          <div class="main-status">
+            <span>Última catalogação</span>
+            <b>Sem registro</b>
+          </div>
+          <div class="dates-row">
+            INÍCIO: <b>--:--:--</b>
+            <span>•</span>
+            FIM: <b>--:--:--</b>
+          </div>
+        </div>
+      `;
+    }
+    return `
+      <div class="status-minimalist">
+        <div class="main-status">
+          <span>Última catalogação</span>
+          <b>${escapeHtml(shortDate(latestCatalogTask.finished_at || latestCatalogTask.started_at))}</b>
+        </div>
+        <div class="dates-row">
+          INÍCIO: <b>${escapeHtml(shortTime(latestCatalogTask.started_at))}</b>
+          <span>•</span>
+          FIM: <b>${escapeHtml(shortTime(latestCatalogTask.finished_at))}</b>
+        </div>
+      </div>
+    `;
+  }
+
   function catalogChangeName(item) {
     if (typeof item === "string") return item;
     return item?.nome || item?.name || item?.title || "Obra sem nome";
@@ -1050,15 +1107,29 @@ export function initOrganizationPage({
     const removed = Array.isArray(changes.removed) ? changes.removed : [];
     if (!added.length && !updated.length && !removed.length) return "";
     return `
-      <details class="organization-track-change-details">
-        <summary>Ver detalhes da última catalogação</summary>
-        <div class="organization-track-change-groups">
-          ${renderCatalogChangeGroup("NOVAS", added)}
-          ${renderCatalogChangeGroup("ALTERADAS", updated)}
-          ${renderCatalogChangeGroup("REMOVIDAS", removed)}
-        </div>
-      </details>
+      <div class="organization-track-change-groups">
+        ${renderCatalogChangeGroup("NOVAS", added)}
+        ${renderCatalogChangeGroup("ALTERADAS", updated)}
+        ${renderCatalogChangeGroup("REMOVIDAS", removed)}
+      </div>
     `;
+  }
+
+  async function loadLatestCatalogTask() {
+    try {
+      const { response, payload } = await getTaskHistory();
+      if (!response.ok) return;
+      latestCatalogTask = (payload.tasks || []).find(task =>
+        task.action === "catalog_scan" && task.status === "completed"
+      ) || null;
+      if (organizationSubtab === "track_library") {
+        updateTopbar({
+          title: "Rastrear biblioteca",
+          subtitle: "Localize obras, pastas e capítulos antes de qualquer análise.",
+          showCatalogMeta: true,
+        });
+      }
+    } catch {}
   }
 
   async function loadTrackLibrarySnapshot() {
@@ -1068,7 +1139,10 @@ export function initOrganizationPage({
     if (organizationSubtab === "track_library") renderTrackLibrary();
 
     try {
-      const { response, payload } = await getCatalog();
+      const [{ response, payload }] = await Promise.all([
+        getCatalog(),
+        loadLatestCatalogTask(),
+      ]);
       if (!response.ok) {
         throw new Error(payload?.error || "Não foi possível carregar o snapshot da biblioteca.");
       }
@@ -1088,7 +1162,7 @@ export function initOrganizationPage({
     const config = {
       title: "Rastrear biblioteca",
       subtitle: "Localize obras, pastas e capítulos antes de qualquer análise.",
-      status: trackCatalogLoading ? "Atualizando" : "Somente leitura",
+      showCatalogMeta: true,
     };
     updateTopbar(config);
     setOrganizationMode(true);
@@ -1145,7 +1219,6 @@ export function initOrganizationPage({
           <h2>Rastrear biblioteca</h2>
           <p>Leia o estado atual da biblioteca sem mover ou renomear arquivos.</p>
         </div>
-        <span class="organization-stage-status">${trackCatalogLoading ? "Atualizando" : "Somente leitura"}</span>
       </header>
 
       <section class="organization-full-content organization-track-content">
@@ -1209,13 +1282,15 @@ export function initOrganizationPage({
           </div>
         </section>
 
-        <div class="organization-track-changes">
-          <span>Última catalogação</span>
-          <strong>${changeTotal
-            ? `${metrics.added} nova(s) · ${metrics.updated} alterada(s) · ${metrics.removed} removida(s)`
-            : "Nenhuma mudança registrada"}</strong>
-        </div>
-        ${renderCatalogChangeDetails(trackCatalogSnapshot)}
+        <details class="organization-track-changes">
+          <summary>
+            <span>Última catalogação</span>
+            <strong>${changeTotal
+              ? `${metrics.added} nova(s) · ${metrics.updated} alterada(s) · ${metrics.removed} removida(s)`
+              : "Nenhuma mudança registrada"}</strong>
+          </summary>
+          ${renderCatalogChangeDetails(trackCatalogSnapshot)}
+        </details>
 
         <section class="organization-full-action">
           <div class="organization-action-copy">
@@ -1526,6 +1601,7 @@ export function initOrganizationPage({
     trackCatalogSnapshot = event.detail.data;
     trackCatalogError = "";
     trackCatalogLoading = false;
+    loadLatestCatalogTask();
     if (organizationSubtab === "track_library") renderTrackLibrary();
     if (organizationSubtab === "review_structure") renderOrganizationSubtab();
   });

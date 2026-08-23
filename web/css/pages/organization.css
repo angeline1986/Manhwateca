@@ -92,6 +92,17 @@
 .organization-topbar-status {
   margin-left: auto;
 }
+
+.topbar.organization .topbar-flow-meta {
+  display: block;
+  width: min(360px, 36vw);
+  margin: 0 0 0 auto;
+}
+
+.topbar.organization .status-minimalist {
+  text-align: right;
+}
+
 #page-organization .organization-workspace {
   width: 100%;
   padding: 0;
@@ -1055,27 +1066,79 @@
 }
 
 .organization-track-changes {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.organization-track-changes summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-top: 14px;
   padding: 12px 15px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--panel);
+  cursor: pointer;
+  list-style: none;
 }
 
-.organization-track-changes span {
+.organization-track-changes summary::-webkit-details-marker {
+  display: none;
+}
+
+.organization-track-changes summary span {
   color: var(--muted);
   font-size: 11px;
   font-weight: 800;
 }
 
-.organization-track-changes strong {
+.organization-track-changes summary span::before {
+  content: "▶";
+  display: inline-block;
+  width: 16px;
+  color: var(--rose);
+}
+
+.organization-track-changes[open] summary span::before {
+  content: "▼";
+}
+
+.organization-track-changes summary strong {
   color: var(--text);
   font-size: 12px;
   text-align: right;
+}
+
+.organization-track-change-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 18px;
+  padding: 16px 15px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.organization-track-change-group {
+  display: grid;
+  gap: 10px;
+}
+
+.organization-track-change-group strong {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.organization-track-change-group ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.organization-track-change-group li {
+  color: var(--text);
+  font-size: 13px;
 }
 
 .organization-track-state {

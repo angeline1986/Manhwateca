@@ -1,10 +1,24 @@
 export function initTaskToast({ elements, taskNextStep, taskCompletionSummary }) {
+  const consumedTasks = new Set();
+  let hideTimer;
+
+  function hideCompletedToast(taskId) {
+    if (taskId) consumedTasks.add(taskId);
+    elements.taskToast.hidden = true;
+    delete elements.taskToast.dataset.taskId;
+  }
+
   function updateTaskToast(tasks) {
     if (elements.taskToast.hidden || !elements.taskToast.dataset.taskId) return;
     const task = tasks.find(item => item.id === elements.taskToast.dataset.taskId);
     if (!task) return;
+    if (consumedTasks.has(task.id)) {
+      hideCompletedToast(task.id);
+      return;
+    }
     const text = document.getElementById("taskToastText");
     if (["queued", "running"].includes(task.status)) {
+      clearTimeout(hideTimer);
       elements.taskToast.className = "task-toast running";
       text.textContent = task.status === "queued"
         ? "Aguardando o início da tarefa..."
@@ -46,6 +60,8 @@ export function initTaskToast({ elements, taskNextStep, taskCompletionSummary })
       delete elements.viewTaskProgress.dataset.nextPage;
       delete elements.viewTaskProgress.dataset.nextPanel;
     }
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => hideCompletedToast(task.id), 4200);
   }
 
   return { updateTaskToast };
