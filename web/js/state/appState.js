@@ -9,6 +9,11 @@ export const pageMeta = {
     title: "Visão geral",
     subtitle: "Acompanhe a biblioteca e as integrações.",
   },
+  tracking: {
+    eyebrow: "ACOMPANHAMENTO",
+    title: "Acompanhar obras",
+    subtitle: "Consulte lançamentos recentes e organize suas obras favoritas.",
+  },
   library: {
     eyebrow: "ACERVO E CURADORIA",
     title: "Biblioteca",

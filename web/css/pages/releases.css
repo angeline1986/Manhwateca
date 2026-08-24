@@ -184,3 +184,262 @@
     grid-template-columns: 1fr;
   }
 }
+
+.topbar.tracking .topbar-flow-meta {
+  display: block;
+  margin: 0 0 0 auto;
+  width: min(300px, 30vw);
+}
+
+.tracking-topbar-meta {
+  display: grid;
+  gap: 4px;
+  text-align: right;
+}
+
+.tracking-topbar-meta strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.tracking-topbar-meta small {
+  color: var(--muted);
+  font-weight: 850;
+}
+
+.tracking-topbar-meta span,
+.tracking-window span,
+.tracking-window small,
+.tracking-work-kpis span,
+.tracking-detail-grid span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.tracking-window {
+  border: 1px solid var(--rose-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.tracking-window input[type="range"] {
+  accent-color: var(--rose);
+  width: 100%;
+}
+
+.tracking-window-scale,
+.tracking-window-summary {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.tracking-window-summary strong {
+  color: var(--rose-dark);
+}
+
+.tracking-releases-panel .tracking-window {
+  margin-bottom: 14px;
+}
+
+.tracking-releases-panel .release-list-head {
+  align-items: start;
+  margin-bottom: -6px;
+}
+
+.tracking-releases-panel .release-list-head h3 {
+  margin-top: 8px;
+}
+
+.tracking-releases-panel .release-filters {
+  display: grid;
+  gap: 8px 12px;
+  grid-template-columns: minmax(240px, 1fr) auto auto;
+  justify-content: end;
+}
+
+.tracking-releases-panel .release-filters input[type="search"] {
+  min-width: 320px;
+  width: 100%;
+}
+
+.tracking-releases-panel .release-table th:nth-child(1),
+.tracking-releases-panel .release-table td:nth-child(1) {
+  width: 34%;
+}
+
+.tracking-releases-panel .release-table th:nth-child(2),
+.tracking-releases-panel .release-table td:nth-child(2) {
+  width: 10%;
+}
+
+.tracking-releases-panel .release-table th:nth-child(3),
+.tracking-releases-panel .release-table td:nth-child(3) {
+  width: 14%;
+}
+
+.tracking-releases-panel .release-table th:nth-child(4),
+.tracking-releases-panel .release-table td:nth-child(4) {
+  width: 30%;
+  white-space: normal;
+}
+
+.tracking-releases-panel .release-table th:nth-child(5),
+.tracking-releases-panel .release-table td:nth-child(5) {
+  width: 12%;
+}
+
+.tracking-workspace {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(280px, .8fr) minmax(0, 1.5fr);
+}
+
+.tracking-work-list,
+.tracking-work-detail {
+  border: 1px solid var(--rose-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.tracking-work-kpis {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tracking-work-kpis article,
+.tracking-detail-grid article {
+  background: var(--soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+}
+
+.tracking-work-controls {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.tracking-work-items {
+  display: grid;
+  gap: 8px;
+  max-height: 470px;
+  overflow: auto;
+}
+
+.tracking-work-item {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 10px 12px;
+}
+
+.tracking-work-item.active {
+  border-color: var(--rose);
+  box-shadow: 0 0 0 2px rgba(169, 77, 107, .13);
+}
+
+.tracking-work-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracking-star {
+  background: transparent !important;
+  border: 0;
+  color: var(--rose-dark) !important;
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+  padding: 2px !important;
+  transform: none !important;
+}
+
+.tracking-detail-top {
+  align-items: start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.tracking-detail-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tracking-history {
+  display: grid;
+  gap: 10px;
+}
+
+.tracking-history-list {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tracking-history-list article {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr auto auto;
+  padding: 10px 12px;
+}
+
+.tracking-history-list article + article {
+  border-top: 1px solid var(--border);
+}
+
+.tracking-empty {
+  color: var(--muted);
+  margin: 0;
+}
+
+@media (max-width: 920px) {
+  .tracking-window-summary,
+  .tracking-window-scale {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .topbar.tracking .topbar-flow-meta {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .tracking-topbar-meta {
+    text-align: left;
+  }
+
+  .tracking-releases-panel .release-filters {
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  .tracking-releases-panel .release-filters input[type="search"] {
+    min-width: 0;
+  }
+
+  .tracking-workspace,
+  .tracking-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}

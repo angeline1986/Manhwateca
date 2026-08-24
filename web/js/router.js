@@ -12,6 +12,8 @@ export function initRouter(options = {}) {
     const topbar = document.getElementById("topbar");
     topbar.classList.toggle("overview", page === "overview");
     topbar.classList.toggle("flows", page === "flows");
+    topbar.classList.toggle("tracking", page === "tracking");
+    if (page !== "organization-v2") topbar.classList.remove("organization");
     document.getElementById("refresh").hidden = page !== "overview";
     document.querySelectorAll(".page").forEach(section =>
       section.classList.toggle("active", section.id === `page-${pageSection}`)

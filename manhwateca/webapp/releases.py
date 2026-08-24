@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import parse_qs
 from zoneinfo import ZoneInfo
 
@@ -44,9 +44,8 @@ def dashboard_releases_summary():
 
 def releases_payload(query):
     args = parse_qs(query)
-    period = _period(args.get("period", ["today"])[0])
     periods = current_periods()
-    start, end = _range_for(periods, period)
+    period, start, end = _range_from_args(args, periods)
     page = _int(args.get("page", ["1"])[0], 1)
     per_page = min(100, max(1, _int(args.get("per_page", ["20"])[0], 20)))
     warning = None
@@ -110,6 +109,18 @@ def update_subscription_payload(payload):
     return {"subscription": _subscription_payload(row)}, 200
 
 
+def update_favorite_payload(payload):
+    manga_id = _int(payload.get("manga_id"), 0)
+    if not manga_id:
+        return {"error": "manga_id é obrigatório."}, 400
+    favorite = _bool(payload.get("favorite"))
+    row = ReleaseMonitorRepository().update_favorite(manga_id, favorite)
+    return {
+        "manga_id": int(row["manga_id"]),
+        "favorite": bool(row["favorite"]),
+    }, 200
+
+
 def mark_viewed_payload(payload):
     repository = ReleaseMonitorRepository()
     release_id = _int(payload.get("release_id"), 0)
@@ -121,6 +132,16 @@ def mark_viewed_payload(payload):
         start, end = _range_for(periods, period)
         changed = repository.mark_viewed(start_date=start, end_date=end)
     return {"changed": changed}
+
+
+def check_parameters_payload(payload):
+    manga_id = _int(payload.get("manga_id"), 0)
+    parameters = {}
+    if manga_id:
+        parameters["manga_id"] = manga_id
+    elif payload.get("manga_id") not in {None, "", 0, "0"}:
+        return {"error": "manga_id inválido."}, 400
+    return parameters, 202
 
 
 def _period_payload(start, end, counts, prefix):
@@ -187,6 +208,22 @@ def _monitoring_payload(row):
     }
 
 
+def _range_from_args(args, periods):
+    days_text = args.get("days", [None])[0]
+    if days_text not in {None, ""}:
+        days = _int(days_text, 0)
+        if days <= 0 or days > 365:
+            raise ReleaseMonitorRouteError(
+                "days deve ser um inteiro entre 1 e 365.",
+                status=400,
+            )
+        end = periods.today_end
+        return f"{days}d", end - timedelta(days=days - 1), end
+    period = _period(args.get("period", ["today"])[0])
+    start, end = _range_for(periods, period)
+    return period, start, end
+
+
 def _range_for(periods, period):
     return {
         "today": (periods.today_start, periods.today_end),
@@ -204,6 +241,12 @@ def _int(value, default):
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _bool(value):
+    if isinstance(value, str):
+        return value.strip().casefold() in {"1", "true", "sim", "yes", "on"}
+    return bool(value)
 
 
 def _iso(value):

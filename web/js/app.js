@@ -7,6 +7,7 @@ import { initMangaUpdatesPage } from "./pages/mangaupdatesPage.js";
 import { initNotionPage } from "./pages/notionPage.js";
 import { initOrganizationPage } from "./pages/organizationPage.js";
 import { initOverviewPage } from "./pages/overviewPage.js";
+import { initTrackingPage } from "./pages/trackingPage.js";
 import { initRouter } from "./router.js";
 import { initPendingActions, pendingRequiresConfirmation } from "./tasks/pendingActions.js";
 import { initTaskRunner } from "./tasks/taskRunner.js";
@@ -22,6 +23,15 @@ const releaseCards = byId("releaseCards"), releaseList = byId("releaseList");
 const releaseFeedback = byId("releaseFeedback"), releaseCheckNow = byId("releaseCheckNow");
 const releaseMonitorStatus = byId("releaseMonitorStatus");
 const releaseSearch = byId("releaseSearch"), releaseUnseenOnly = byId("releaseUnseenOnly");
+const trackingCheckAll = byId("trackingCheckAll"), trackingDaysSlider = byId("trackingDaysSlider");
+const trackingWindowLabel = byId("trackingWindowLabel"), trackingReleaseCount = byId("trackingReleaseCount");
+const trackingReleaseSearch = byId("trackingReleaseSearch");
+const trackingFavoritesOnly = byId("trackingFavoritesOnly"), trackingUnseenOnly = byId("trackingUnseenOnly");
+const trackingFeedback = byId("trackingFeedback"), trackingReleaseList = byId("trackingReleaseList");
+const trackingWorksCount = byId("trackingWorksCount"), trackingFavoriteCount = byId("trackingFavoriteCount");
+const trackingUpdatedCount = byId("trackingUpdatedCount"), trackingWorkSearch = byId("trackingWorkSearch");
+const trackingWorkFilter = byId("trackingWorkFilter"), trackingWorkList = byId("trackingWorkList");
+const trackingWorkDetail = byId("trackingWorkDetail");
 const actionGrid = byId("actionGrid"), mangaActionGrid = byId("mangaActionGrid");
 const notionActionGrid = byId("notionActionGrid"), supportActionGrid = byId("supportActionGrid");
 const taskList = byId("taskList"), taskToast = byId("taskToast"), viewTaskProgress = byId("viewTaskProgress");
@@ -74,6 +84,26 @@ const overviewPage = initOverviewPage({
 const loadStatus = overviewPage.loadStatus;
 const loadDiagnostics = overviewPage.loadDiagnostics;
 const loadPendingActions = overviewPage.loadPendingActions;
+const trackingPage = initTrackingPage({
+  topbarMeta: flowsCurrentMeta,
+  checkAll: trackingCheckAll,
+  daysSlider: trackingDaysSlider,
+  windowLabel: trackingWindowLabel,
+  releaseCount: trackingReleaseCount,
+  releaseSearch: trackingReleaseSearch,
+  favoritesOnly: trackingFavoritesOnly,
+  unseenOnly: trackingUnseenOnly,
+  feedback: trackingFeedback,
+  releaseList: trackingReleaseList,
+  worksCount: trackingWorksCount,
+  favoriteCount: trackingFavoriteCount,
+  updatedCount: trackingUpdatedCount,
+  workSearch: trackingWorkSearch,
+  workFilter: trackingWorkFilter,
+  workList: trackingWorkList,
+  detail: trackingWorkDetail,
+});
+const loadTracking = trackingPage.loadTracking;
 const libraryPage = initLibraryPage({
   elements: {
     catalogSummary,
@@ -226,5 +256,6 @@ initPendingActions({
 Promise.all([
   loadStatus(), loadDiagnostics(), loadActions(), loadCatalog(),
   loadIdReview(), loadMangaUpdatesStatus(), loadTasks()
-  , loadNotionStatus(), loadMetadataStatus(), loadEditorial(), loadWorkflow()
+  , loadNotionStatus(), loadMetadataStatus(), loadEditorial(), loadWorkflow(),
+  loadTracking()
 ]);

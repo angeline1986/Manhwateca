@@ -35,12 +35,14 @@ from manhwateca.webapp.organization import (
 from manhwateca.webapp.pending_actions import pending_payload
 from manhwateca.webapp.post_routes import handle_direct_post
 from manhwateca.webapp.releases import (
+    check_parameters_payload,
     dashboard_releases_summary,
     mark_viewed_payload,
     ReleaseMonitorRouteError,
     release_status_payload,
     releases_payload,
     subscriptions_payload,
+    update_favorite_payload,
     update_subscription_payload,
 )
 from manhwateca.webapp.status import build_status
@@ -216,8 +218,15 @@ def create_handler(project_root, task_manager, workflow_manager=None):
                 self._send_json(*direct)
                 return
             if path == "/api/releases/check":
+                parameters, status = check_parameters_payload(payload)
+                if status != 202:
+                    self._send_json(parameters, status=status)
+                    return
                 try:
-                    task = task_manager.start("release_check")
+                    task = task_manager.start(
+                        "release_check",
+                        parameters=parameters,
+                    )
                 except RuntimeError:
                     self._send_json({"status": "already_running"}, status=409)
                 else:
@@ -225,6 +234,9 @@ def create_handler(project_root, task_manager, workflow_manager=None):
                 return
             if path == "/api/releases/subscriptions/update":
                 self._send_json(*update_subscription_payload(payload))
+                return
+            if path == "/api/releases/favorite":
+                self._send_json(*update_favorite_payload(payload))
                 return
             if path == "/api/releases/mark-viewed":
                 self._send_json(mark_viewed_payload(payload))

@@ -58,7 +58,7 @@ class ReleaseMonitorService:
             else provider_executors
         )
 
-    def run(self, max_pages=100):
+    def run(self, max_pages=100, manga_id=None):
         tz = ZoneInfo(self.timezone)
         now = self.now_func() if self.now_func else datetime.now(tz)
         periods = current_periods(now, self.timezone)
@@ -94,7 +94,8 @@ class ReleaseMonitorService:
         status = "success"
         error_message = None
         try:
-            subscriptions = self.repository.list_active_subscriptions()
+            subscriptions = self._list_active_subscriptions(manga_id)
+            checked_manga_ids = [row["manga_id"] for row in subscriptions]
             work_refs = _resolve_work_refs(subscriptions, self.external_ref_repository)
             metrics["monitored_series_count"] = len({
                 ref.external_id
@@ -149,6 +150,12 @@ class ReleaseMonitorService:
         except Exception as error:
             status = "failed" if metrics["releases_received"] == 0 else "partial_success"
             error_message = _safe_error(error)
+        if "checked_manga_ids" in locals() and checked_manga_ids:
+            self._mark_subscriptions_checked(
+                checked_manga_ids,
+                success=status in {"success", "partial_success"},
+                error_message=error_message,
+            )
         self.repository.finish_run(run_id, status, metrics, error_message)
         latest = self.repository.latest_run() or {}
         return ReleaseMonitorResult(
@@ -160,6 +167,24 @@ class ReleaseMonitorService:
             provider_metrics=provider_metrics,
             **metrics,
         )
+
+    def _list_active_subscriptions(self, manga_id):
+        try:
+            return self.repository.list_active_subscriptions(manga_id=manga_id)
+        except TypeError:
+            subscriptions = self.repository.list_active_subscriptions()
+            if manga_id is None:
+                return subscriptions
+            return [
+                row for row in subscriptions
+                if int(row.get("manga_id") or 0) == int(manga_id)
+            ]
+
+    def _mark_subscriptions_checked(self, manga_ids, success=True, error_message=None):
+        marker = getattr(self.repository, "mark_subscriptions_checked", None)
+        if marker is None:
+            return
+        marker(manga_ids, success=success, error_message=error_message)
 
 
 class ProviderExecution:

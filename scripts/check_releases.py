@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 from pathlib import Path
 import sys
 
@@ -11,8 +12,11 @@ from manhwateca.release_monitor.service import ReleaseMonitorService
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--manga-id", type=int)
+    args = parser.parse_args()
     load_dotenv(PROJECT_ROOT / ".env")
-    result = ReleaseMonitorService().run()
+    result = ReleaseMonitorService().run(manga_id=args.manga_id)
     print(f"Status: {result.status}")
     print(f"Execução: {result.run_id}")
     print(f"Obras monitoradas: {result.monitored_series_count}")

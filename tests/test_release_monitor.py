@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 from datetime import date, datetime
 from types import SimpleNamespace
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from manhwateca.release_monitor.parser import (
@@ -22,6 +23,8 @@ from manhwateca.release_monitor.service import (
     ReleaseMonitorService,
     current_periods,
 )
+from manhwateca.webapp.actions import SAFE_ACTIONS, build_command
+from manhwateca.webapp import releases as web_releases
 
 
 class FakeRepository:
@@ -31,6 +34,8 @@ class FakeRepository:
         self.external_rows = {}
         self.finished = []
         self.subscriptions = subscriptions
+        self.checked = []
+        self.requested_manga_id = None
 
     def active_run(self):
         return {"id": 99, "started_at": datetime(2026, 8, 6, tzinfo=ZoneInfo("UTC"))} if self.running else None
@@ -44,13 +49,24 @@ class FakeRepository:
     def latest_run(self):
         return {"started_at": datetime(2026, 8, 6, 13, tzinfo=ZoneInfo("UTC")), "finished_at": datetime(2026, 8, 6, 13, 1, tzinfo=ZoneInfo("UTC"))}
 
-    def list_active_subscriptions(self):
+    def list_active_subscriptions(self, manga_id=None):
+        self.requested_manga_id = manga_id
         if self.subscriptions is not None:
-            return self.subscriptions
-        return [
-            {"manga_id": 10, "work_code": "123", "title": "Obra A"},
-            {"manga_id": 390, "work_code": "39054810010", "title": "Accidental Baby (Luharang)"},
-        ]
+            subscriptions = self.subscriptions
+        else:
+            subscriptions = [
+                {"manga_id": 10, "work_code": "123", "title": "Obra A"},
+                {"manga_id": 390, "work_code": "39054810010", "title": "Accidental Baby (Luharang)"},
+            ]
+        if manga_id is not None:
+            return [
+                row for row in subscriptions
+                if int(row.get("manga_id") or 0) == int(manga_id)
+            ]
+        return subscriptions
+
+    def mark_subscriptions_checked(self, manga_ids, success=True, error_message=None):
+        self.checked.append((list(manga_ids), success, error_message))
 
     def upsert_release(self, release, manga_id):
         key = release.external_release_id or (
@@ -256,7 +272,7 @@ class ExternalReleaseConnection:
             "release_group": release_group,
             "normalized_release_group": normalized_release_group,
             "source_url": source_url,
-            "raw_payload": raw_payload,
+            "raw_payload": getattr(raw_payload, "obj", raw_payload),
             "last_seen_at": f"seen-{self.clock}",
         })
         return {"id": existing["id"], "inserted": inserted}
@@ -370,6 +386,96 @@ def unseen_between(rows, start_date, end_date):
 
 
 class ReleaseMonitorTests(unittest.TestCase):
+    def test_favorite_migration_adds_default_false_column(self):
+        sql = Path(
+            "manhwateca/database/migrations/016_release_monitor_favorites.sql"
+        ).read_text(encoding="utf-8").casefold()
+
+        self.assertIn("alter table manhwateca.release_monitor_subscriptions", sql)
+        self.assertIn("favorite boolean not null default false", sql)
+
+    def test_days_range_uses_inclusive_window(self):
+        periods = current_periods(
+            datetime(2026, 8, 24, 12, tzinfo=ZoneInfo("America/Sao_Paulo"))
+        )
+
+        period, start, end = web_releases._range_from_args({"days": ["15"]}, periods)
+
+        self.assertEqual("15d", period)
+        self.assertEqual(date(2026, 8, 10), start)
+        self.assertEqual(date(2026, 8, 24), end)
+
+    def test_days_one_returns_today_and_period_still_works(self):
+        periods = current_periods(
+            datetime(2026, 8, 24, 12, tzinfo=ZoneInfo("America/Sao_Paulo"))
+        )
+
+        one = web_releases._range_from_args({"days": ["1"]}, periods)
+        month = web_releases._range_from_args({"period": ["month"]}, periods)
+
+        self.assertEqual((date(2026, 8, 24), date(2026, 8, 24)), one[1:])
+        self.assertEqual("month", month[0])
+        self.assertEqual(date(2026, 8, 1), month[1])
+
+    def test_invalid_days_raises_route_error(self):
+        periods = current_periods(
+            datetime(2026, 8, 24, 12, tzinfo=ZoneInfo("America/Sao_Paulo"))
+        )
+
+        with self.assertRaises(web_releases.ReleaseMonitorRouteError):
+            web_releases._range_from_args({"days": ["0"]}, periods)
+
+    def test_check_parameters_accepts_optional_manga_id(self):
+        self.assertEqual(({}, 202), web_releases.check_parameters_payload({}))
+        self.assertEqual(
+            ({"manga_id": 7}, 202),
+            web_releases.check_parameters_payload({"manga_id": "7"}),
+        )
+
+        payload, status = web_releases.check_parameters_payload({"manga_id": "abc"})
+
+        self.assertEqual(400, status)
+        self.assertIn("error", payload)
+
+    def test_release_check_command_keeps_general_and_accepts_manga_id(self):
+        config = SAFE_ACTIONS["release_check"]
+
+        self.assertEqual(
+            ["scripts/check_releases.py"],
+            build_command(config, {}),
+        )
+        self.assertEqual(
+            ["scripts/check_releases.py", "--manga-id", "12"],
+            build_command(config, {"manga_id": 12}),
+        )
+
+    def test_update_favorite_payload_persists_true_and_false(self):
+        class FavoriteRepository:
+            def __init__(self):
+                self.values = {}
+
+            def update_favorite(self, manga_id, favorite):
+                self.values[manga_id] = favorite
+                return {"manga_id": manga_id, "favorite": favorite}
+
+        repository = FavoriteRepository()
+
+        with patch.object(web_releases, "ReleaseMonitorRepository", return_value=repository):
+            enabled, enabled_status = web_releases.update_favorite_payload({
+                "manga_id": "12",
+                "favorite": "true",
+            })
+            disabled, disabled_status = web_releases.update_favorite_payload({
+                "manga_id": "12",
+                "favorite": "false",
+            })
+
+        self.assertEqual(200, enabled_status)
+        self.assertEqual({"manga_id": 12, "favorite": True}, enabled)
+        self.assertEqual(200, disabled_status)
+        self.assertEqual({"manga_id": 12, "favorite": False}, disabled)
+        self.assertFalse(repository.values[12])
+
     def test_periods_use_sao_paulo_week_and_month_boundaries(self):
         periods = current_periods(datetime(2026, 8, 6, 2, 0, tzinfo=ZoneInfo("UTC")))
         self.assertEqual(periods.today_start, date(2026, 8, 5))
@@ -509,6 +615,61 @@ class ReleaseMonitorTests(unittest.TestCase):
         self.assertEqual(first.releases_inserted, 1)
         self.assertEqual(first.releases_unmatched, 1)
         self.assertEqual(second.releases_already_known, 1)
+
+    def test_service_with_manga_id_processes_only_that_subscription(self):
+        repository = FakeRepository(subscriptions=[
+            {"manga_id": 1, "work_code": "mu-a", "title": "Obra A"},
+            {"manga_id": 2, "work_code": "mu-b", "title": "Obra B"},
+        ])
+        provider = FakeProvider({
+            1: ReleaseProviderPage(
+                releases=[
+                    ExternalRelease("mangaupdates", "mu-a", "1", date(2026, 8, 6), external_release_id="a"),
+                    ExternalRelease("mangaupdates", "mu-b", "1", date(2026, 8, 6), external_release_id="b"),
+                ],
+                stats={
+                    "releases_received": 2,
+                    "releases_parsed": 2,
+                    "releases_with_series_metadata": 2,
+                    "releases_missing_series_metadata": 0,
+                    "releases_invalid": 0,
+                },
+                has_results_collection=True,
+                has_next_page=False,
+            )
+        })
+
+        result = ReleaseMonitorService(
+            repository=repository,
+            provider=provider,
+            external_ref_repository=FakeExternalRefRepository({}),
+            provider_executors=[MangaUpdatesMonitorExecutor(provider)],
+            now_func=lambda: datetime(2026, 8, 6, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        ).run(manga_id=2)
+
+        self.assertEqual(2, repository.requested_manga_id)
+        self.assertEqual(["b"], list(repository.rows))
+        self.assertEqual([([2], True, None)], repository.checked)
+        self.assertEqual(1, result.monitored_series_count)
+
+    def test_service_with_unknown_manga_id_does_not_run_general_check(self):
+        repository = FakeRepository(subscriptions=[
+            {"manga_id": 1, "work_code": "mu-a", "title": "Obra A"},
+        ])
+        provider = FakeProvider({})
+
+        result = ReleaseMonitorService(
+            repository=repository,
+            provider=provider,
+            external_ref_repository=FakeExternalRefRepository({}),
+            provider_executors=[MangaUpdatesMonitorExecutor(provider)],
+            now_func=lambda: datetime(2026, 8, 6, 12, tzinfo=ZoneInfo("America/Sao_Paulo")),
+        ).run(manga_id=999)
+
+        self.assertEqual(999, repository.requested_manga_id)
+        self.assertEqual([], provider.seen_pages)
+        self.assertEqual([], repository.checked)
+        self.assertEqual(0, result.monitored_series_count)
 
     def test_service_stops_when_period_is_exhausted_before_page_ten(self):
         repository = FakeRepository()

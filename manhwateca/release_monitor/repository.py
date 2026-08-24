@@ -88,14 +88,28 @@ class ReleaseMonitorRepository:
             """
         )
 
-    def list_active_subscriptions(self):
-        return self._fetch_all(
+    def list_active_subscriptions(self, manga_id=None):
+        filters = [
+            "COALESCE(s.enabled, TRUE) = TRUE",
             """
+            (
+                (m.work_code IS NOT NULL AND btrim(m.work_code) <> '')
+                OR s.enabled = TRUE
+            )
+            """,
+        ]
+        params = []
+        if manga_id:
+            filters.append("m.id = %s")
+            params.append(manga_id)
+        return self._fetch_all(
+            f"""
             SELECT
                 s.id,
                 m.id AS manga_id,
                 COALESCE(s.enabled, TRUE) AS enabled,
                 COALESCE(s.monitor_mode, 'auto') AS monitor_mode,
+                COALESCE(s.favorite, FALSE) AS favorite,
                 s.last_checked_at,
                 s.last_success_at,
                 s.last_error_at,
@@ -107,13 +121,10 @@ class ReleaseMonitorRepository:
             FROM mangas m
             LEFT JOIN release_monitor_subscriptions s
                 ON s.manga_id = m.id
-            WHERE COALESCE(s.enabled, TRUE) = TRUE
-              AND (
-                  (m.work_code IS NOT NULL AND btrim(m.work_code) <> '')
-                  OR s.enabled = TRUE
-              )
+            WHERE {" AND ".join(filters)}
             ORDER BY m.title
-            """
+            """,
+            tuple(params),
         )
 
     def list_subscription_overview(self):
@@ -127,11 +138,24 @@ class ReleaseMonitorRepository:
                 s.enabled AS explicit_enabled,
                 COALESCE(s.enabled, TRUE) AS monitored,
                 COALESCE(s.monitor_mode, 'auto') AS monitor_mode,
+                COALESCE(s.favorite, FALSE) AS favorite,
+                s.last_checked_at,
+                s.last_success_at,
+                latest.chapter AS latest_release_chapter,
+                latest.release_date AS latest_release_date,
+                latest.release_group AS latest_release_group,
                 s.created_at,
                 s.updated_at
             FROM mangas m
             LEFT JOIN release_monitor_subscriptions s
                 ON s.manga_id = m.id
+            LEFT JOIN LATERAL (
+                SELECT r.chapter, r.release_date, r.release_group
+                FROM external_releases r
+                WHERE r.manga_id = m.id
+                ORDER BY r.release_date DESC, r.first_seen_at DESC, r.id DESC
+                LIMIT 1
+            ) latest ON TRUE
             WHERE m.work_code IS NOT NULL
               AND btrim(m.work_code) <> ''
             ORDER BY m.title
@@ -176,6 +200,59 @@ class ReleaseMonitorRepository:
         )
         self._commit()
         return row
+
+    def update_favorite(self, manga_id, favorite):
+        row = self._fetch_one(
+            """
+            INSERT INTO release_monitor_subscriptions(manga_id, enabled, monitor_mode, favorite)
+            VALUES (%s, TRUE, 'releases', %s)
+            ON CONFLICT (manga_id)
+            DO UPDATE SET favorite = EXCLUDED.favorite
+            RETURNING manga_id, favorite
+            """,
+            (manga_id, favorite),
+        )
+        self._commit()
+        return row
+
+    def mark_subscriptions_checked(self, manga_ids, success=True, error_message=None):
+        ids = [int(manga_id) for manga_id in manga_ids if manga_id]
+        if not ids:
+            return 0
+        if success:
+            set_clause = """
+                last_checked_at = now(),
+                last_success_at = now(),
+                last_error_at = NULL,
+                last_error_message = NULL
+            """
+            params = (ids,)
+        else:
+            set_clause = """
+                last_checked_at = now(),
+                last_error_at = now(),
+                last_error_message = %s
+            """
+            params = (error_message, ids)
+        self._execute(
+            """
+            INSERT INTO release_monitor_subscriptions(manga_id, enabled, monitor_mode)
+            SELECT unnest(%s::bigint[]), TRUE, 'releases'
+            ON CONFLICT (manga_id) DO NOTHING
+            """,
+            (ids,),
+        )
+        row = self._fetch_one(
+            f"""
+            UPDATE release_monitor_subscriptions
+            SET {set_clause}
+            WHERE manga_id = ANY(%s::bigint[])
+            RETURNING count(*) OVER() AS changed
+            """,
+            params,
+        )
+        self._commit()
+        return int(row["changed"]) if row else 0
 
     def upsert_release(self, release, manga_id):
         mangaupdates_series_id = _mangaupdates_series_id(release)

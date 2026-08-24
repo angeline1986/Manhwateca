@@ -41,6 +41,9 @@
           <button class="nav-link" data-page="overview">
             <span class="nav-icon">⌂</span><span>Dashboard</span>
           </button>
+          <button class="nav-link" data-page="tracking">
+            <span class="nav-icon">★</span><span>Acompanhamento</span>
+          </button>
           <button class="nav-link legacy-nav" data-page="library">
             <span class="nav-icon">▤</span><span>Biblioteca</span>
           </button>
@@ -290,6 +293,102 @@
                   </span>
                 </button>
               </div>
+          </section>
+        </section>
+
+        <section class="page" id="page-tracking">
+          <section class="panel releases-panel tracking-releases-panel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">LANÇAMENTOS</span>
+                <h2>Lançamentos recentes</h2>
+                <p>Explore os capítulos encontrados dentro da janela selecionada.</p>
+              </div>
+              <button class="secondary-action" id="trackingCheckAll" type="button">
+                Verificar agora
+              </button>
+            </div>
+
+            <div class="tracking-window">
+              <span>JANELA DE VISUALIZAÇÃO</span>
+              <strong id="trackingWindowLabel">Últimos 15 dias</strong>
+              <input id="trackingDaysSlider" type="range" min="0" max="5" step="1" value="2">
+              <div class="tracking-window-scale" aria-hidden="true">
+                <span>1 DIA</span><span>7 DIAS</span><span>15 DIAS</span>
+                <span>30 DIAS</span><span>45 DIAS</span><span>60 DIAS</span>
+              </div>
+              <div class="tracking-window-summary">
+                <strong id="trackingReleaseCount">0 capítulos encontrados</strong>
+              </div>
+            </div>
+
+            <div class="release-list-head">
+              <h3>Capítulos disponíveis</h3>
+              <div class="release-filters">
+                <label>
+                  <input id="trackingReleaseSearch" type="search" placeholder="Buscar nesta lista...">
+                </label>
+                <label class="checkbox-label">
+                  <input id="trackingFavoritesOnly" type="checkbox">
+                  Somente favoritas
+                </label>
+                <label class="checkbox-label">
+                  <input id="trackingUnseenOnly" type="checkbox">
+                  Somente não visualizados
+                </label>
+              </div>
+            </div>
+            <div class="release-feedback" id="trackingFeedback"></div>
+            <div class="release-table-wrap">
+              <table class="release-table">
+                <thead>
+                  <tr>
+                    <th>Obra</th>
+                    <th>Capítulo</th>
+                    <th>Lançamento</th>
+                    <th>Grupo</th>
+                    <th>Situação</th>
+                  </tr>
+                </thead>
+                <tbody id="trackingReleaseList"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel tracking-works-panel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">OBRAS</span>
+                <h2>Busca e favoritas</h2>
+                <p>Consulte qualquer obra monitorada e organize suas favoritas.</p>
+              </div>
+            </div>
+            <div class="tracking-workspace">
+              <aside class="tracking-work-list">
+                <h3>Fila de obras</h3>
+                <div class="tracking-work-kpis">
+                  <article><strong id="trackingWorksCount">0</strong><span>MONITOR.</span></article>
+                  <article><strong id="trackingFavoriteCount">0</strong><span>FAVORITAS</span></article>
+                  <article><strong id="trackingUpdatedCount">0</strong><span>ATUALIZ.</span></article>
+                </div>
+                <div class="tracking-work-controls">
+                  <input id="trackingWorkSearch" type="search" placeholder="Buscar obra...">
+                  <select id="trackingWorkFilter" aria-label="Filtrar obras">
+                    <option value="all">TODAS</option>
+                    <option value="favorites">FAVORITAS</option>
+                    <option value="not-favorites">NÃO FAVORITAS</option>
+                  </select>
+                </div>
+                <div class="tracking-work-items" id="trackingWorkList" aria-live="polite"></div>
+              </aside>
+              <article class="tracking-work-detail" id="trackingWorkDetail">
+                <div class="organization-empty-detail">
+                  <span class="eyebrow">OBRA SELECIONADA</span>
+                  <h2>Nenhuma obra selecionada</h2>
+                  <p>Selecione uma obra monitorada para ver detalhes.</p>
+                </div>
+              </article>
+            </div>
           </section>
         </section>
 

@@ -46,6 +46,7 @@ SAFE_ACTIONS = {
         "command": ["scripts/check_releases.py"],
         "reports": [],
         "group": "release_monitor",
+        "accepts_manga_id": True,
     },
     "apply_organization": {
         "label": "Aplicar organização alfabética",
@@ -144,4 +145,8 @@ def build_command(config, parameters):
         )[:30]
         if initials:
             command.extend(["--initials", initials])
+    if config.get("accepts_manga_id"):
+        manga_id = str(parameters.get("manga_id", "")).strip()
+        if manga_id.isdigit() and int(manga_id) > 0:
+            command.extend(["--manga-id", manga_id])
     return command

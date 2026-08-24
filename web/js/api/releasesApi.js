@@ -16,6 +16,18 @@ export function checkReleases() {
   return postJson("/api/releases/check");
 }
 
+export function checkReleaseWork(mangaId) {
+  return postJson("/api/releases/check", { manga_id: mangaId });
+}
+
+export function getReleaseSubscriptions() {
+  return getJson("/api/releases/subscriptions");
+}
+
+export function updateReleaseFavorite(payload) {
+  return postJson("/api/releases/favorite", payload);
+}
+
 export function markViewed(payload) {
   return postJson("/api/releases/mark-viewed", payload);
 }
