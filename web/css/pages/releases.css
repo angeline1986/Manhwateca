@@ -458,3 +458,12 @@
 .tracking-history-toggle {
   min-width: 112px;
 }
+
+/* acompanhamento-layout-v2 */
+#page-tracking .tracking-page-shell,
+#page-tracking .tracking-content {
+    width: 100%;
+    max-width: 1180px;
+    margin-left: auto;
+    margin-right: auto;
+}

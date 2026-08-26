@@ -88,7 +88,6 @@ export function initTrackingPage(elements) {
         <td>${escapeHtml(item.title || "")}</td>
         <td>${escapeHtml(item.chapter || "")}</td>
         <td>${escapeHtml(dateOnly(item.release_date))}</td>
-        <td>${escapeHtml(item.release_group || "-")}</td>
         <td><span class="state ${item.viewed_at ? "ok" : "warn"}">${escapeHtml(item.status)}</span></td>
       </tr>
     `).join("");

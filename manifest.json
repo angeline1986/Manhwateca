@@ -1,13 +1,10 @@
 {
-  "package": "manhwateca-acompanhamento-ajustes-20260824",
-  "targets": [
+  "name": "Acompanhamento patch v2",
+  "date": "2026-08-26",
+  "scope": [
+    "web/index.html",
     "web/js/pages/trackingPage.js",
-    "web/css/pages/releases.css",
-    "tests/test_tracking_followup_regressions.py"
+    "web/css/pages/releases.css"
   ],
-  "changes": [
-    "polling de tasks até 10 minutos",
-    "histórico compacto 5 itens com expansão",
-    "fila esquerda sem stretch vertical"
-  ]
+  "safety": "alteração HTML limitada a #page-tracking; backup automático"
 }
