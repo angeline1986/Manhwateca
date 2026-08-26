@@ -36,7 +36,7 @@ def main() -> int:
     print(f"Sem correspondência: {result.releases_unmatched}")
     if result.error_message:
         print(f"Erro: {result.error_message}")
-    return 1 if result.status == "failed" else 0
+    return 1 if result.status in {"failed", "already_running"} else 0
 
 
 if __name__ == "__main__":

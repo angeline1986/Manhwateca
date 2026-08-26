@@ -17,12 +17,20 @@ def jsonb_payload(value):
     return Jsonb(value) if Jsonb is not None else value
 
 
+STALE_RUNNING_MINUTES = 2
+STALE_RUNNING_ERROR = (
+    "Execução running recuperada automaticamente após exceder "
+    f"{STALE_RUNNING_MINUTES} minutos sem finalizar."
+)
+
+
 class ReleaseMonitorRepository:
     def __init__(self, connection=None, *, connection_factory=None):
         self.connection = connection
         self.connection_factory = connection_factory or connect
 
     def start_run(self, reference_date, timezone) -> int | None:
+        self.recover_stale_runs()
         if self.active_run():
             return None
         row = self._fetch_one(
@@ -35,6 +43,20 @@ class ReleaseMonitorRepository:
         )
         self._commit()
         return row["id"]
+
+    def recover_stale_runs(self):
+        self._execute(
+            """
+            UPDATE release_monitor_runs
+            SET status = 'failed',
+                finished_at = now(),
+                error_message = %s
+            WHERE status = 'running'
+              AND started_at < now() - (%s * interval '1 minute')
+            """,
+            (STALE_RUNNING_ERROR, STALE_RUNNING_MINUTES),
+        )
+        self._commit()
 
     def active_run(self):
         return self._fetch_one(
@@ -242,17 +264,17 @@ class ReleaseMonitorRepository:
             """,
             (ids,),
         )
-        row = self._fetch_one(
+        rows = self._fetch_all(
             f"""
             UPDATE release_monitor_subscriptions
             SET {set_clause}
             WHERE manga_id = ANY(%s::bigint[])
-            RETURNING count(*) OVER() AS changed
+            RETURNING manga_id
             """,
             params,
         )
         self._commit()
-        return int(row["changed"]) if row else 0
+        return len(rows)
 
     def upsert_release(self, release, manga_id):
         mangaupdates_series_id = _mangaupdates_series_id(release)

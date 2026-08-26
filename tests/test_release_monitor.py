@@ -1,6 +1,6 @@
 import unittest
 from pathlib import Path
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -16,6 +16,7 @@ from manhwateca.release_monitor.providers import (
     ReleaseProviderPage,
 )
 from manhwateca.release_monitor.repository import ReleaseMonitorRepository
+from manhwateca.release_monitor.repository import STALE_RUNNING_ERROR
 from manhwateca.release_monitor.mangadex_execution import MangaDexExecutionResult
 from manhwateca.release_monitor.service import (
     MangaDexMonitorExecutor,
@@ -134,6 +135,115 @@ class CapturingConnection:
 
     def commit(self):
         pass
+
+
+class ReleaseRunCursor:
+    def __init__(self, connection):
+        self.connection = connection
+        self.row = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, sql, params=None):
+        normalized = " ".join(sql.split()).casefold()
+        if normalized.startswith("update release_monitor_runs set status = 'failed'"):
+            self.connection.recover_stale(params)
+            self.row = None
+        elif normalized.startswith("select * from release_monitor_runs where status = 'running'"):
+            self.row = self.connection.active_run()
+        elif normalized.startswith("insert into release_monitor_runs"):
+            self.row = self.connection.insert_run(params)
+        elif normalized.startswith("update release_monitor_runs set status = %s"):
+            self.connection.finish_run(params)
+            self.row = None
+        elif normalized.startswith("select * from release_monitor_runs order by"):
+            self.row = self.connection.latest_run()
+
+    def fetchone(self):
+        return self.row
+
+
+class ReleaseRunConnection:
+    def __init__(self, runs=None):
+        self.now = datetime(2026, 8, 25, 12, tzinfo=ZoneInfo("America/Sao_Paulo"))
+        self.runs = list(runs or [])
+        self.commits = []
+        self.next_id = max((run["id"] for run in self.runs), default=0) + 1
+
+    def cursor(self):
+        return ReleaseRunCursor(self)
+
+    def commit(self):
+        self.commits.append(True)
+
+    def recover_stale(self, params):
+        error_message, stale_minutes = params
+        threshold = self.now - timedelta(minutes=stale_minutes)
+        for run in self.runs:
+            if run["status"] == "running" and run["started_at"] < threshold:
+                run["status"] = "failed"
+                run["finished_at"] = self.now
+                run["error_message"] = error_message
+
+    def active_run(self):
+        active = [
+            run for run in self.runs
+            if run["status"] == "running"
+        ]
+        return sorted(active, key=lambda run: run["started_at"], reverse=True)[0] if active else None
+
+    def insert_run(self, params):
+        reference_date, timezone = params
+        row = {
+            "id": self.next_id,
+            "reference_date": reference_date,
+            "timezone": timezone,
+            "status": "running",
+            "started_at": self.now,
+            "finished_at": None,
+            "error_message": None,
+        }
+        self.next_id += 1
+        self.runs.append(row)
+        return {"id": row["id"]}
+
+    def finish_run(self, params):
+        (
+            status,
+            pages_requested,
+            releases_received,
+            releases_in_period,
+            releases_matched,
+            releases_inserted,
+            releases_already_known,
+            releases_unmatched,
+            error_message,
+            run_id,
+        ) = params
+        run = next(row for row in self.runs if row["id"] == run_id)
+        run.update({
+            "status": status,
+            "finished_at": self.now,
+            "pages_requested": pages_requested,
+            "releases_received": releases_received,
+            "releases_in_period": releases_in_period,
+            "releases_matched": releases_matched,
+            "releases_inserted": releases_inserted,
+            "releases_already_known": releases_already_known,
+            "releases_unmatched": releases_unmatched,
+            "error_message": error_message,
+        })
+
+    def latest_run(self):
+        return sorted(
+            self.runs,
+            key=lambda run: (run.get("finished_at") or run["started_at"], run["id"]),
+            reverse=True,
+        )[0] if self.runs else None
 
 
 class ExternalReleaseCursor:
@@ -1066,6 +1176,99 @@ class ReleaseMonitorTests(unittest.TestCase):
         repository.running = True
         result = ReleaseMonitorService(repository=repository).run()
         self.assertEqual(result.status, "already_running")
+
+    def test_repository_starts_run_without_active_run(self):
+        connection = ReleaseRunConnection()
+        repository = ReleaseMonitorRepository(connection=connection)
+
+        run_id = repository.start_run(date(2026, 8, 25), "America/Sao_Paulo")
+
+        self.assertEqual(1, run_id)
+        self.assertEqual("running", connection.runs[0]["status"])
+
+    def test_repository_recent_running_run_blocks_new_run(self):
+        started_at = datetime(2026, 8, 25, 11, 59, tzinfo=ZoneInfo("America/Sao_Paulo"))
+        connection = ReleaseRunConnection([{
+            "id": 7,
+            "status": "running",
+            "started_at": started_at,
+            "finished_at": None,
+            "error_message": None,
+        }])
+        repository = ReleaseMonitorRepository(connection=connection)
+
+        run_id = repository.start_run(date(2026, 8, 25), "America/Sao_Paulo")
+
+        self.assertIsNone(run_id)
+        self.assertEqual("running", connection.runs[0]["status"])
+        self.assertEqual(1, len(connection.runs))
+
+    def test_repository_recovers_stale_run_and_starts_new_run(self):
+        started_at = datetime(2026, 8, 25, 9, 59, tzinfo=ZoneInfo("America/Sao_Paulo"))
+        connection = ReleaseRunConnection([{
+            "id": 7,
+            "status": "running",
+            "started_at": started_at,
+            "finished_at": None,
+            "error_message": None,
+        }])
+        repository = ReleaseMonitorRepository(connection=connection)
+
+        run_id = repository.start_run(date(2026, 8, 25), "America/Sao_Paulo")
+
+        self.assertEqual(8, run_id)
+        self.assertEqual("failed", connection.runs[0]["status"])
+        self.assertEqual(connection.now, connection.runs[0]["finished_at"])
+        self.assertEqual(STALE_RUNNING_ERROR, connection.runs[0]["error_message"])
+        self.assertEqual("running", connection.runs[1]["status"])
+
+    def test_service_processes_subscriptions_after_stale_recovery(self):
+        started_at = datetime(2026, 8, 25, 9, 59, tzinfo=ZoneInfo("America/Sao_Paulo"))
+        connection = ReleaseRunConnection([{
+            "id": 7,
+            "status": "running",
+            "started_at": started_at,
+            "finished_at": None,
+            "error_message": None,
+        }])
+
+        class Repository(ReleaseMonitorRepository):
+            def __init__(self, connection):
+                super().__init__(connection=connection)
+                self.checked = []
+
+            def list_active_subscriptions(self, manga_id=None):
+                return [{"manga_id": 10, "work_code": "", "title": "Obra A"}]
+
+            def mark_subscriptions_checked(self, manga_ids, success=True, error_message=None):
+                self.checked.append((list(manga_ids), success, error_message))
+                return len(manga_ids)
+
+        repository = Repository(connection)
+        result = ReleaseMonitorService(
+            repository=repository,
+            external_ref_repository=FakeExternalRefRepository({}),
+            provider_executors=[],
+            now_func=lambda: connection.now,
+        ).run()
+
+        self.assertEqual("partial_success", result.status)
+        self.assertEqual(8, result.run_id)
+        self.assertEqual([([10], True, "Nenhuma obra com ID MangaUpdates confirmado está habilitada para monitoramento.")], repository.checked)
+        self.assertEqual("failed", connection.runs[0]["status"])
+        self.assertEqual("partial_success", connection.runs[1]["status"])
+
+    def test_check_releases_treats_already_running_as_failed_exit(self):
+        source = Path("scripts/check_releases.py").read_text(encoding="utf-8")
+        self.assertIn('result.status in {"failed", "already_running"}', source)
+
+    def test_mark_subscriptions_checked_does_not_use_window_function_in_returning(self):
+        source = Path("manhwateca/release_monitor/repository.py").read_text(encoding="utf-8")
+        method = source.split("def mark_subscriptions_checked", 1)[1].split(
+            "def upsert_release", 1
+        )[0]
+        self.assertIn("RETURNING manga_id", method)
+        self.assertNotIn("OVER()", method)
 
     def test_repository_wraps_source_payload_for_jsonb(self):
         class JsonbSentinel:
