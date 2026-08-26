@@ -172,10 +172,31 @@ class ReleaseMonitorRepository:
             LEFT JOIN release_monitor_subscriptions s
                 ON s.manga_id = m.id
             LEFT JOIN LATERAL (
-                SELECT r.chapter, r.release_date, r.release_group
-                FROM external_releases r
-                WHERE r.manga_id = m.id
-                ORDER BY r.release_date DESC, r.first_seen_at DESC, r.id DESC
+                SELECT releases.chapter, releases.release_date, releases.release_group
+                FROM (
+                    SELECT
+                        r.chapter,
+                        r.release_date,
+                        r.release_group,
+                        r.first_seen_at AS seen_at,
+                        r.id
+                    FROM external_releases r
+                    WHERE r.manga_id = m.id
+
+                    UNION ALL
+
+                    SELECT
+                        mr.chapter,
+                        mr.release_date,
+                        mr.release_group,
+                        mr.first_seen_at AS seen_at,
+                        mr.id
+                    FROM mangaupdates_releases mr
+                    WHERE mr.manga_id = m.id
+                ) releases
+                ORDER BY releases.release_date DESC NULLS LAST,
+                         releases.seen_at DESC NULLS LAST,
+                         releases.id DESC
                 LIMIT 1
             ) latest ON TRUE
             WHERE m.work_code IS NOT NULL

@@ -44,16 +44,42 @@ Exemplo:
 
 ## 5. Paginação
 
+O componente canônico de paginação para páginas internas é o mesmo usado em
+**Fluxos > Jornada operacional > Buscar candidatos**.
+
+### Contrato visual obrigatório
+
+- reutilize `.flow-pager` como contêiner;
+- reutilize `.flow-page-link` em todas as ações;
+- use `‹` e `›` para anterior/próxima;
+- mostre até **3 números de página** por vez;
+- a página atual deve usar `.active`, com o sublinhado Rose já definido em `flows.css`;
+- desabilite os extremos com `disabled`;
+- não crie uma segunda aparência com botões “Anterior / Próxima”, contador
+  “Página X de Y” ou nova paleta quando o padrão de Fluxos atender à tela.
+
+Estrutura de referência:
+
+```html
+<div class="flow-pager">
+  <button class="flow-page-link" aria-label="Página anterior">‹</button>
+  <button class="flow-page-link active">1</button>
+  <button class="flow-page-link">2</button>
+  <button class="flow-page-link">3</button>
+  <button class="flow-page-link" aria-label="Próxima página">›</button>
+</div>
+```
+
 Para paginação client-side:
 
 - mantenha `currentPage` e `pageSize` no módulo da página;
 - ao alterar busca ou filtros, retorne para a página 1;
 - limite `currentPage` ao total de páginas após qualquer mudança nos dados;
-- desabilite Anterior/Próxima nos extremos;
-- mostre página atual, total de páginas e intervalo de registros;
-- use os botões/componentes existentes, sem criar nova paleta.
+- para listas pequenas, esconda o pager quando houver somente uma página;
+- use a mesma janela de até três números adotada por Buscar candidatos.
 
-Quando a quantidade de dados for grande ou o endpoint já oferecer paginação real, prefira paginação no backend.
+Quando a quantidade de dados for grande ou o endpoint já oferecer paginação real,
+prefira paginação no backend.
 
 ## 6. JavaScript por página
 
@@ -84,4 +110,4 @@ Quando a quantidade de dados for grande ou o endpoint já oferecer paginação r
 
 ## 9. Página Acompanhamento como exemplo
 
-A correção de Acompanhamento de 26/08/2026 segue este padrão: envelope de 16px, largura operacional de 1180px, seções com espaçamento controlado, tabela de quatro colunas coerentes e paginação client-side de cinco lançamentos por página.
+A página Acompanhamento segue este padrão: envelope de 16px, largura operacional de 1180px, seções com espaçamento controlado, tabela de quatro colunas coerentes e paginação client-side de cinco lançamentos por página usando o componente canônico `flow-pager` / `flow-page-link` de Buscar candidatos.

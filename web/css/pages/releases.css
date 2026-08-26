@@ -350,6 +350,7 @@
 }
 
 .tracking-work-item strong {
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -361,6 +362,7 @@
   color: var(--rose-dark) !important;
   cursor: pointer;
   font-size: 22px;
+  font-weight: 400;
   line-height: 1;
   padding: 2px !important;
   transform: none !important;
@@ -478,44 +480,10 @@
   margin-top: 16px;
 }
 
-.tracking-pagination {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-  padding-top: 2px;
+/* Acompanhamento reutiliza exatamente o componente de paginação de Fluxos/Buscar candidatos. */
+#page-tracking .tracking-release-pager {
+  margin-left: auto;
+  margin-top: 0;
 }
 
-.tracking-pagination[hidden] {
-  display: none;
-}
-
-.tracking-pagination-status {
-  align-items: center;
-  color: var(--muted);
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  justify-content: center;
-  min-width: 190px;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.tracking-pagination-status strong {
-  color: var(--text);
-}
-
-.tracking-pagination-status small {
-  color: var(--muted);
-  margin-left: 6px;
-  font-size: 11px;
-  font-weight: 750;
-}
-
-.tracking-pagination .secondary-action:disabled {
-  cursor: default;
-  opacity: .45;
-  transform: none !important;
-}
 

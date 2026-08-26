@@ -86,7 +86,7 @@ export function initTrackingPage(elements) {
     const start = (releasePage - 1) * RELEASE_PAGE_SIZE;
     const visibleItems = items.slice(start, start + RELEASE_PAGE_SIZE);
 
-    renderReleasePagination(items.length, totalPages, start, visibleItems.length);
+    renderReleasePagination(items.length, totalPages);
 
     if (!items.length) {
       elements.releaseList.innerHTML = '<tr><td colspan="4">Nenhum capítulo encontrado nesta janela.</td></tr>';
@@ -101,19 +101,38 @@ export function initTrackingPage(elements) {
       </tr>
     `).join("");
   }
-  function renderReleasePagination(totalItems, totalPages, start, visibleCount) {
+  function renderReleasePagination(totalItems, totalPages) {
     if (!elements.pagination) return;
-    elements.pagination.hidden = totalItems === 0;
-    if (elements.pageCurrent) elements.pageCurrent.textContent = String(releasePage);
-    if (elements.pageTotal) elements.pageTotal.textContent = String(totalPages);
-    if (elements.pageRange) {
-      const first = totalItems ? start + 1 : 0;
-      const last = totalItems ? start + visibleCount : 0;
-      elements.pageRange.textContent = totalItems ? `${first}–${last} de ${totalItems}` : "0 itens";
+    elements.pagination.hidden = totalItems === 0 || totalPages <= 1;
+    if (elements.pagination.hidden) {
+      elements.pagination.innerHTML = "";
+      return;
     }
-    if (elements.pagePrev) elements.pagePrev.disabled = releasePage <= 1;
-    if (elements.pageNext) elements.pageNext.disabled = releasePage >= totalPages;
+    elements.pagination.innerHTML = `
+      <button class="flow-page-link" type="button"
+              ${releasePage <= 1 ? "disabled" : ""}
+              data-tracking-release-page="${releasePage - 1}"
+              aria-label="Página anterior">‹</button>
+      ${releasePageButtons(releasePage, totalPages)}
+      <button class="flow-page-link" type="button"
+              ${releasePage >= totalPages ? "disabled" : ""}
+              data-tracking-release-page="${releasePage + 1}"
+              aria-label="Próxima página">›</button>
+    `;
   }
+
+  function releasePageButtons(page, pages) {
+    const startPage = Math.max(1, Math.min(page - 1, pages - 2));
+    const endPage = Math.min(pages, startPage + 2);
+    return Array.from({ length: endPage - startPage + 1 }, (_, index) => startPage + index)
+      .map(number => `
+        <button type="button"
+                class="flow-page-link ${number === page ? "active" : ""}"
+                data-tracking-release-page="${number}">${number}</button>
+      `)
+      .join("");
+  }
+
   function renderWorks() {
     renderHeader();
     const items = filteredWorks();
@@ -152,7 +171,7 @@ export function initTrackingPage(elements) {
         ${starButton(item, "detail")}
       </div>
       <div class="tracking-detail-grid">
-        <article><span>ÚLTIMO LANÇAMENTO</span><strong>${escapeHtml(latestReleaseLabel(item))}</strong></article>
+        <article><span>ÚLTIMO LANÇAMENTO</span><strong>${escapeHtml(latestReleaseLabel(item, history))}</strong></article>
         <article><span>ÚLTIMA VERIFICAÇÃO</span><strong>${escapeHtml(dateTime(item.last_checked_at, "Sem registro"))}</strong></article>
         <article><span>STATUS</span><strong>${item.monitored ? "Monitorada" : "Pausada"}</strong></article>
       </div>
@@ -314,13 +333,12 @@ export function initTrackingPage(elements) {
     releasePage = 1;
     loadReleases();
   });
-  elements.pagePrev?.addEventListener("click", () => {
-    if (releasePage <= 1) return;
-    releasePage -= 1;
-    renderReleaseTable();
-  });
-  elements.pageNext?.addEventListener("click", () => {
-    releasePage += 1;
+  elements.pagination?.addEventListener("click", event => {
+    const button = event.target.closest("[data-tracking-release-page]");
+    if (!button || button.disabled) return;
+    const nextPage = Number(button.dataset.trackingReleasePage);
+    if (!Number.isFinite(nextPage) || nextPage < 1) return;
+    releasePage = nextPage;
     renderReleaseTable();
   });
   elements.workSearch?.addEventListener("input", renderWorks);
@@ -379,10 +397,16 @@ async function waitForTask(taskId) {
   throw new Error("A verificação continua em andamento após 10 minutos. Atualize a página para consultar o status.");
 }
 
-function latestReleaseLabel(item) {
-  if (!item.latest_release_chapter && !item.latest_release_date) return "Sem lançamento registrado";
-  const chapter = item.latest_release_chapter ? `cap ${item.latest_release_chapter}` : "capítulo não informado";
-  const date = dateOnly(item.latest_release_date);
+function latestReleaseLabel(item, releaseHistory = []) {
+  const rows = releaseHistory
+    .filter(row => Number(row.manga_id) === Number(item.manga_id))
+    .sort((left, right) => String(right.release_date || "").localeCompare(String(left.release_date || "")));
+  const fallback = rows[0] || {};
+  const chapterValue = item.latest_release_chapter || fallback.chapter;
+  const dateValue = item.latest_release_date || fallback.release_date;
+  if (!chapterValue && !dateValue) return "Sem lançamento registrado";
+  const chapter = chapterValue ? `cap ${chapterValue}` : "cap não informado";
+  const date = dateOnly(dateValue);
   return `${chapter} · ${date}`;
 }
 
