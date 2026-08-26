@@ -270,28 +270,22 @@
 
 .tracking-releases-panel .release-table th:nth-child(1),
 .tracking-releases-panel .release-table td:nth-child(1) {
-  width: 34%;
+  width: 48%;
 }
 
 .tracking-releases-panel .release-table th:nth-child(2),
 .tracking-releases-panel .release-table td:nth-child(2) {
-  width: 10%;
+  width: 12%;
 }
 
 .tracking-releases-panel .release-table th:nth-child(3),
 .tracking-releases-panel .release-table td:nth-child(3) {
-  width: 14%;
+  width: 20%;
 }
 
 .tracking-releases-panel .release-table th:nth-child(4),
 .tracking-releases-panel .release-table td:nth-child(4) {
-  width: 30%;
-  white-space: normal;
-}
-
-.tracking-releases-panel .release-table th:nth-child(5),
-.tracking-releases-panel .release-table td:nth-child(5) {
-  width: 12%;
+  width: 20%;
 }
 
 .tracking-workspace {
@@ -467,3 +461,61 @@
     margin-left: auto;
     margin-right: auto;
 }
+
+/* TRACKING_PAGE_STANDARD_20260826
+   Mantém Acompanhamento no mesmo envelope espacial das páginas operacionais de Fluxos. */
+.page-container:has(#page-tracking.active) {
+  padding: 16px;
+}
+
+#page-tracking {
+  width: min(1180px, 100%);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+#page-tracking > .panel + .panel {
+  margin-top: 16px;
+}
+
+.tracking-pagination {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.tracking-pagination[hidden] {
+  display: none;
+}
+
+.tracking-pagination-status {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  min-width: 190px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tracking-pagination-status strong {
+  color: var(--text);
+}
+
+.tracking-pagination-status small {
+  color: var(--muted);
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.tracking-pagination .secondary-action:disabled {
+  cursor: default;
+  opacity: .45;
+  transform: none !important;
+}
+

@@ -1,64 +1,41 @@
-MANHWATECA — AJUSTES ACOMPANHAMENTO
-26/08/2026
+MANHWATECA — PACOTE DE AJUSTES ACOMPANHAMENTO
+Data: 26/08/2026
 
-Base revisada: branch main de
-https://github.com/angeline1986/Manhwateca
+Escopo:
+- Acompanhamento alinhado ao padrão espacial de Fluxos / Buscar candidatos.
+- Page container da tela ativa com 16px de padding.
+- Conteúdo operacional centralizado com largura máxima de 1180px.
+- Espaço entre as duas grandes seções reduzido e controlado em 16px.
+- Lançamentos recentes: paginação client-side de 5 itens por página.
+- Busca, janela, favoritas e não visualizados resetam a paginação para a página 1.
+- Botões Anterior/Próxima respeitam os limites.
+- Coluna Grupo removida somente da tabela de Acompanhamento.
+- Colspan e larguras da tabela ajustados para 4 colunas.
+- Novo docs/frontend_page_standard.md documentando o padrão para futuras páginas.
 
-Este pacote faz somente três ajustes:
+Como aplicar:
+1. Extraia este ZIP.
+2. Copie apply_updates.py para a raiz do projeto Manhwateca (ou execute apontando o terminal para a raiz onde o script estiver).
+3. Na raiz do projeto, execute:
 
-1. Remove a coluna GRUPO da tabela de Lançamentos da página Acompanhamento.
-   A tabela passa a ser:
-   OBRA | CAPÍTULO | LANÇAMENTO | SITUAÇÃO
-
-2. Adiciona paginação local de 5 lançamentos por página.
-   A paginação respeita os filtros já existentes:
-   janela de dias, busca, favoritas e não visualizados.
-   Ao trocar um filtro, volta para a página 1.
-
-3. Corrige o enquadramento externo da página Acompanhamento para copiar
-   o padrão já estabelecido em Organização:
-   page-container com 16px;
-   conteúdo com largura máxima de 1180px;
-   centralização automática.
-
-Arquivos alterados:
-- web/index.html
-- web/js/pages/trackingPage.js
-- web/css/pages/releases.css
-
-Não altera backend, banco, migrations, ReleaseMonitor, favoritas, histórico
-individual, slider, Dashboard ou Organização.
-
-COMO APLICAR
-
-Na raiz do Manhwateca:
-
-  git status
-
-Depois:
-
-  python /caminho/do/pacote/apply_updates.py
-
-Exemplo:
-
-  python ~/Downloads/manhwateca_acompanhamento_tabela_paginacao_layout_20260826/apply_updates.py
+   python apply_updates.py
 
 O script cria backup automático em:
-reports/patch_backups/acompanhamento_tabela_<data_hora>/
+reports/patch_backups/acompanhamento_paginacao_padrao_20260826_<timestamp>/
 
-VALIDAÇÃO
+Arquivos alterados pelo script:
+- web/index.html
+- web/js/app.js
+- web/js/pages/trackingPage.js
+- web/css/pages/releases.css
+- docs/frontend_page_standard.md (novo/atualizado)
 
-  node --check web/js/pages/trackingPage.js
-  git diff --check
-  ./start_manhwateca.command
+Não altera:
+- backend/API
+- banco/schema/migrations
+- monitor de releases
+- outras páginas
+- docs/arquitetura.md
 
-No navegador:
-- confirme que GRUPO sumiu;
-- confirme no máximo 5 linhas por página;
-- confirme anterior/próxima;
-- teste busca e filtros com mais de 5 resultados;
-- confirme que trocar filtro volta à página 1;
-- compare posição da página com Organização.
-
-O patch é defensivo: se o código local divergir dos trechos revisados,
-ele para sem tentar adivinhar alterações.
+Observação importante:
+O patch procura a coluna Grupo dentro do bloco #page-tracking, e não globalmente no index.html. Isso evita o erro de patch anterior causado por múltiplas ocorrências de um trecho semelhante.

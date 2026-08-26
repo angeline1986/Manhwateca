@@ -28,6 +28,10 @@ const trackingWindowLabel = byId("trackingWindowLabel"), trackingReleaseCount = 
 const trackingReleaseSearch = byId("trackingReleaseSearch");
 const trackingFavoritesOnly = byId("trackingFavoritesOnly"), trackingUnseenOnly = byId("trackingUnseenOnly");
 const trackingFeedback = byId("trackingFeedback"), trackingReleaseList = byId("trackingReleaseList");
+const trackingReleasePagination = byId("trackingReleasePagination");
+const trackingReleasePrev = byId("trackingReleasePrev"), trackingReleaseNext = byId("trackingReleaseNext");
+const trackingReleasePageCurrent = byId("trackingReleasePageCurrent"), trackingReleasePageTotal = byId("trackingReleasePageTotal");
+const trackingReleasePageRange = byId("trackingReleasePageRange");
 const trackingWorksCount = byId("trackingWorksCount"), trackingFavoriteCount = byId("trackingFavoriteCount");
 const trackingUpdatedCount = byId("trackingUpdatedCount"), trackingWorkSearch = byId("trackingWorkSearch");
 const trackingWorkFilter = byId("trackingWorkFilter"), trackingWorkList = byId("trackingWorkList");
@@ -95,6 +99,12 @@ const trackingPage = initTrackingPage({
   unseenOnly: trackingUnseenOnly,
   feedback: trackingFeedback,
   releaseList: trackingReleaseList,
+  pagination: trackingReleasePagination,
+  pagePrev: trackingReleasePrev,
+  pageNext: trackingReleaseNext,
+  pageCurrent: trackingReleasePageCurrent,
+  pageTotal: trackingReleasePageTotal,
+  pageRange: trackingReleasePageRange,
   worksCount: trackingWorksCount,
   favoriteCount: trackingFavoriteCount,
   updatedCount: trackingUpdatedCount,

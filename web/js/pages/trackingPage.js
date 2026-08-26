@@ -9,11 +9,13 @@ import { getTasks } from "../api/tasksApi.js";
 import { escapeHtml } from "../utils/html.js";
 
 const DAY_OPTIONS = [1, 7, 15, 30, 45, 60];
+const RELEASE_PAGE_SIZE = 5;
 
 export function initTrackingPage(elements) {
   let days = 15;
   let subscriptions = [];
   let releases = [];
+  let releasePage = 1;
   let selectedMangaId = null;
   let history = [];
   let historyExpanded = false;
@@ -79,11 +81,18 @@ export function initTrackingPage(elements) {
     const items = onlyFavorites
       ? releases.filter(item => favoriteIds.has(Number(item.manga_id)))
       : releases;
+    const totalPages = Math.max(1, Math.ceil(items.length / RELEASE_PAGE_SIZE));
+    releasePage = Math.min(Math.max(1, releasePage), totalPages);
+    const start = (releasePage - 1) * RELEASE_PAGE_SIZE;
+    const visibleItems = items.slice(start, start + RELEASE_PAGE_SIZE);
+
+    renderReleasePagination(items.length, totalPages, start, visibleItems.length);
+
     if (!items.length) {
-      elements.releaseList.innerHTML = '<tr><td colspan="5">Nenhum capítulo encontrado nesta janela.</td></tr>';
+      elements.releaseList.innerHTML = '<tr><td colspan="4">Nenhum capítulo encontrado nesta janela.</td></tr>';
       return;
     }
-    elements.releaseList.innerHTML = items.map(item => `
+    elements.releaseList.innerHTML = visibleItems.map(item => `
       <tr>
         <td>${escapeHtml(item.title || "")}</td>
         <td>${escapeHtml(item.chapter || "")}</td>
@@ -92,7 +101,19 @@ export function initTrackingPage(elements) {
       </tr>
     `).join("");
   }
-
+  function renderReleasePagination(totalItems, totalPages, start, visibleCount) {
+    if (!elements.pagination) return;
+    elements.pagination.hidden = totalItems === 0;
+    if (elements.pageCurrent) elements.pageCurrent.textContent = String(releasePage);
+    if (elements.pageTotal) elements.pageTotal.textContent = String(totalPages);
+    if (elements.pageRange) {
+      const first = totalItems ? start + 1 : 0;
+      const last = totalItems ? start + visibleCount : 0;
+      elements.pageRange.textContent = totalItems ? `${first}–${last} de ${totalItems}` : "0 itens";
+    }
+    if (elements.pagePrev) elements.pagePrev.disabled = releasePage <= 1;
+    if (elements.pageNext) elements.pageNext.disabled = releasePage >= totalPages;
+  }
   function renderWorks() {
     renderHeader();
     const items = filteredWorks();
@@ -278,11 +299,30 @@ export function initTrackingPage(elements) {
 
   elements.daysSlider?.addEventListener("input", () => {
     days = DAY_OPTIONS[Number(elements.daysSlider.value)] || 15;
+    releasePage = 1;
     loadReleases();
   });
-  elements.releaseSearch?.addEventListener("input", () => loadReleases());
-  elements.favoritesOnly?.addEventListener("change", renderReleaseTable);
-  elements.unseenOnly?.addEventListener("change", () => loadReleases());
+  elements.releaseSearch?.addEventListener("input", () => {
+    releasePage = 1;
+    loadReleases();
+  });
+  elements.favoritesOnly?.addEventListener("change", () => {
+    releasePage = 1;
+    renderReleaseTable();
+  });
+  elements.unseenOnly?.addEventListener("change", () => {
+    releasePage = 1;
+    loadReleases();
+  });
+  elements.pagePrev?.addEventListener("click", () => {
+    if (releasePage <= 1) return;
+    releasePage -= 1;
+    renderReleaseTable();
+  });
+  elements.pageNext?.addEventListener("click", () => {
+    releasePage += 1;
+    renderReleaseTable();
+  });
   elements.workSearch?.addEventListener("input", renderWorks);
   elements.workFilter?.addEventListener("change", renderWorks);
   elements.checkAll?.addEventListener("click", checkAll);

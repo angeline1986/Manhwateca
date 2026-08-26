@@ -346,12 +346,20 @@
                     <th>Obra</th>
                     <th>Capítulo</th>
                     <th>Lançamento</th>
-                    <th>Grupo</th>
                     <th>Situação</th>
                   </tr>
                 </thead>
                 <tbody id="trackingReleaseList"></tbody>
               </table>
+            </div>
+            <div class="tracking-pagination" id="trackingReleasePagination" aria-label="Paginação de lançamentos">
+              <button class="secondary-action" id="trackingReleasePrev" type="button">Anterior</button>
+              <span class="tracking-pagination-status" aria-live="polite">
+                Página <strong id="trackingReleasePageCurrent">1</strong> de
+                <strong id="trackingReleasePageTotal">1</strong>
+                <small id="trackingReleasePageRange">0 itens</small>
+              </span>
+              <button class="secondary-action" id="trackingReleaseNext" type="button">Próxima</button>
             </div>
           </section>
 
