@@ -1,170 +1,225 @@
+#!/usr/bin/env python3
 from pathlib import Path
 
-root = Path(__file__).resolve().parent
-org_path = root / "web/js/pages/organizationPage.js"
-sidebar_path = root / "web/js/layout/sidebar.js"
+ROOT = Path.cwd()
 
-if not org_path.is_file() or not sidebar_path.is_file():
-    raise SystemExit(
-        "Execute apply_patch.py na raiz do repositório Manhwateca. "
-        "Esperados: web/js/pages/organizationPage.js e web/js/layout/sidebar.js"
-    )
+def replace_once(path, old, new, label):
+    file = ROOT / path
+    if not file.exists():
+        raise RuntimeError(f"{label}: arquivo não encontrado: {path}")
+    text = file.read_text(encoding="utf-8")
+    if new in text:
+        print(f"[OK] {label}: ajuste já aplicado.")
+        return
+    count = text.count(old)
+    if count != 1:
+        raise RuntimeError(
+            f"{label}: trecho esperado encontrado {count} vez(es) em {path}. "
+            "Patch interrompido para não alterar código inesperado."
+        )
+    file.write_text(text.replace(old, new, 1), encoding="utf-8")
+    print(f"[OK] {label}: {path}")
 
-org = org_path.read_text(encoding="utf-8")
-sidebar = sidebar_path.read_text(encoding="utf-8")
+def append_once(path, marker, block, label):
+    file = ROOT / path
+    if not file.exists():
+        raise RuntimeError(f"{label}: arquivo não encontrado: {path}")
+    text = file.read_text(encoding="utf-8")
+    if marker in text:
+        print(f"[OK] {label}: ajuste já aplicado.")
+        return
+    file.write_text(text.rstrip() + "\n\n" + block.strip() + "\n", encoding="utf-8")
+    print(f"[OK] {label}: {path}")
 
-
-def replace_js_function(source, signature, replacement):
-    start = source.find(signature)
-    if start < 0:
-        raise RuntimeError(f"Função não encontrada: {signature}")
-
-    brace = source.find("{", start)
-    if brace < 0:
-        raise RuntimeError(f"Abertura da função não encontrada: {signature}")
-
-    depth = 0
-    quote = None
-    escaped = False
-    i = brace
-
-    while i < len(source):
-        ch = source[i]
-
-        if quote:
-            if escaped:
-                escaped = False
-            elif ch == "\\":
-                escaped = True
-            elif ch == quote:
-                quote = None
-            i += 1
-            continue
-
-        if ch in ('"', "'", "`"):
-            quote = ch
-        elif ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                end = i + 1
-                return source[:start] + replacement + source[end:]
-
-        i += 1
-
-    raise RuntimeError(f"Fechamento da função não encontrado: {signature}")
-
-
-new_update_topbar = '''  function updateTopbar(config) {
-    const eyebrow = document.getElementById("pageEyebrow");
-    const title = document.getElementById("pageTitle");
-    const subtitle = document.getElementById("pageSubtitle");
-    const staticStatus = document.querySelector(".organization-topbar-status");
-
-    if (eyebrow) eyebrow.textContent = `ORGANIZAÇÃO / ${config.title.toUpperCase()}`;
-    if (title) title.textContent = "Organizar biblioteca local";
-    if (subtitle) subtitle.textContent = config.subtitle;
-    if (staticStatus) staticStatus.hidden = true;
-  }'''
-
-org = replace_js_function(
-    org,
-    "  function updateTopbar(config)",
-    new_update_topbar,
+replace_once(
+    "web/js/pages/trackingPage.js",
+    '''  let selectedMangaId = null;
+  let history = [];
+''',
+    '''  let selectedMangaId = null;
+  let history = [];
+  let historyExpanded = false;
+''',
+    "estado do histórico",
 )
 
-for line in [
-    '        <span class="organization-stage-status">${escapeHtml(config.status || "Prévia local")}</span>\n',
-    '        <span class="organization-stage-status">Somente leitura</span>\n',
-    '        <span class="organization-stage-status">Pronto para aplicar</span>\n',
-    '        <span class="organization-stage-status">Prévia local</span>\n',
-    '        <span class="organization-stage-status">Decisão manual</span>\n',
-]:
-    org = org.replace(line, "")
-
-if "manhwateca:organization-legacy" not in org:
-    marker = '  window.addEventListener("manhwateca:organization-subtab", event => {'
-    pos = org.find(marker)
-    if pos < 0:
-        marker = "  return { renderCatalogPending };"
-        pos = org.find(marker)
-    if pos < 0:
-        raise RuntimeError("Ponto de inserção do modo legado não encontrado.")
-
-    legacy_code = '''  function showLegacyOrganization() {
-    organizationSubtab = null;
-    selectedIndex = 0;
-    organizationCheckedKeys = new Set();
-    setOrganizationMode(false);
-    restoreTopbar();
+replace_once(
+    "web/js/pages/trackingPage.js",
+    '''  function renderHistory(item) {
+    const rows = history.filter(row => Number(row.manga_id) === Number(item.manga_id));
+    if (!rows.length) return '<p class="tracking-empty">Nenhum lançamento recente encontrado para esta obra.</p>';
+    return `
+      <div class="tracking-history-list">
+        ${rows.map(row => `
+          <article>
+            <strong>Cap. ${escapeHtml(row.chapter || "-")}</strong>
+            <span>${escapeHtml(dateOnly(row.release_date))}</span>
+            <em>${escapeHtml(row.status || "")}</em>
+          </article>
+        `).join("")}
+      </div>
+    `;
   }
+''',
+    '''  function renderHistory(item) {
+    const rows = history.filter(row => Number(row.manga_id) === Number(item.manga_id));
+    if (!rows.length) return '<p class="tracking-empty">Nenhum lançamento recente encontrado para esta obra.</p>';
+    const visibleRows = historyExpanded ? rows : rows.slice(0, 5);
+    const hiddenCount = Math.max(0, rows.length - visibleRows.length);
+    return `
+      <div class="tracking-history-list">
+        ${visibleRows.map(row => `
+          <article>
+            <strong>Cap. ${escapeHtml(row.chapter || "-")}</strong>
+            <span>${escapeHtml(dateOnly(row.release_date))}</span>
+            <em>${escapeHtml(row.status || "")}</em>
+          </article>
+        `).join("")}
+      </div>
+      ${rows.length > 5 ? `
+        <div class="tracking-history-actions">
+          <button type="button" class="secondary-action tracking-history-toggle" data-tracking-history-toggle>
+            ${historyExpanded ? "Ver menos" : `Ver mais (${hiddenCount})`}
+          </button>
+        </div>
+      ` : ""}
+    `;
+  }
+''',
+    "histórico compacto",
+)
 
-  window.addEventListener("manhwateca:organization-legacy", () => {
-    showLegacyOrganization();
-  });
+replace_once(
+    "web/js/pages/trackingPage.js",
+    '''    selectedMangaId = Number(item.dataset.trackingWork);
+    renderWorks();
+    loadSelectedHistory();
+''',
+    '''    selectedMangaId = Number(item.dataset.trackingWork);
+    historyExpanded = false;
+    renderWorks();
+    loadSelectedHistory();
+''',
+    "reset de expansão ao trocar obra",
+)
 
-'''
-    org = org[:pos] + legacy_code + org[pos:]
+replace_once(
+    "web/js/pages/trackingPage.js",
+    '''  elements.detail?.addEventListener("click", event => {
+    const favorite = event.target.closest("[data-tracking-favorite]");
+''',
+    '''  elements.detail?.addEventListener("click", event => {
+    const historyToggle = event.target.closest("[data-tracking-history-toggle]");
+    if (historyToggle) {
+      historyExpanded = !historyExpanded;
+      renderDetail();
+      return;
+    }
+    const favorite = event.target.closest("[data-tracking-favorite]");
+''',
+    "toggle de histórico",
+)
 
-if "manhwateca:organization-legacy" not in sidebar:
-    marker = "  return { closeSidebar, setSidebarCollapsed };"
-    pos = sidebar.find(marker)
-    if pos < 0:
-        raise RuntimeError("Retorno de initSidebar() não encontrado.")
+replace_once(
+    "web/js/pages/trackingPage.js",
+    '''async function waitForTask(taskId) {
+  if (!taskId) return;
+  for (let index = 0; index < 30; index += 1) {
+    const { payload } = await getTasks();
+    const task = (payload.tasks || []).find(item => item.id === taskId);
+    if (task && !["queued", "running"].includes(task.status)) return;
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+}
+''',
+    '''async function waitForTask(taskId) {
+  if (!taskId) return null;
+  const maxAttempts = 600;
+  for (let index = 0; index < maxAttempts; index += 1) {
+    const { response, payload } = await getTasks();
+    if (!response.ok) {
+      throw new Error(payload?.error || "Não foi possível acompanhar a verificação.");
+    }
+    const task = (payload.tasks || []).find(item => item.id === taskId);
+    if (task && !["queued", "running"].includes(task.status)) {
+      if (task.status === "failed") {
+        throw new Error(task.error || task.error_message || "A verificação falhou.");
+      }
+      return task;
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  throw new Error("A verificação continua em andamento após 10 minutos. Atualize a página para consultar o status.");
+}
+''',
+    "polling de task",
+)
 
-    sidebar_code = '''  const legacyOrganizationButton =
-    document.querySelector('[data-page="organization"]');
+append_once(
+    "web/css/pages/releases.css",
+    "/* tracking follow-up: compact queue + collapsible history */",
+    '''
+/* tracking follow-up: compact queue + collapsible history */
+.tracking-work-list {
+  align-content: start;
+}
 
-  legacyOrganizationButton?.addEventListener("click", () => {
-    setContext(null);
+.tracking-history-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
 
-    document.querySelectorAll("[data-sidebar-organization-subtab]").forEach(button => {
-      button.classList.remove("active");
-    });
+.tracking-history-toggle {
+  min-width: 112px;
+}
+''',
+    "CSS da fila/histórico",
+)
 
-    window.dispatchEvent(
-      new CustomEvent("manhwateca:organization-legacy")
-    );
-  });
+test_path = ROOT / "tests/test_tracking_followup_regressions.py"
+test_path.parent.mkdir(parents=True, exist_ok=True)
+test_path.write_text(r'''from pathlib import Path
 
-'''
-    sidebar = sidebar[:pos] + sidebar_code + sidebar[pos:]
 
-required_org = [
-    "function updateTopbar(config)",
-    "manhwateca:organization-legacy",
-    "setOrganizationMode(false)",
-    "restoreTopbar()",
-    "validate_chapters",
-    "review_pending",
-]
-required_sidebar = [
-    'data-page="organization"',
-    "manhwateca:organization-legacy",
-]
+ROOT = Path(__file__).resolve().parents[1]
 
-missing_org = [item for item in required_org if item not in org]
-missing_sidebar = [item for item in required_sidebar if item not in sidebar]
 
-if missing_org or missing_sidebar:
-    raise RuntimeError(
-        "Validação do patch falhou antes da gravação. "
-        f"organizationPage={missing_org}; sidebar={missing_sidebar}"
-    )
+def read(path):
+    return (ROOT / path).read_text(encoding="utf-8")
 
-start = org.find("  function updateTopbar(config)")
-end = org.find("  function restoreTopbar", start)
-if end < 0:
-    raise RuntimeError("restoreTopbar não encontrada após updateTopbar.")
 
-if "config.status" in org[start:end]:
-    raise RuntimeError("updateTopbar ainda contém config.status.")
+def test_tracking_task_wait_no_longer_stops_after_30_seconds():
+    page = read("web/js/pages/trackingPage.js")
+    wait = page.split("async function waitForTask", 1)[1].split(
+        "function latestReleaseLabel", 1
+    )[0]
+    assert "const maxAttempts = 600" in wait
+    assert "index < maxAttempts" in wait
+    assert "throw new Error" in wait
+    assert "index < 30" not in wait
 
-org_path.write_text(org, encoding="utf-8")
-sidebar_path.write_text(sidebar, encoding="utf-8")
 
-print("Patch aplicado com sucesso.")
+def test_tracking_history_is_compact_and_expandable():
+    page = read("web/js/pages/trackingPage.js")
+    assert "let historyExpanded = false" in page
+    assert "rows.slice(0, 5)" in page
+    assert 'data-tracking-history-toggle' in page
+    assert '"Ver menos"' in page
+    assert "`Ver mais (${hiddenCount})`" in page
+
+
+def test_tracking_work_queue_does_not_stretch_with_long_history():
+    css = read("web/css/pages/releases.css")
+    assert "/* tracking follow-up: compact queue + collapsible history */" in css
+    block = css.split("/* tracking follow-up: compact queue + collapsible history */", 1)[1]
+    assert ".tracking-work-list" in block
+    assert "align-content: start" in block
+''', encoding="utf-8")
+print("[OK] teste adicionado: tests/test_tracking_followup_regressions.py")
+
+print("\nPatch aplicado com sucesso.")
 print("Arquivos alterados:")
-print("  web/js/pages/organizationPage.js")
-print("  web/js/layout/sidebar.js")
+print("  web/js/pages/trackingPage.js")
+print("  web/css/pages/releases.css")
+print("  tests/test_tracking_followup_regressions.py")

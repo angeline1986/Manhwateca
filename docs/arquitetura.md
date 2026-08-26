@@ -115,3 +115,36 @@ O objetivo é manter módulos abaixo de 170 linhas. As exceções atuais são:
   pelos testes e por comandos existentes.
 
 Nessas exceções, as regras de negócio já estão isoladas em módulos menores.
+
+
+ORGANIZAÇÃO ANTIGA                         ORGANIZAÇÃO V2
+
+Catalogar biblioteca
+        │
+        └───────────────────────────────► 1. Rastrear biblioteca
+
+
+Auditoria de capítulos
+        ├───────────────────────────────► 2. Revisar estrutura
+        │
+        └───────────────────────────────► 5. Validar capítulos
+
+
+Padronização
+        │
+        └───────────────────────────────► 3. Padronizar nomes
+
+
+Organização de Pastas
+        │
+        └───────────────────────────────► 4. Organizar pastas
+
+
+Pendências acionáveis ───────┐
+Correspondências pendentes ──┼─────────► 6. Revisar pendências
+Registrar ajuste da revisão ─┘
+
+
+Aplicar [Pastas] ────────────┐
+Aplicar [Padronização] ──────┼─────────► 7. Aplicar organização
+Decisões aprovadas ──────────┘

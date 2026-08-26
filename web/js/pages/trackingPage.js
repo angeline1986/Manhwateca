@@ -16,6 +16,7 @@ export function initTrackingPage(elements) {
   let releases = [];
   let selectedMangaId = null;
   let history = [];
+  let historyExpanded = false;
 
   renderHeader();
 
@@ -155,9 +156,11 @@ export function initTrackingPage(elements) {
   function renderHistory(item) {
     const rows = history.filter(row => Number(row.manga_id) === Number(item.manga_id));
     if (!rows.length) return '<p class="tracking-empty">Nenhum lançamento recente encontrado para esta obra.</p>';
+    const visibleRows = historyExpanded ? rows : rows.slice(0, 5);
+    const hiddenCount = Math.max(0, rows.length - visibleRows.length);
     return `
       <div class="tracking-history-list">
-        ${rows.map(row => `
+        ${visibleRows.map(row => `
           <article>
             <strong>Cap. ${escapeHtml(row.chapter || "-")}</strong>
             <span>${escapeHtml(dateOnly(row.release_date))}</span>
@@ -165,6 +168,13 @@ export function initTrackingPage(elements) {
           </article>
         `).join("")}
       </div>
+      ${rows.length > 5 ? `
+        <div class="tracking-history-actions">
+          <button type="button" class="secondary-action tracking-history-toggle" data-tracking-history-toggle>
+            ${historyExpanded ? "Ver menos" : `Ver mais (${hiddenCount})`}
+          </button>
+        </div>
+      ` : ""}
     `;
   }
 
@@ -287,10 +297,17 @@ export function initTrackingPage(elements) {
     const item = event.target.closest("[data-tracking-work]");
     if (!item) return;
     selectedMangaId = Number(item.dataset.trackingWork);
+    historyExpanded = false;
     renderWorks();
     loadSelectedHistory();
   });
   elements.detail?.addEventListener("click", event => {
+    const historyToggle = event.target.closest("[data-tracking-history-toggle]");
+    if (historyToggle) {
+      historyExpanded = !historyExpanded;
+      renderDetail();
+      return;
+    }
     const favorite = event.target.closest("[data-tracking-favorite]");
     if (favorite) {
       toggleFavorite(favorite.dataset.trackingFavorite);
@@ -304,13 +321,23 @@ export function initTrackingPage(elements) {
 }
 
 async function waitForTask(taskId) {
-  if (!taskId) return;
-  for (let index = 0; index < 30; index += 1) {
-    const { payload } = await getTasks();
+  if (!taskId) return null;
+  const maxAttempts = 600;
+  for (let index = 0; index < maxAttempts; index += 1) {
+    const { response, payload } = await getTasks();
+    if (!response.ok) {
+      throw new Error(payload?.error || "Não foi possível acompanhar a verificação.");
+    }
     const task = (payload.tasks || []).find(item => item.id === taskId);
-    if (task && !["queued", "running"].includes(task.status)) return;
+    if (task && !["queued", "running"].includes(task.status)) {
+      if (task.status === "failed") {
+        throw new Error(task.error || task.error_message || "A verificação falhou.");
+      }
+      return task;
+    }
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
+  throw new Error("A verificação continua em andamento após 10 minutos. Atualize a página para consultar o status.");
 }
 
 function latestReleaseLabel(item) {

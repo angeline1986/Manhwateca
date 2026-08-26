@@ -443,3 +443,18 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* tracking follow-up: compact queue + collapsible history */
+.tracking-work-list {
+  align-content: start;
+}
+
+.tracking-history-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.tracking-history-toggle {
+  min-width: 112px;
+}
