@@ -5,46 +5,37 @@ from datetime import datetime
 from pathlib import Path
 import shutil
 
-
 ROOT = Path(__file__).resolve().parent
 STAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
-BACKUP_ROOT = ROOT / "reports" / "patch_backups" / f"acompanhamento_paginacao_v2_{STAMP}"
+BACKUP_ROOT = ROOT / "reports" / "patch_backups" / f"queue_capsules_{STAMP}"
 
 FILES = {
-    "index": ROOT / "web" / "index.html",
-    "tracking_js": ROOT / "web" / "js" / "pages" / "trackingPage.js",
-    "releases_css": ROOT / "web" / "css" / "pages" / "releases.css",
-    "repository": ROOT / "manhwateca" / "release_monitor" / "repository.py",
     "docs": ROOT / "docs" / "frontend_page_standard.md",
+    "organization_js": ROOT / "web" / "js" / "pages" / "organizationPage.js",
+    "organization_css": ROOT / "web" / "css" / "pages" / "organization.css",
+    "tracking_js": ROOT / "web" / "js" / "pages" / "trackingPage.js",
+    "tracking_css": ROOT / "web" / "css" / "pages" / "releases.css",
+    "notion_js": ROOT / "web" / "js" / "flows" / "syncNotionPanel.js",
+    "flows_css": ROOT / "web" / "css" / "pages" / "flows-journey.css",
 }
-
 
 class PatchError(RuntimeError):
     pass
-
 
 def read(path: Path) -> str:
     if not path.is_file():
         raise PatchError(f"Arquivo não encontrado: {path.relative_to(ROOT)}")
     return path.read_text(encoding="utf-8")
 
-
-def write(path: Path, content: str) -> None:
-    path.write_text(content, encoding="utf-8")
-
-
 def backup(paths: list[Path]) -> None:
-    BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
     for path in paths:
-        rel = path.relative_to(ROOT)
-        target = BACKUP_ROOT / rel
+        target = BACKUP_ROOT / path.relative_to(ROOT)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, target)
 
-
-def replace_once(text: str, old: str, new: str, label: str, *, allow_already: str | None = None) -> str:
-    if allow_already and allow_already in text:
-        print(f"[SKIP] {label}: ajuste já presente.")
+def replace_once(text: str, old: str, new: str, label: str, *, already: str | None = None) -> str:
+    if already and already in text:
+        print(f"[SKIP] {label}: já aplicado.")
         return text
     count = text.count(old)
     if count != 1:
@@ -55,403 +46,406 @@ def replace_once(text: str, old: str, new: str, label: str, *, allow_already: st
     print(f"[OK] {label}")
     return text.replace(old, new, 1)
 
-
-def replace_between(text: str, start: str, end: str, replacement: str, label: str, *, already: str | None = None) -> str:
-    if already and already in text:
-        print(f"[SKIP] {label}: ajuste já presente.")
+def append_once(text: str, marker: str, block: str, label: str) -> str:
+    if marker in text:
+        print(f"[SKIP] {label}: já aplicado.")
         return text
-    start_pos = text.find(start)
-    if start_pos < 0:
-        raise PatchError(f"{label}: início do trecho não encontrado.")
-    end_pos = text.find(end, start_pos)
-    if end_pos < 0:
-        raise PatchError(f"{label}: fim do trecho não encontrado.")
     print(f"[OK] {label}")
-    return text[:start_pos] + replacement + text[end_pos:]
-
-
-def patch_index(text: str) -> str:
-    old = '''            <div class="tracking-pagination" id="trackingReleasePagination" aria-label="Paginação de lançamentos">
-              <button class="secondary-action" id="trackingReleasePrev" type="button">Anterior</button>
-              <span class="tracking-pagination-status" aria-live="polite">
-                Página <strong id="trackingReleasePageCurrent">1</strong> de
-                <strong id="trackingReleasePageTotal">1</strong>
-                <small id="trackingReleasePageRange">0 itens</small>
-              </span>
-              <button class="secondary-action" id="trackingReleaseNext" type="button">Próxima</button>
-            </div>'''
-    new = '''            <div class="flow-pager tracking-release-pager"
-                 id="trackingReleasePagination"
-                 aria-label="Paginação de lançamentos"
-                 aria-live="polite"></div>'''
-    return replace_once(
-        text, old, new,
-        "Usar paginação padrão de Buscar candidatos em Lançamentos recentes",
-        allow_already='class="flow-pager tracking-release-pager"',
-    )
-
-
-def patch_tracking_js(text: str) -> str:
-    text = replace_once(
-        text,
-        '<article><span>ÚLTIMO LANÇAMENTO</span><strong>${escapeHtml(latestReleaseLabel(item))}</strong></article>',
-        '<article><span>ÚLTIMO LANÇAMENTO</span><strong>${escapeHtml(latestReleaseLabel(item, history))}</strong></article>',
-        "Usar histórico carregado como fallback do Último lançamento",
-        allow_already="latestReleaseLabel(item, history)",
-    )
-
-    start = "  function renderReleasePagination(totalItems, totalPages, start, visibleCount) {"
-    end = "  function renderWorks() {"
-    replacement = '''  function renderReleasePagination(totalItems, totalPages) {
-    if (!elements.pagination) return;
-    elements.pagination.hidden = totalItems === 0 || totalPages <= 1;
-    if (elements.pagination.hidden) {
-      elements.pagination.innerHTML = "";
-      return;
-    }
-    elements.pagination.innerHTML = `
-      <button class="flow-page-link" type="button"
-              ${releasePage <= 1 ? "disabled" : ""}
-              data-tracking-release-page="${releasePage - 1}"
-              aria-label="Página anterior">‹</button>
-      ${releasePageButtons(releasePage, totalPages)}
-      <button class="flow-page-link" type="button"
-              ${releasePage >= totalPages ? "disabled" : ""}
-              data-tracking-release-page="${releasePage + 1}"
-              aria-label="Próxima página">›</button>
-    `;
-  }
-
-  function releasePageButtons(page, pages) {
-    const startPage = Math.max(1, Math.min(page - 1, pages - 2));
-    const endPage = Math.min(pages, startPage + 2);
-    return Array.from({ length: endPage - startPage + 1 }, (_, index) => startPage + index)
-      .map(number => `
-        <button type="button"
-                class="flow-page-link ${number === page ? "active" : ""}"
-                data-tracking-release-page="${number}">${number}</button>
-      `)
-      .join("");
-  }
-
-'''
-    text = replace_between(
-        text, start, end, replacement,
-        "Renderizar paginação com flow-pager/flow-page-link",
-        already="function releasePageButtons(page, pages)",
-    )
-
-    text = replace_once(
-        text,
-        "    renderReleasePagination(items.length, totalPages, start, visibleItems.length);",
-        "    renderReleasePagination(items.length, totalPages);",
-        "Simplificar chamada da paginação",
-        allow_already="    renderReleasePagination(items.length, totalPages);",
-    )
-
-    old_events = '''  elements.pagePrev?.addEventListener("click", () => {
-    if (releasePage <= 1) return;
-    releasePage -= 1;
-    renderReleaseTable();
-  });
-  elements.pageNext?.addEventListener("click", () => {
-    releasePage += 1;
-    renderReleaseTable();
-  });
-'''
-    new_events = '''  elements.pagination?.addEventListener("click", event => {
-    const button = event.target.closest("[data-tracking-release-page]");
-    if (!button || button.disabled) return;
-    const nextPage = Number(button.dataset.trackingReleasePage);
-    if (!Number.isFinite(nextPage) || nextPage < 1) return;
-    releasePage = nextPage;
-    renderReleaseTable();
-  });
-'''
-    text = replace_once(
-        text, old_events, new_events,
-        "Usar delegação de eventos no pager padrão",
-        allow_already='event.target.closest("[data-tracking-release-page]")',
-    )
-
-    old_func = '''function latestReleaseLabel(item) {
-  if (!item.latest_release_chapter && !item.latest_release_date) return "Sem lançamento registrado";
-  const chapter = item.latest_release_chapter ? `cap ${item.latest_release_chapter}` : "capítulo não informado";
-  const date = dateOnly(item.latest_release_date);
-  return `${chapter} · ${date}`;
-}
-'''
-    new_func = '''function latestReleaseLabel(item, releaseHistory = []) {
-  const rows = releaseHistory
-    .filter(row => Number(row.manga_id) === Number(item.manga_id))
-    .sort((left, right) => String(right.release_date || "").localeCompare(String(left.release_date || "")));
-  const fallback = rows[0] || {};
-  const chapterValue = item.latest_release_chapter || fallback.chapter;
-  const dateValue = item.latest_release_date || fallback.release_date;
-  if (!chapterValue && !dateValue) return "Sem lançamento registrado";
-  const chapter = chapterValue ? `cap ${chapterValue}` : "cap não informado";
-  const date = dateOnly(dateValue);
-  return `${chapter} · ${date}`;
-}
-'''
-    text = replace_once(
-        text, old_func, new_func,
-        "Adicionar fallback seguro ao Último lançamento",
-        allow_already="function latestReleaseLabel(item, releaseHistory = [])",
-    )
-    return text
-
-
-def patch_css(text: str) -> str:
-    old_name = '''.tracking-work-item strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}'''
-    new_name = '''.tracking-work-item strong {
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}'''
-    text = replace_once(
-        text, old_name, new_name,
-        "Reduzir peso dos nomes na Fila de obras",
-        allow_already=".tracking-work-item strong {\n  font-weight: 500;",
-    )
-
-    old_star = '''.tracking-star {
-  background: transparent !important;
-  border: 0;
-  color: var(--rose-dark) !important;
-  cursor: pointer;
-  font-size: 22px;
-  line-height: 1;
-  padding: 2px !important;
-  transform: none !important;
-}'''
-    new_star = '''.tracking-star {
-  background: transparent !important;
-  border: 0;
-  color: var(--rose-dark) !important;
-  cursor: pointer;
-  font-size: 22px;
-  font-weight: 400;
-  line-height: 1;
-  padding: 2px !important;
-  transform: none !important;
-}'''
-    text = replace_once(
-        text, old_star, new_star,
-        "Usar peso regular nas estrelas de favorito",
-        allow_already="font-weight: 400;\n  line-height: 1;",
-    )
-
-    start = ".tracking-pagination {"
-    if start in text:
-        start_pos = text.find(start)
-        marker = ".tracking-pagination .secondary-action:disabled {"
-        marker_pos = text.find(marker, start_pos)
-        if marker_pos < 0:
-            raise PatchError("Remover paginação antiga: bloco disabled não encontrado.")
-        close_pos = text.find("}\n", marker_pos)
-        if close_pos < 0:
-            raise PatchError("Remover paginação antiga: fechamento não encontrado.")
-        close_pos += 2
-        text = text[:start_pos] + text[close_pos:]
-        print("[OK] Remover CSS do microcomponente de paginação anterior")
-    else:
-        print("[SKIP] Remover CSS do microcomponente de paginação anterior: já ausente.")
-
-    canonical_css = '''
-/* Acompanhamento reutiliza exatamente o componente de paginação de Fluxos/Buscar candidatos. */
-#page-tracking .tracking-release-pager {
-  margin-left: auto;
-  margin-top: 0;
-}
-'''
-    if "#page-tracking .tracking-release-pager" not in text:
-        anchor = "#page-tracking > .panel + .panel {\n  margin-top: 16px;\n}\n"
-        if anchor not in text:
-            raise PatchError("Inserir ajuste do pager: âncora do layout de Acompanhamento não encontrada.")
-        text = text.replace(anchor, anchor + canonical_css, 1)
-        print("[OK] Reutilizar flow-pager no Acompanhamento")
-    else:
-        print("[SKIP] Reutilizar flow-pager no Acompanhamento: ajuste já presente.")
-    return text
-
-
-def patch_repository(text: str) -> str:
-    old = '''            LEFT JOIN LATERAL (
-                SELECT r.chapter, r.release_date, r.release_group
-                FROM external_releases r
-                WHERE r.manga_id = m.id
-                ORDER BY r.release_date DESC, r.first_seen_at DESC, r.id DESC
-                LIMIT 1
-            ) latest ON TRUE'''
-    new = '''            LEFT JOIN LATERAL (
-                SELECT releases.chapter, releases.release_date, releases.release_group
-                FROM (
-                    SELECT
-                        r.chapter,
-                        r.release_date,
-                        r.release_group,
-                        r.first_seen_at AS seen_at,
-                        r.id
-                    FROM external_releases r
-                    WHERE r.manga_id = m.id
-
-                    UNION ALL
-
-                    SELECT
-                        mr.chapter,
-                        mr.release_date,
-                        mr.release_group,
-                        mr.first_seen_at AS seen_at,
-                        mr.id
-                    FROM mangaupdates_releases mr
-                    WHERE mr.manga_id = m.id
-                ) releases
-                ORDER BY releases.release_date DESC NULLS LAST,
-                         releases.seen_at DESC NULLS LAST,
-                         releases.id DESC
-                LIMIT 1
-            ) latest ON TRUE'''
-    return replace_once(
-        text, old, new,
-        "Buscar Último lançamento nas duas fontes persistidas",
-        allow_already="FROM mangaupdates_releases mr\n                    WHERE mr.manga_id = m.id",
-    )
-
+    return text.rstrip() + "\n\n" + block.strip() + "\n"
 
 def patch_docs(text: str) -> str:
-    start = "## 5. Paginação\n"
-    end = "## 6. JavaScript por página\n"
-    replacement = '''## 5. Paginação
+    block = r'''
+## Padrão visual dos itens de fila — Cápsulas leves
 
-O componente canônico de paginação para páginas internas é o mesmo usado em
-**Fluxos > Jornada operacional > Buscar candidatos**.
+<!-- QUEUE_CAPSULES_STANDARD_20260827 -->
 
-### Contrato visual obrigatório
+Para telas do arquétipo **Fila + detalhe + capa**, o padrão visual oficial dos itens
+da coluna esquerda é **Cápsulas leves**.
 
-- reutilize `.flow-pager` como contêiner;
-- reutilize `.flow-page-link` em todas as ações;
-- use `‹` e `›` para anterior/próxima;
-- mostre até **3 números de página** por vez;
-- a página atual deve usar `.active`, com o sublinhado Rose já definido em `flows.css`;
-- desabilite os extremos com `disabled`;
-- não crie uma segunda aparência com botões “Anterior / Próxima”, contador
-  “Página X de Y” ou nova paleta quando o padrão de Fluxos atender à tela.
+A fila tem uma responsabilidade simples: **localizar e selecionar a obra**.
+Ela não deve explicar o estado da obra.
 
-Estrutura de referência:
+### Conteúdo permitido na fila
 
-```html
-<div class="flow-pager">
-  <button class="flow-page-link" aria-label="Página anterior">‹</button>
-  <button class="flow-page-link active">1</button>
-  <button class="flow-page-link">2</button>
-  <button class="flow-page-link">3</button>
-  <button class="flow-page-link" aria-label="Próxima página">›</button>
-</div>
-```
+Cada item pode conter apenas:
 
-Para paginação client-side:
+- controle de seleção quando a etapa trabalhar com seleção em lote;
+- interação própria da entidade quando indispensável, como a estrela de Favorito em
+  Acompanhamento;
+- **nome da obra**;
+- affordance discreto de navegação, como `›`, sem texto adicional.
 
-- mantenha `currentPage` e `pageSize` no módulo da página;
-- ao alterar busca ou filtros, retorne para a página 1;
-- limite `currentPage` ao total de páginas após qualquer mudança nos dados;
-- para listas pequenas, esconda o pager quando houver somente uma página;
-- use a mesma janela de até três números adotada por Buscar candidatos.
+Não exiba ao redor ou abaixo do nome:
 
-Quando a quantidade de dados for grande ou o endpoint já oferecer paginação real,
-prefira paginação no backend.
+- ID;
+- status;
+- data;
+- quantidade de divergências;
+- estado de sincronização;
+- caminho;
+- grupo;
+- capítulo;
+- mensagens operacionais;
+- qualquer outro metadado.
 
+Essas informações pertencem ao **painel de detalhe à direita**.
+
+### Aparência da Cápsula leve
+
+O item deve manter o estilo Rose Edition já existente, sem introduzir nova paleta:
+
+- altura mínima de referência: **48px**;
+- raio de referência: **10–11px**;
+- fundo em repouso muito sutil, próximo ao fundo da fila;
+- borda transparente ou extremamente discreta em repouso;
+- `gap` vertical de aproximadamente **6–7px** entre itens;
+- nome com peso moderado, sem negrito excessivo;
+- `overflow: hidden`, `text-overflow: ellipsis` e `white-space: nowrap` para nomes longos.
+
+#### Hover
+
+No hover:
+
+- a cápsula pode deslocar-se horizontalmente em aproximadamente **2px**;
+- fundo passa para o painel branco;
+- borda Rose suave aparece;
+- o `›` pode surgir com transição curta.
+
+O movimento deve ser pequeno e não pode causar reflow da fila.
+
+#### Item aberto no detalhe
+
+A obra atualmente aberta no painel direito deve receber:
+
+- borda Rose;
+- fundo claro;
+- sombra muito sutil;
+- `›` visível;
+- nenhuma informação textual adicional.
+
+O estado de **item aberto** é diferente do estado de **checkbox marcado**.
+Marcar um checkbox para ação em lote não deve alterar qual obra está aberta no detalhe.
+
+### Aplicação no projeto
+
+Este padrão deve ser compartilhado por filas equivalentes, incluindo:
+
+- **Organização v2**;
+- **Acompanhamento > Busca e favoritas**;
+- **Fluxos > Sincronizar Notion**.
+
+As telas continuam livres para especializar o conteúdo do painel direito, mas a fila
+de obras deve manter a mesma linguagem de seleção e navegação.
+
+### Checklist específico da fila
+
+- [ ] A fila mostra somente interação indispensável + nome da obra.
+- [ ] Nenhum status, ID ou metadado aparece abaixo do nome.
+- [ ] Informações operacionais estão no painel direito.
+- [ ] Hover usa acabamento leve e deslocamento de no máximo 2px.
+- [ ] Item aberto possui destaque Rose sem acrescentar texto.
+- [ ] Checkbox marcado e item aberto continuam estados independentes.
+- [ ] Nomes longos são truncados de forma previsível.
+- [ ] `flow-pager` continua sendo usado quando a fila é paginada.
 '''
-    text = replace_between(
-        text, start, end, replacement,
-        "Documentar paginação canônica de Buscar candidatos",
-        already="### Contrato visual obrigatório",
+    return append_once(
+        text,
+        "QUEUE_CAPSULES_STANDARD_20260827",
+        block,
+        "Documentar Cápsulas leves como padrão oficial de fila",
     )
 
-    old_example = (
-        "A correção de Acompanhamento de 26/08/2026 segue este padrão: envelope de 16px, "
-        "largura operacional de 1180px, seções com espaçamento controlado, tabela de quatro "
-        "colunas coerentes e paginação client-side de cinco lançamentos por página."
+def patch_organization_js(text: str) -> str:
+    old = '''          <h4>${escapeHtml(item.title)}</h4>
+        </article>'''
+    new = '''          <h4 title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h4>
+          <span class="organization-queue-arrow" aria-hidden="true">›</span>
+        </article>'''
+    return replace_once(
+        text, old, new,
+        "Organização v2: adicionar affordance discreto à fila",
+        already='class="organization-queue-arrow"',
     )
-    new_example = (
-        "A página Acompanhamento segue este padrão: envelope de 16px, largura operacional "
-        "de 1180px, seções com espaçamento controlado, tabela de quatro colunas coerentes "
-        "e paginação client-side de cinco lançamentos por página usando o componente "
-        "canônico `flow-pager` / `flow-page-link` de Buscar candidatos."
+
+def patch_tracking_js(text: str) -> str:
+    old = '''        <span>${starButton(item)}</span>
+        <strong>${escapeHtml(item.title || "Obra sem título")}</strong>
+      </article>'''
+    new = '''        <span>${starButton(item)}</span>
+        <strong title="${escapeHtml(item.title || "Obra sem título")}">${escapeHtml(item.title || "Obra sem título")}</strong>
+        <span class="tracking-queue-arrow" aria-hidden="true">›</span>
+      </article>'''
+    return replace_once(
+        text, old, new,
+        "Acompanhamento: adequar item da fila ao padrão Cápsulas leves",
+        already='class="tracking-queue-arrow"',
     )
-    if old_example in text:
-        text = text.replace(old_example, new_example, 1)
-        print("[OK] Atualizar exemplo de Acompanhamento na documentação")
-    elif new_example in text:
-        print("[SKIP] Atualizar exemplo de Acompanhamento na documentação: já atualizado.")
-    else:
-        raise PatchError("Atualizar exemplo de Acompanhamento: parágrafo esperado não encontrado.")
-    return text
 
+def patch_notion_js(text: str) -> str:
+    old = '''      <input type="checkbox" data-notion-sync-choice data-notion-sync-work-id="${escapeHtml(String(workId))}" ${selectable ? "" : "disabled"}>
+      <span>
+        <strong>${escapeHtml(title)}</strong>
+        <small>${escapeHtml(listStatus)} · ID ${escapeHtml(String(workId || "--"))}</small>
+      </span>
+    </label>'''
+    new = '''      <input type="checkbox" data-notion-sync-choice data-notion-sync-work-id="${escapeHtml(String(workId))}" ${selectable ? "" : "disabled"}>
+      <strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong>
+      <span class="sync-notion-queue-arrow" aria-hidden="true">›</span>
+    </label>'''
+    return replace_once(
+        text, old, new,
+        "Sincronizar Notion: remover status/ID da fila",
+        already='class="sync-notion-queue-arrow"',
+    )
 
-def verify(contents: dict[str, str]) -> None:
+def patch_organization_css(text: str) -> str:
+    block = r'''
+/* QUEUE_CAPSULES_STANDARD_20260827
+   Organização v2 — fila mostra somente checkbox + nome + affordance. */
+.organization-item-list {
+  gap: 7px;
+}
+.organization-list-item {
+  grid-template-columns: 16px minmax(0, 1fr) 22px;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: #fffcfd;
+  box-shadow: none;
+  transform: translateX(0);
+  transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.organization-list-item h4 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.organization-queue-arrow {
+  color: transparent;
+  font-size: 18px;
+  line-height: 1;
+  text-align: right;
+  transform: translateX(-3px);
+  transition: color .16s ease, transform .16s ease;
+}
+.organization-list-item:hover {
+  border-color: var(--rose-border);
+  background: var(--panel);
+  box-shadow: none;
+  transform: translateX(2px);
+}
+.organization-list-item:hover .organization-queue-arrow,
+.organization-list-item[aria-current="true"] .organization-queue-arrow {
+  color: var(--rose);
+  transform: translateX(0);
+}
+.organization-list-item[aria-current="true"],
+.organization-list-item[aria-current="true"]:hover {
+  border-color: var(--rose);
+  background: var(--panel);
+  box-shadow: 0 7px 18px rgba(169, 77, 107, .08);
+}
+.organization-list-item.selected:not([aria-current="true"]) {
+  border-color: transparent;
+  background: #fffcfd;
+  box-shadow: none;
+}
+.organization-list-item.selected:not([aria-current="true"]):hover {
+  border-color: var(--rose-border);
+  background: var(--panel);
+}
+'''
+    return append_once(
+        text, "QUEUE_CAPSULES_STANDARD_20260827",
+        block, "Organização v2: aplicar Cápsulas leves",
+    )
+
+def patch_tracking_css(text: str) -> str:
+    block = r'''
+/* QUEUE_CAPSULES_STANDARD_20260827
+   Acompanhamento — favorito é interação; todo metadado permanece no detalhe. */
+.tracking-work-items {
+  gap: 7px;
+}
+.tracking-work-item {
+  grid-template-columns: auto minmax(0, 1fr) 22px;
+  gap: 9px;
+  min-height: 48px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: #fffcfd;
+  box-shadow: none;
+  transform: translateX(0);
+  transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.tracking-work-item strong {
+  min-width: 0;
+  font-weight: 600;
+}
+.tracking-queue-arrow {
+  color: transparent;
+  font-size: 18px;
+  line-height: 1;
+  text-align: right;
+  transform: translateX(-3px);
+  transition: color .16s ease, transform .16s ease;
+}
+.tracking-work-item:hover {
+  border-color: var(--rose-border);
+  background: var(--panel);
+  transform: translateX(2px);
+}
+.tracking-work-item:hover .tracking-queue-arrow,
+.tracking-work-item.active .tracking-queue-arrow {
+  color: var(--rose);
+  transform: translateX(0);
+}
+.tracking-work-item.active {
+  border-color: var(--rose);
+  background: var(--panel);
+  box-shadow: 0 7px 18px rgba(169, 77, 107, .08);
+}
+'''
+    return append_once(
+        text, "QUEUE_CAPSULES_STANDARD_20260827",
+        block, "Acompanhamento: aplicar Cápsulas leves",
+    )
+
+def patch_flows_css(text: str) -> str:
+    block = r'''
+/* QUEUE_CAPSULES_STANDARD_20260827
+   Sync Notion — fila mostra somente checkbox + nome + affordance.
+   Status/ID continuam disponíveis no painel de detalhe via data-* existente. */
+.sync-notion-candidate-list {
+  gap: 7px;
+}
+.sync-notion-candidate {
+  grid-template-columns: 18px minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: #fffcfd;
+  box-shadow: none;
+  transform: translateX(0);
+  transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.sync-notion-candidate > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sync-notion-queue-arrow {
+  color: transparent;
+  font-size: 18px;
+  line-height: 1;
+  text-align: right;
+  transform: translateX(-3px);
+  transition: color .16s ease, transform .16s ease;
+}
+.sync-notion-candidate:hover {
+  border-color: var(--rose-border);
+  background: var(--panel);
+  transform: translateX(2px);
+}
+.sync-notion-candidate:hover .sync-notion-queue-arrow,
+.sync-notion-candidate.is-selected .sync-notion-queue-arrow {
+  color: var(--rose);
+  transform: translateX(0);
+}
+.sync-notion-candidate.is-selected {
+  border-color: var(--rose);
+  background: var(--panel);
+  box-shadow: 0 7px 18px rgba(169, 77, 107, .08);
+}
+.sync-notion-candidate small {
+  display: none;
+}
+'''
+    return append_once(
+        text, "QUEUE_CAPSULES_STANDARD_20260827",
+        block, "Sincronizar Notion: aplicar Cápsulas leves",
+    )
+
+def verify(updated: dict[str, str]) -> None:
     checks = [
-        ('class="flow-pager tracking-release-pager"', contents["index"], "HTML usa o pager padrão"),
-        ('data-tracking-release-page=', contents["tracking_js"], "JS renderiza links de página"),
-        ('function releasePageButtons(page, pages)', contents["tracking_js"], "JS limita números da paginação"),
-        ('latestReleaseLabel(item, history)', contents["tracking_js"], "Detalhe usa fallback de histórico"),
-        ('font-weight: 500;', contents["releases_css"], "Fila de obras não usa negrito forte"),
-        ('#page-tracking .tracking-release-pager', contents["releases_css"], "Pager escopado ao Acompanhamento"),
-        ('FROM mangaupdates_releases mr', contents["repository"], "Consulta inclui histórico MangaUpdates"),
-        ('### Contrato visual obrigatório', contents["docs"], "Padrão de paginação documentado"),
+        ("docs", "QUEUE_CAPSULES_STANDARD_20260827"),
+        ("docs", "Cápsulas leves"),
+        ("organization_js", "organization-queue-arrow"),
+        ("organization_css", "QUEUE_CAPSULES_STANDARD_20260827"),
+        ("tracking_js", "tracking-queue-arrow"),
+        ("tracking_css", "QUEUE_CAPSULES_STANDARD_20260827"),
+        ("notion_js", "sync-notion-queue-arrow"),
+        ("flows_css", "QUEUE_CAPSULES_STANDARD_20260827"),
     ]
-    missing = [label for needle, haystack, label in checks if needle not in haystack]
+    missing = [
+        f"{key}: {needle}"
+        for key, needle in checks
+        if needle not in updated[key]
+    ]
     if missing:
-        raise PatchError("Validação final falhou: " + "; ".join(missing))
-    if 'id="trackingReleasePrev"' in contents["index"] or 'id="trackingReleaseNext"' in contents["index"]:
-        raise PatchError("Validação final falhou: paginação antiga ainda existe no HTML.")
+        raise PatchError("Validação estrutural falhou: " + "; ".join(missing))
+    if '<small>${escapeHtml(listStatus)} · ID ${escapeHtml(String(workId || "--"))}</small>' in updated["notion_js"]:
+        raise PatchError("Validação falhou: status/ID ainda aparece na fila do Sync Notion.")
     print("[OK] Validação estrutural concluída.")
-
 
 def main() -> int:
     try:
         original = {name: read(path) for name, path in FILES.items()}
         updated = dict(original)
-        updated["index"] = patch_index(updated["index"])
-        updated["tracking_js"] = patch_tracking_js(updated["tracking_js"])
-        updated["releases_css"] = patch_css(updated["releases_css"])
-        updated["repository"] = patch_repository(updated["repository"])
+
         updated["docs"] = patch_docs(updated["docs"])
+        updated["organization_js"] = patch_organization_js(updated["organization_js"])
+        updated["organization_css"] = patch_organization_css(updated["organization_css"])
+        updated["tracking_js"] = patch_tracking_js(updated["tracking_js"])
+        updated["tracking_css"] = patch_tracking_css(updated["tracking_css"])
+        updated["notion_js"] = patch_notion_js(updated["notion_js"])
+        updated["flows_css"] = patch_flows_css(updated["flows_css"])
+
         verify(updated)
 
-        changed_paths = [FILES[name] for name in FILES if updated[name] != original[name]]
-        if not changed_paths:
-            print("[OK] Nenhuma alteração necessária; projeto já está atualizado.")
+        changed = [FILES[name] for name in FILES if updated[name] != original[name]]
+        if not changed:
+            print("[OK] Projeto já contém todos os ajustes.")
             return 0
 
-        backup(changed_paths)
+        backup(changed)
         print(f"[OK] Backup criado em: {BACKUP_ROOT}")
+
         for name, path in FILES.items():
             if updated[name] != original[name]:
-                write(path, updated[name])
+                path.write_text(updated[name], encoding="utf-8")
                 print(f"[OK] Atualizado: {path.relative_to(ROOT)}")
 
-        print("\nAjustes aplicados com sucesso.")
-        print("Arquivos alterados:")
-        for path in changed_paths:
-            print(f"  - {path.relative_to(ROOT)}")
-        print("\nValidações recomendadas:")
+        print("")
+        print("Padronização de filas aplicada com sucesso.")
+        print("")
+        print("Validações recomendadas:")
+        print("  node --check web/js/pages/organizationPage.js")
         print("  node --check web/js/pages/trackingPage.js")
-        print("  python -m py_compile manhwateca/release_monitor/repository.py")
-        print("  python -m unittest discover -s tests")
+        print("  node --check web/js/flows/syncNotionPanel.js")
+        print("  python -m unittest discover -s tests -p 'test_release_monitor*.py' -v")
         return 0
-    except PatchError as error:
-        print(f"[ERRO] {error}")
-        return 1
-    except Exception as error:
-        print(f"[ERRO] Falha inesperada: {error}")
-        return 1
 
+    except PatchError as exc:
+        print(f"[ERRO] {exc}")
+        return 1
 
 if __name__ == "__main__":
     raise SystemExit(main())

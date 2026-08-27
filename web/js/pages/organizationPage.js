@@ -866,7 +866,8 @@ export function initOrganizationPage({
                  data-organization-key="${escapeHtml(key)}"
                  ${checked ? "checked" : ""}
                  aria-label="Selecionar ${escapeHtml(item.title)}">
-          <h4>${escapeHtml(item.title)}</h4>
+          <h4 title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h4>
+          <span class="organization-queue-arrow" aria-hidden="true">›</span>
         </article>
       `;
     }).join("");
@@ -908,6 +909,10 @@ export function initOrganizationPage({
     return lines.join("\n");
   }
 
+  function organizationCoverUrl(item) {
+    return item?.cover_url || item?.coverUrl || item?.cover || item?.cover_image || item?.thumbnail || "";
+  }
+
   function renderNamingDetail(item) {
     const changes = Array.isArray(item.changes) ? item.changes : [];
     return `
@@ -923,10 +928,17 @@ export function initOrganizationPage({
           <article class="organization-meta"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>
         `).join("")}
       </div>
-      <section class="organization-notice">
-        <h3>${escapeHtml(item.notice?.[0] || "Nomes fora do padrão")}</h3>
-        <p>${escapeHtml(item.notice?.[1] || "")}</p>
-      </section>
+      <div class="organization-cover-context-row">
+        <div class="organization-detail-cover">
+          ${organizationCoverUrl(item)
+            ? `<img src="${escapeHtml(organizationCoverUrl(item))}" alt="Capa de ${escapeHtml(item.title || "obra")}">`
+            : "<span>Sem capa</span>"}
+        </div>
+        <section class="organization-cover-context">
+          <h3>${escapeHtml(item.notice?.[0] || "Nomes fora do padrão")}</h3>
+          <p>${escapeHtml(item.notice?.[1] || "Revise as alterações propostas para esta obra.")}</p>
+        </section>
+      </div>
       <section class="organization-naming-changes">
         <h3>ALTERAÇÕES PROPOSTAS</h3>
         <div class="organization-naming-change-list">
@@ -986,12 +998,17 @@ export function initOrganizationPage({
           <article class="organization-meta"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>
         `).join("")}
       </div>
-      ${item.notice ? `
-        <section class="organization-notice">
-          <h3>${escapeHtml(item.notice?.[0] || "Informação")}</h3>
-          <p>${escapeHtml(item.notice?.[1] || "")}</p>
+      <div class="organization-cover-context-row">
+        <div class="organization-detail-cover">
+          ${organizationCoverUrl(item)
+            ? `<img src="${escapeHtml(organizationCoverUrl(item))}" alt="Capa de ${escapeHtml(item.title || "obra")}">`
+            : "<span>Sem capa</span>"}
+        </div>
+        <section class="organization-cover-context">
+          <h3>${escapeHtml(item.notice?.[0] || "O que revisar")}</h3>
+          <p>${escapeHtml(item.notice?.[1] || "Revise os dados desta obra antes de avançar para a próxima ação.")}</p>
         </section>
-      ` : ""}
+      </div>
       <div class="organization-detail-boxes">
         ${(item.boxes || []).map(([label, value]) => `
           <article class="organization-detail-box"><h3>${escapeHtml(label)}</h3>${(organizationSubtab === "review_structure" || organizationSubtab === "organize_folders")

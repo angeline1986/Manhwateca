@@ -1379,3 +1379,117 @@
     width: 100%;
   }
 }
+
+/* ORGANIZATION_MASTER_DETAIL_COVER_20260826 */
+.organization-cover-context-row {
+  display: grid;
+  grid-template-columns: 136px minmax(0, 1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.organization-detail-cover {
+  display: grid;
+  place-items: center;
+  min-height: 184px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--soft);
+}
+.organization-detail-cover img {
+  width: 100%;
+  height: 184px;
+  object-fit: cover;
+}
+.organization-detail-cover span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+.organization-cover-context {
+  min-height: 184px;
+  border: 1px solid var(--rose-border);
+  border-radius: 11px;
+  background: var(--soft-2);
+  padding: 14px 16px;
+}
+.organization-cover-context h3 {
+  margin: 0 0 5px;
+  color: var(--text);
+  font-size: 13px;
+}
+.organization-cover-context p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+@media (max-width: 900px) {
+  .organization-cover-context-row { grid-template-columns: 110px minmax(0, 1fr); }
+  .organization-detail-cover,
+  .organization-cover-context { min-height: 155px; }
+  .organization-detail-cover img { height: 155px; }
+}
+
+/* QUEUE_CAPSULES_STANDARD_20260827
+   Organização v2 — fila mostra somente checkbox + nome + affordance. */
+.organization-item-list {
+  gap: 7px;
+}
+.organization-list-item {
+  grid-template-columns: 16px minmax(0, 1fr) 22px;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: #fffcfd;
+  box-shadow: none;
+  transform: translateX(0);
+  transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.organization-list-item h4 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.organization-queue-arrow {
+  color: transparent;
+  font-size: 18px;
+  line-height: 1;
+  text-align: right;
+  transform: translateX(-3px);
+  transition: color .16s ease, transform .16s ease;
+}
+.organization-list-item:hover {
+  border-color: var(--rose-border);
+  background: var(--panel);
+  box-shadow: none;
+  transform: translateX(2px);
+}
+.organization-list-item:hover .organization-queue-arrow,
+.organization-list-item[aria-current="true"] .organization-queue-arrow {
+  color: var(--rose);
+  transform: translateX(0);
+}
+.organization-list-item[aria-current="true"],
+.organization-list-item[aria-current="true"]:hover {
+  border-color: var(--rose);
+  background: var(--panel);
+  box-shadow: 0 7px 18px rgba(169, 77, 107, .08);
+}
+.organization-list-item.selected:not([aria-current="true"]) {
+  border-color: transparent;
+  background: #fffcfd;
+  box-shadow: none;
+}
+.organization-list-item.selected:not([aria-current="true"]):hover {
+  border-color: var(--rose-border);
+  background: var(--panel);
+}

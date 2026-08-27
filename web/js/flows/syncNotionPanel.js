@@ -456,10 +456,8 @@ function candidateItem(item, index, options = {}) {
   return `
     <label class="sync-notion-candidate ${selectable ? "" : "is-disabled"}" data-notion-sync-candidate data-notion-sync-index="${index}" data-notion-sync-search-text="${escapeHtml(search)}" data-notion-sync-title="${escapeHtml(title)}" data-notion-sync-status="${escapeHtml(status)}" data-notion-sync-raw-status="${escapeHtml(item.notionSyncStatus || "")}" data-notion-sync-result-status="${escapeHtml(resultStatus)}" data-notion-sync-result-message="${escapeHtml(resultMessage)}" data-notion-sync-session-done="${options.sessionDone ? "true" : "false"}" data-notion-sync-work-code="${escapeHtml(item.workCode || "")}" data-notion-sync-page-label="${escapeHtml(pageLabel)}" data-notion-sync-synced-label="${escapeHtml(syncedLabel)}" data-notion-sync-cover-url="${escapeHtml(item.coverUrl || "")}" ${index >= 5 ? "hidden" : ""}>
       <input type="checkbox" data-notion-sync-choice data-notion-sync-work-id="${escapeHtml(String(workId))}" ${selectable ? "" : "disabled"}>
-      <span>
-        <strong>${escapeHtml(title)}</strong>
-        <small>${escapeHtml(listStatus)} · ID ${escapeHtml(String(workId || "--"))}</small>
-      </span>
+      <strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong>
+      <span class="sync-notion-queue-arrow" aria-hidden="true">›</span>
     </label>
   `;
 }

@@ -1,39 +1,65 @@
-# Manhwateca — ajustes de Acompanhamento (24/08/2026)
+# Manhwateca — Padronização de filas: Cápsulas leves
 
-Pacote conservador: altera somente os arquivos já responsáveis pela página **Acompanhamento**.
+Este patch aplica a opção aprovada **B — Cápsulas leves** nas filas equivalentes
+do projeto e registra a decisão em `docs/frontend_page_standard.md`.
 
-## Ajustes
+## Regra consolidada
 
-- Histórico da obra limitado aos **6 lançamentos mais recentes**.
-- Remove a necessidade de **Ver mais**.
-- Espera a task de **Verificar agora** realmente terminar (até 10 min) antes de recarregar subscriptions; evita atualizar o cabeçalho cedo demais com `Sem registro`.
-- Se a task falhar, não trata a falha como conclusão bem-sucedida.
-- Corrige a geometria dos cards `Último lançamento / Última verificação / Status`: o painel deixa de esticar os cards quando há pouco conteúdo.
-- Alinha o enquadramento externo da página ao padrão de Organização: `padding: 16px`, conteúdo com `max-width: 1180px`, fila de `340px` e detalhe flexível.
-- Não altera migration, banco, favoritos, endpoints, release service, slider, menu ou outras páginas.
+Na fila esquerda aparecem somente:
 
-## Como aplicar
+- checkbox quando houver seleção em lote;
+- interação indispensável, como Favorito em Acompanhamento;
+- nome da obra;
+- seta `›` discreta.
 
-1. Extraia este ZIP.
-2. Copie `apply_updates.py` para a **raiz do repositório Manhwateca**.
-3. Na raiz do projeto, execute:
+Não aparecem na fila status, ID, datas, divergências, grupo, caminho, mensagem de
+sincronização ou outro metadado. Essas informações ficam no painel direito.
+
+## Telas ajustadas
+
+- Organização v2
+- Acompanhamento > Busca e favoritas
+- Fluxos > Sincronizar Notion
+
+Em Sincronizar Notion é removida visualmente a segunda linha
+`Nunca sincronizada · ID ...`; os dados continuam preservados nos `data-*` usados
+pelo detalhe e pela lógica da tela.
+
+## Documentação
+
+Adiciona ao `docs/frontend_page_standard.md` a seção
+**Padrão visual dos itens de fila — Cápsulas leves**, incluindo hover, item aberto,
+truncamento e independência entre checkbox e item em detalhe.
+
+## Arquivos alterados
+
+- `docs/frontend_page_standard.md`
+- `web/js/pages/organizationPage.js`
+- `web/css/pages/organization.css`
+- `web/js/pages/trackingPage.js`
+- `web/css/pages/releases.css`
+- `web/js/flows/syncNotionPanel.js`
+- `web/css/pages/flows-journey.css`
+
+## Aplicação
+
+Copie `apply_updates.py` para a raiz do repositório e execute:
 
 ```bash
 python apply_updates.py
 ```
 
-O script cria automaticamente um backup em:
+Backup automático:
 
 ```text
-.tracking_patch_backup_20260824/
+reports/patch_backups/queue_capsules_<timestamp>/
 ```
 
-Depois inicie normalmente:
+## Validação recomendada
 
 ```bash
-./start_manhwateca.command
+node --check web/js/pages/organizationPage.js
+node --check web/js/pages/trackingPage.js
+node --check web/js/flows/syncNotionPanel.js
+python -m unittest discover -s tests -p 'test_release_monitor*.py' -v
 ```
-
-## Observação sobre “Última verificação”
-
-O cabeçalho continua usando o dado real `last_checked_at`. O pacote não inventa horário nem usa a hora do clique. A correção impede o frontend de desistir após apenas 30 segundos e recarregar dados antigos enquanto a task ainda está executando.

@@ -144,7 +144,8 @@ export function initTrackingPage(elements) {
                data-tracking-work="${escapeHtml(item.manga_id)}"
                tabindex="0">
         <span>${starButton(item)}</span>
-        <strong>${escapeHtml(item.title || "Obra sem título")}</strong>
+        <strong title="${escapeHtml(item.title || "Obra sem título")}">${escapeHtml(item.title || "Obra sem título")}</strong>
+        <span class="tracking-queue-arrow" aria-hidden="true">›</span>
       </article>
     `).join("") : '<div class="organization-empty-list">Nenhuma obra nesta seleção.</div>';
     renderDetail();
@@ -174,6 +175,17 @@ export function initTrackingPage(elements) {
         <article><span>ÚLTIMO LANÇAMENTO</span><strong>${escapeHtml(latestReleaseLabel(item, history))}</strong></article>
         <article><span>ÚLTIMA VERIFICAÇÃO</span><strong>${escapeHtml(dateTime(item.last_checked_at, "Sem registro"))}</strong></article>
         <article><span>STATUS</span><strong>${item.monitored ? "Monitorada" : "Pausada"}</strong></article>
+      </div>
+      <div class="tracking-cover-context-row">
+        <div class="tracking-detail-cover">
+          ${trackingCoverUrl(item)
+            ? `<img src="${escapeHtml(trackingCoverUrl(item))}" alt="Capa de ${escapeHtml(item.title || "obra")}">`
+            : "<span>Sem capa</span>"}
+        </div>
+        <section class="tracking-context-card">
+          <h3>Sobre esta obra</h3>
+          <p>${escapeHtml(trackingContextText(item, history))}</p>
+        </section>
       </div>
       <section class="tracking-history">
         <h3>HISTÓRICO DE LANÇAMENTOS</h3>
@@ -395,6 +407,20 @@ async function waitForTask(taskId) {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   throw new Error("A verificação continua em andamento após 10 minutos. Atualize a página para consultar o status.");
+}
+
+function trackingCoverUrl(item) {
+  return item?.cover_url || item?.coverUrl || item?.cover || item?.cover_image || item?.thumbnail || "";
+}
+
+function trackingContextText(item, releaseHistory = []) {
+  const rows = releaseHistory.filter(row => Number(row.manga_id) === Number(item.manga_id));
+  if (rows.length) {
+    return `${rows.length} lançamento${rows.length === 1 ? "" : "s"} carregado${rows.length === 1 ? "" : "s"} no histórico recente.`;
+  }
+  return item.monitored
+    ? "Obra monitorada. Ainda não há lançamentos carregados no histórico recente."
+    : "Monitoramento pausado para esta obra.";
 }
 
 function latestReleaseLabel(item, releaseHistory = []) {

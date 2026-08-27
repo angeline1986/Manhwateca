@@ -1405,3 +1405,79 @@
     text-align: left;
   }
 }
+
+/* FLOW_SEARCH_STABLE_TABLE_20260826 */
+.flow-search-results-table {
+  table-layout: fixed;
+}
+.flow-search-results-table .flow-search-col-title { width: 42%; }
+.flow-search-results-table .flow-search-col-status { width: 18%; }
+.flow-search-results-table .flow-search-col-result { width: 18%; }
+.flow-search-results-table .flow-search-col-action { width: 22%; }
+.flow-search-results-table th,
+.flow-search-results-table td { min-width: 0; }
+.flow-search-results-table td:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flow-search-results-table th:nth-child(2),
+.flow-search-results-table td:nth-child(2) {
+  text-align: center;
+}
+
+/* QUEUE_CAPSULES_STANDARD_20260827
+   Sync Notion — fila mostra somente checkbox + nome + affordance.
+   Status/ID continuam disponíveis no painel de detalhe via data-* existente. */
+.sync-notion-candidate-list {
+  gap: 7px;
+}
+.sync-notion-candidate {
+  grid-template-columns: 18px minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: #fffcfd;
+  box-shadow: none;
+  transform: translateX(0);
+  transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.sync-notion-candidate > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sync-notion-queue-arrow {
+  color: transparent;
+  font-size: 18px;
+  line-height: 1;
+  text-align: right;
+  transform: translateX(-3px);
+  transition: color .16s ease, transform .16s ease;
+}
+.sync-notion-candidate:hover {
+  border-color: var(--rose-border);
+  background: var(--panel);
+  transform: translateX(2px);
+}
+.sync-notion-candidate:hover .sync-notion-queue-arrow,
+.sync-notion-candidate.is-selected .sync-notion-queue-arrow {
+  color: var(--rose);
+  transform: translateX(0);
+}
+.sync-notion-candidate.is-selected {
+  border-color: var(--rose);
+  background: var(--panel);
+  box-shadow: 0 7px 18px rgba(169, 77, 107, .08);
+}
+.sync-notion-candidate small {
+  display: none;
+}

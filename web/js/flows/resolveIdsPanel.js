@@ -48,15 +48,22 @@ function searchTab(metrics, summary, review, works) {
             ${metricCard("Sem resultado", kpis.noResult ?? criticalCount(metrics))}
             ${metricCard("Erros de API", kpis.apiErrors ?? 0)}
           </div>
-          <table class="flow-table">
+          <table class="flow-table flow-search-results-table">
+            <colgroup>
+              <col class="flow-search-col-title">
+              <col class="flow-search-col-status">
+              <col class="flow-search-col-result">
+              <col class="flow-search-col-action">
+            </colgroup>
             <thead>
-              <tr><th>Obra local</th><th>Situação</th><th>Ação sugerida</th></tr>
+              <tr><th>Obra local</th><th>Situação</th><th>Resultado</th><th>Ação sugerida</th></tr>
             </thead>
             <tbody>
               ${rows.map(row => `
                 <tr>
-                  <td>${escapeHtml(row.title)}</td>
+                  <td title="${escapeHtml(row.title)}">${escapeHtml(row.title)}</td>
                   <td><span class="flow-badge ${row.tone}">${escapeHtml(row.status)}</span></td>
+                  <td>${escapeHtml(row.result)}</td>
                   <td>${escapeHtml(row.action)}</td>
                 </tr>
               `).join("")}
@@ -105,6 +112,7 @@ function searchRows(metrics, summary, review, works) {
     title: item.localTitle || "Obra sem título",
     status: statusLabel(item.decisionStatus),
     tone: statusTone(item.decisionStatus),
+    result: resultLabel(item),
     action: actionLabel(item.nextAction),
   }));
   const items = review?.items || [];
@@ -112,6 +120,7 @@ function searchRows(metrics, summary, review, works) {
     title: item.nome || "Obra sem título",
     status: item.candidates?.length ? "Pendente" : "Crítico",
     tone: item.candidates?.length ? "amb" : "bad",
+    result: item.candidates?.length ? `${item.candidates.length} encontrado${item.candidates.length === 1 ? "" : "s"}` : "0 candidatos",
     action: item.candidates?.length ? "Revisar candidatos" : "Informar ID manual",
   }));
   return [
@@ -119,18 +128,21 @@ function searchRows(metrics, summary, review, works) {
       title: "Obras sem ID",
       status: `${unresolvedCount(metrics)} aguardam`,
       tone: "info",
+      result: "Ainda não consultada",
       action: "Pesquisar na API",
     },
     {
       title: "Correspondências pendentes",
       status: `${suggestionCount(metrics, summary)} sugestões`,
       tone: "amb",
+      result: "Sugestões disponíveis",
       action: "Revisar candidatos",
     },
     {
       title: "Sem resultado seguro",
       status: `${criticalCount(metrics)} críticas`,
       tone: "bad",
+      result: "0 candidatos",
       action: "Normalizar título ou informar ID",
     },
   ];
@@ -151,6 +163,26 @@ function statusTone(status) {
   if (status === "ERROR" || status === "MANUAL_ID_REQUIRED") return "bad";
   if (status === "CANDIDATES_FOUND" || status === "PENDING_REVIEW") return "amb";
   return "info";
+}
+
+function resultLabel(item) {
+  const arrayCount = Array.isArray(item?.candidates) ? item.candidates.length : null;
+  const explicitCount = Number.isFinite(Number(item?.candidateCount))
+    ? Number(item.candidateCount)
+    : Number.isFinite(Number(item?.candidatesCount))
+      ? Number(item.candidatesCount)
+      : arrayCount;
+  if (explicitCount !== null && Number.isFinite(explicitCount)) {
+    return `${explicitCount} encontrado${explicitCount === 1 ? "" : "s"}`;
+  }
+  return {
+    WITHOUT_ID: "Ainda não consultada",
+    READY_TO_SEARCH: "Ainda não consultada",
+    CANDIDATES_FOUND: "Disponíveis para revisão",
+    PENDING_REVIEW: "Disponíveis para revisão",
+    MANUAL_ID_REQUIRED: "0 candidatos",
+    ERROR: "Falha na consulta",
+  }[item?.decisionStatus] || "Aguardando";
 }
 
 function actionLabel(action) {
