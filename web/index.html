@@ -167,7 +167,10 @@
                     </div>
                   </article>
                 </div>
-                <span id="flowsFeedback" aria-live="polite"></span>
+                <div id="flowsFeedback" class="flow-feedback-toast" role="status" aria-live="polite" hidden>
+                  <span class="flow-feedback-message" data-flow-feedback-message></span>
+                  <button class="flow-feedback-close secondary-action" type="button" data-flow-feedback-close aria-label="Fechar aviso" title="Fechar aviso">×</button>
+                </div>
               </main>
             </div>
           </section>

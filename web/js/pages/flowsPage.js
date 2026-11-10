@@ -719,10 +719,15 @@ export function initFlowsPage(elements, options = {}) {
 
   function setFeedback(message, tone = "success") {
     const className = `flow-feedback flow-feedback--${tone}`;
-    for (const target of [elements.workflowFeedback, elements.flowsFeedback]) {
-      if (!target) continue;
-      target.textContent = message;
-      target.className = className;
+    if (elements.workflowFeedback) {
+      elements.workflowFeedback.textContent = message || "";
+      elements.workflowFeedback.className = className;
+    }
+    if (elements.flowsFeedback) {
+      const messageElement = elements.flowsFeedback.querySelector("[data-flow-feedback-message]");
+      if (messageElement) messageElement.textContent = message || "";
+      elements.flowsFeedback.className = `flow-feedback-toast ${className}`;
+      elements.flowsFeedback.hidden = !message;
     }
   }
 
@@ -846,6 +851,9 @@ export function initFlowsPage(elements, options = {}) {
   });
 
   const area = elements.flowsCurrentCards;
+  elements.flowsFeedback?.addEventListener("click", event => {
+    if (event.target.closest("[data-flow-feedback-close]")) setFeedback("");
+  });
   area?.addEventListener("click", event => handleFlowsClick(event, {
     area,
     afterApply,
