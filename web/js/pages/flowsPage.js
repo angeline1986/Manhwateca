@@ -10,6 +10,7 @@ import {
   getConfirmedMangaUpdatesIdCandidates,
   previewConfirmedMangaUpdatesIdCorrection,
 } from "../api/mangaupdatesApi.js";
+import { getReleasesSummary } from "../api/releasesApi.js";
 import { ACTIVE_FLOW_STEPS, FLOW_STAGE_GROUPS } from "../flows/flowConstants.js";
 import {
   loadMetadataState as fetchMetadataState,
@@ -29,6 +30,7 @@ import {
   withOptimisticStage,
 } from "../flows/flowModel.js";
 import { renderFlowsOverview } from "../flows/flowRenderer.js";
+import { escapeHtml } from "../utils/html.js";
 
 export function initFlowsPage(elements, options = {}) {
   let workflowState;
@@ -36,6 +38,10 @@ export function initFlowsPage(elements, options = {}) {
   let pendingRequest = false;
   let activeSubtab = "buscar";
   let worksPage = 1;
+  let worksPageSize = 10;
+  let worksFilter = "WITHOUT_ID";
+  let selectedWorkIds = new Set();
+  let worksLoadSequence = 0;
   let activeReviewKey = "";
   let reviewSearchQuery = "";
   let showResolvedReview = false;
@@ -54,6 +60,7 @@ export function initFlowsPage(elements, options = {}) {
   let savedReviewKeys = new Set();
   let ignoredReviewKeys = new Set();
   let worksState = { kpis: {}, items: [], pagination: {} };
+  let releaseMonitorState = {};
   let metadataState = { kpis: {}, items: [], pagination: {} };
   let notionMetadataState = {};
   let notionSyncCandidateStatus = "default";
@@ -69,6 +76,7 @@ export function initFlowsPage(elements, options = {}) {
       refreshMetadataState(),
       refreshNotionMetadataState(),
       refreshConfirmedIdCandidatesState(),
+      refreshReleaseMonitorState(),
     ]);
     renderWorkflow(data);
     scheduleWorkflowPolling(data);
@@ -105,7 +113,73 @@ export function initFlowsPage(elements, options = {}) {
   }
 
   async function refreshReviewState() { reviewState = await fetchReviewState(); }
-  async function refreshWorksState() { worksState = await fetchWorksState(worksPage); }
+  async function refreshWorksState() {
+    const sequence = ++worksLoadSequence;
+    const nextState = await fetchWorksState({
+      page: worksPage,
+      pageSize: worksPageSize,
+      status: worksFilter,
+    });
+    if (sequence === worksLoadSequence) worksState = nextState;
+  }
+
+  async function refreshReleaseMonitorState() {
+    try {
+      const { response, payload } = await getReleasesSummary();
+      releaseMonitorState = response.ok ? payload : {};
+    } catch {
+      releaseMonitorState = {};
+    }
+  }
+
+  async function reloadWorksList() {
+    const sequence = ++worksLoadSequence;
+    const nextState = await fetchWorksState({
+      page: worksPage,
+      pageSize: worksPageSize,
+      status: worksFilter,
+    });
+    if (sequence !== worksLoadSequence) return;
+    worksState = nextState;
+    if (workflowState) renderWorkflow(workflowState);
+  }
+
+  function setWorksFilter(value) {
+    worksFilter = value || "WITHOUT_ID";
+    worksPage = 1;
+    reloadWorksList();
+  }
+
+  function setWorksPage(value) {
+    worksPage = Math.max(1, Number(value) || 1);
+    reloadWorksList();
+  }
+
+  function setWorksPageSize(value) {
+    worksPageSize = Math.max(1, Number(value) || 10);
+    worksPage = 1;
+    reloadWorksList();
+  }
+
+  function setWorksSelection(workId, checked) {
+    const id = Number(workId);
+    if (!Number.isInteger(id) || id <= 0) return;
+    if (checked) selectedWorkIds.add(id);
+    else selectedWorkIds.delete(id);
+  }
+
+  function selectVisibleWorks(checked) {
+    for (const item of worksState.items || []) {
+      setWorksSelection(item.mangaId, checked);
+    }
+  }
+
+  function showWorkDetails(workId) {
+    const item = (worksState.items || []).find(row => Number(row.mangaId) === Number(workId));
+    if (!item) return;
+    const reviewItem = (reviewState.items || []).find(row => Number(row.mangaId) === Number(workId));
+    showWorksDetailsDialog(item, reviewItem);
+  }
   async function refreshMetadataState() { metadataState = await fetchMetadataState(); }
   async function refreshNotionMetadataState() { notionMetadataState = await fetchNotionMetadataState(notionSyncCandidateStatus); }
   async function refreshConfirmedIdCandidatesState(search = confirmedIdCorrection.search || "") {
@@ -142,8 +216,22 @@ export function initFlowsPage(elements, options = {}) {
       recentlySyncedNotionWorkIds,
       flowSectionOpenState,
       works: worksState,
+      releaseMonitor: releaseMonitorState,
+      worksFilter,
+      selectedWorkIds: [...selectedWorkIds],
     });
+    syncWorksSelectionState();
     renderLegacyWorkflow(data);
+  }
+
+  function syncWorksSelectionState() {
+    const area = elements.flowsCurrentCards;
+    const selectAll = area?.querySelector("[data-flow-works-select-all]");
+    if (!selectAll) return;
+    const choices = [...area.querySelectorAll("[data-flow-works-select]")];
+    const selected = choices.filter(input => selectedWorkIds.has(Number(input.dataset.flowWorksSelect))).length;
+    selectAll.checked = Boolean(choices.length && selected === choices.length);
+    selectAll.indeterminate = selected > 0 && selected < choices.length;
   }
 
   function captureFlowSectionOpenState() {
@@ -752,7 +840,10 @@ export function initFlowsPage(elements, options = {}) {
   elements.flowsStartWorkflow?.addEventListener("click", () => runCurrentFlowStage());
   elements.flowsResumeWorkflow?.addEventListener("click", () => runWorkflow(true));
 
-  window.addEventListener("manhwateca:flow-subtab", event => setActiveSubtab(event.detail?.subtab));
+  window.addEventListener("manhwateca:flow-subtab", event => {
+    if (event.detail?.reviewKey) activeReviewKey = event.detail.reviewKey;
+    setActiveSubtab(event.detail?.subtab);
+  });
 
   const area = elements.flowsCurrentCards;
   area?.addEventListener("click", event => handleFlowsClick(event, {
@@ -779,11 +870,19 @@ export function initFlowsPage(elements, options = {}) {
     setActiveSubtab,
     setFeedback,
     setSelectedDecisions: value => { selectedDecisions = value; },
-    setWorksPage: value => { worksPage = value; },
+    setWorksFilter,
+    setWorksPage: setWorksPage,
+    setWorksPageSize,
+    setWorksSelection,
+    selectVisibleWorks,
+    showWorkDetails,
     showPage,
   }));
   area?.addEventListener("change", event => handleFlowsChange(event, area, {
     setNotionSyncCandidateStatus,
+    setWorksSelection,
+    selectVisibleWorks,
+    setWorksPageSize,
   }));
   area?.addEventListener("input", event => handleFlowsInput(event, area, {
     setReviewSearchQuery,
@@ -793,4 +892,62 @@ export function initFlowsPage(elements, options = {}) {
   area?.addEventListener("keydown", event => handleFlowsKeydown(event));
 
   return { loadWorkflow, stopWorkflowPolling };
+}
+
+function showWorksDetailsDialog(item, reviewItem) {
+  document.querySelector("[data-flow-works-details-dialog]")?.remove();
+  const candidates = reviewItem?.candidates || [];
+  const status = {
+    READY_TO_SEARCH: "Não pesquisada",
+    CANDIDATES_FOUND: "Revisão",
+    PENDING_REVIEW: "Revisão",
+    MANUAL_ID_REQUIRED: "Sem correspondência",
+    ERROR: "Falha",
+  }[item.decisionStatus] || "Sem ID confirmado";
+  const result = item.decisionStatus === "READY_TO_SEARCH"
+    ? "Ainda não consultada"
+    : item.decisionStatus === "ERROR"
+      ? "Falha na consulta"
+      : `${Number(item.candidatesCount || 0)} candidato(s)`;
+  const lastSearch = item.lastSearchAt
+    ? new Date(item.lastSearchAt).toLocaleString("pt-BR")
+    : "Ainda não pesquisada";
+  const candidateMarkup = candidates.length
+    ? candidates.map(candidate => {
+      const confidence = Number(candidate.confidence ?? candidate.pontuacao);
+      const confidenceLabel = Number.isFinite(confidence)
+        ? `${Math.round(confidence <= 1 ? confidence * 100 : confidence)}% de confiança`
+        : "Confiança não informada";
+      return `<li><strong>${escapeHtml(candidate.title || candidate.titulo || "Candidato sem título")}</strong><span>ID ${escapeHtml(String(candidate.id || "—"))} · ${escapeHtml(confidenceLabel)}</span></li>`;
+    }).join("")
+    : "<li class=\"flow-search-detail-empty\">Nenhum candidato disponível para revisão.</li>";
+  const dialog = document.createElement("dialog");
+  dialog.className = "flow-search-details-dialog";
+  dialog.dataset.flowWorksDetailsDialog = "";
+  dialog.innerHTML = `
+    <div class="flow-search-details-content">
+      <header class="flow-search-details-header">
+        <div><span class="eyebrow">Detalhes da obra</span><h3>${escapeHtml(item.localTitle || "Obra sem título")}</h3></div>
+        <button type="button" class="flow-search-details-close" data-flow-works-details-close aria-label="Fechar detalhes">×</button>
+      </header>
+      <dl class="flow-search-details-meta">
+        <div><dt>Situação</dt><dd>${escapeHtml(status)}</dd></div>
+        <div><dt>Resultado</dt><dd>${escapeHtml(result)}</dd></div>
+        <div><dt>Última busca</dt><dd>${escapeHtml(lastSearch)}</dd></div>
+      </dl>
+      <section class="flow-search-details-candidates"><h4>Candidatos</h4><ul>${candidateMarkup}</ul></section>
+      ${reviewItem ? '<button type="button" class="primary-action" data-flow-works-details-review>Revisar candidatos</button>' : ""}
+    </div>`;
+  dialog.addEventListener("click", event => {
+    if (event.target === dialog || event.target.closest("[data-flow-works-details-close]")) dialog.close();
+    if (event.target.closest("[data-flow-works-details-review]")) {
+      dialog.close();
+      window.dispatchEvent(new CustomEvent("manhwateca:flow-subtab", {
+        detail: { subtab: "pendencias", reviewKey: reviewItem.queueId },
+      }));
+    }
+  });
+  dialog.addEventListener("close", () => dialog.remove(), { once: true });
+  document.body.append(dialog);
+  dialog.showModal();
 }

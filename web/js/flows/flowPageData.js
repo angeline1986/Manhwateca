@@ -12,11 +12,12 @@ export async function loadReviewState() {
   }
 }
 
-export async function loadWorksState(page) {
+export async function loadWorksState({ page, pageSize, status, search } = {}) {
   return loadWorks({
-    status: "WITHOUT_ID",
-    page: String(page),
-    pageSize: "5",
+    status: status || "WITHOUT_ID",
+    page: String(page || 1),
+    pageSize: String(pageSize || 10),
+    search: String(search || ""),
   });
 }
 

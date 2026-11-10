@@ -47,6 +47,8 @@ export function renderFlowsOverview(elements, data, options = {}) {
     recentlySyncedNotionWorkIds: options.recentlySyncedNotionWorkIds || [],
     flowSectionOpenState: options.flowSectionOpenState || {},
     works: options.works,
+    worksFilter: options.worksFilter || "WITHOUT_ID",
+    selectedWorkIds: options.selectedWorkIds || [],
   });
   return { activeStage, activeStatus, visibleRunning };
 }
@@ -95,6 +97,10 @@ function renderCurrentPanel(elements, context) {
   ) || activeStage;
   const selectedStatus = flowStageStatus(selectedStage, run);
   const content = elements.flowsCurrentTitle?.closest(".flows-journey-content");
+  document.getElementById("topbar")?.classList.toggle(
+    "flows-search-page-active",
+    selectedStage.id === "resolve_ids" && context.activeSubtab === "buscar",
+  );
   content?.classList.toggle("flows-resolve-mode", selectedStage.id === "resolve_ids");
   content?.classList.toggle("flows-apply-mode", context.activeSubtab === "decisoes");
   content?.classList.toggle("flows-metadata-mode", selectedStage.id === "update_metadata");

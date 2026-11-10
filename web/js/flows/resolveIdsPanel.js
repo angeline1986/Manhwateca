@@ -9,16 +9,16 @@ export function renderResolveIdsPanel({
   review,
   reviewSearchQuery,
   confirmedIdCorrection,
-  run,
   selectedDecisions,
   savedReviewKeys,
   flowSectionOpenState,
   works,
+  worksFilter = "WITHOUT_ID",
+  selectedWorkIds = [],
+  releaseMonitor = {},
 }) {
-  const summary = review?.summary || {};
-  const metrics = run.results?.resolve_ids?.metrics || {};
   return `
-    ${activeSubtab === "buscar" ? searchTab(metrics, summary, review, works) : ""}
+    ${activeSubtab === "buscar" ? searchTab(review, works, worksFilter, selectedWorkIds, releaseMonitor) : ""}
     ${activeSubtab === "pendencias" ? pendingTab(review, selectedDecisions, activeReviewKey, {
       savedKeys: savedReviewKeys,
       searchQuery: reviewSearchQuery,
@@ -30,133 +30,136 @@ export function renderResolveIdsPanel({
   `;
 }
 
-function searchTab(metrics, summary, review, works) {
-  const rows = searchRows(metrics, summary, review, works);
+function searchTab(review, works, worksFilter, selectedWorkIds, releaseMonitor) {
+  const rows = searchRows(works);
   const kpis = works?.kpis || {};
-  const description = "Localize candidatos no MangaUpdates para obras sem identificação.";
+  const pageSize = Number(works?.pagination?.pageSize || 10);
+  const selected = new Set(selectedWorkIds.map(Number));
   return `
+    <div class="flow-search-page-header">
+      <div class="flow-search-page-heading">
+        <div class="flow-search-breadcrumb">MANHWATECA <span>/</span> FLUXOS OPERACIONAIS</div>
+        <h1>Buscar Candidatos</h1>
+      </div>
+      ${monitoringChip(releaseMonitor)}
+    </div>
     <section class="flow-search-main-card">
-      <details class="flow-section-details" open>
-        <summary class="flow-section-summary">
-          <span class="eyebrow">Jornada operacional</span>
-          <h2>${headingTooltip("Buscar candidatos", description)}</h2>
-        </summary>
-        <div class="flow-section-body">
-          <div class="flow-subgrid">
-            ${metricCard("Sem ID", kpis.withoutId ?? unresolvedCount(metrics))}
-            ${metricCard("Sugestões", kpis.candidatesFound ?? suggestionCount(metrics, summary))}
-            ${metricCard("Sem resultado", kpis.noResult ?? criticalCount(metrics))}
-            ${metricCard("Erros de API", kpis.apiErrors ?? 0)}
+          <div class="flow-search-toolbar">
+            <div class="flow-search-filters" role="group" aria-label="Filtrar obras por situação">
+              ${searchFilter("WITHOUT_ID", "Todos", kpis.withoutId ?? 0, worksFilter)}
+              ${searchFilter("REVIEW", "Revisão", kpis.candidatesFound ?? 0, worksFilter)}
+              ${searchFilter("READY_TO_SEARCH", "Não pesquisada", kpis.readyToSearch ?? 0, worksFilter)}
+              ${searchFilter("MANUAL_ID_REQUIRED", "Sem correspondência", kpis.noResult ?? 0, worksFilter)}
+              ${searchFilter("ERROR", "Falha", kpis.apiErrors ?? 0, worksFilter)}
+            </div>
+            <div class="flow-search-actions">
+              <button class="secondary-action" type="button" data-flow-subtab="pendencias">Ver pendências</button>
+              <button class="primary-action" type="button" data-flow-run-stage>Buscar candidatos</button>
+            </div>
           </div>
+          <div class="flow-search-table-scroll">
           <table class="flow-table flow-search-results-table">
             <colgroup>
+              <col class="flow-search-col-select">
               <col class="flow-search-col-title">
               <col class="flow-search-col-status">
               <col class="flow-search-col-result">
               <col class="flow-search-col-action">
+              <col class="flow-search-col-details">
             </colgroup>
             <thead>
-              <tr><th>Obra local</th><th>Situação</th><th>Resultado</th><th>Ação sugerida</th></tr>
+              <tr>
+                <th class="flow-search-select-cell"><input type="checkbox" data-flow-works-select-all aria-label="Selecionar obras desta página"></th>
+                <th>Obra local</th><th>Situação</th><th>Resultado</th><th>Ação sugerida</th>
+                <th class="flow-search-details-cell">Ações</th>
+              </tr>
             </thead>
             <tbody>
-              ${rows.map(row => `
-                <tr>
-                  <td title="${escapeHtml(row.title)}">${escapeHtml(row.title)}</td>
-                  <td><span class="flow-badge ${row.tone}">${escapeHtml(row.status)}</span></td>
-                  <td>${escapeHtml(row.result)}</td>
-                  <td>${escapeHtml(row.action)}</td>
-                </tr>
-              `).join("")}
+              ${rows.length ? rows.map(item => {
+                const id = Number(item.mangaId);
+                const status = statusLabel(item.decisionStatus);
+                const result = resultLabel(item);
+                return `
+                  <tr>
+                    <td class="flow-search-select-cell"><input type="checkbox" data-flow-works-select="${id}" aria-label="Selecionar ${escapeHtml(item.localTitle || "obra")}" ${selected.has(id) ? "checked" : ""}></td>
+                    <td class="flow-search-work-title" title="${escapeHtml(item.localTitle || "Obra sem título")}">${escapeHtml(item.localTitle || "Obra sem título")}</td>
+                    <td><span class="flow-badge ${statusTone(item.decisionStatus)}">${escapeHtml(status)}</span></td>
+                    <td>${escapeHtml(result)}</td>
+                    <td>${escapeHtml(actionLabel(item.nextAction))}</td>
+                    <td class="flow-search-details-cell">
+                      <button class="flow-search-detail-button" type="button" data-flow-work-view="${id}" aria-label="Visualizar detalhes de ${escapeHtml(item.localTitle || "obra")}" title="Visualizar detalhes">
+                        <span class="flow-search-eye-icon" aria-hidden="true"></span>
+                      </button>
+                    </td>
+                  </tr>`;
+              }).join("") : `<tr><td class="flow-search-empty" colspan="6">Nenhuma obra encontrada nesta situação.</td></tr>`}
             </tbody>
           </table>
-          <div class="flow-table-footer">
-            <div class="actions">
-              <button class="primary-action" type="button" data-flow-run-stage>Buscar candidatos</button>
-              <button class="secondary-action" type="button" data-flow-subtab="pendencias">Ver pendências</button>
-            </div>
+          </div>
+          <div class="flow-search-footer">
+            <label class="flow-search-page-size">
+              <span>Exibir:</span>
+              <select data-flow-works-page-size aria-label="Obras por página">
+                ${[10, 25, 50].map(size => `<option value="${size}" ${size === pageSize ? "selected" : ""}>${size}</option>`).join("")}
+              </select>
+            </label>
             ${searchPagination(works)}
           </div>
-        </div>
-      </details>
     </section>
   `;
 }
 
-function headingTooltip(label, text) {
-  return `<span class="flow-heading-tooltip" tabindex="0" aria-label="${escapeHtml(text)}">${escapeHtml(label)}</span>`;
+function monitoringChip(summary = {}) {
+  const monitored = summary?.monitoring?.monitored_count;
+  const run = summary?.last_monitor_run;
+  const checkedAt = run?.finished_at || run?.started_at;
+  const checkedDate = checkedAt ? new Date(checkedAt) : null;
+  const checkedTime = checkedDate && Number.isFinite(checkedDate.getTime())
+    ? checkedDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    : "—";
+  const hasCount = monitored !== undefined && monitored !== null && Number.isFinite(Number(monitored));
+  const numericCount = hasCount ? Number(monitored) : null;
+  const countLabel = numericCount === null ? "—" : numericCount === 0 ? "" : numericCount.toLocaleString("pt-BR");
+  const monitoredLabel = countLabel ? `${countLabel} obras` : "";
+  return `<div class="flow-search-monitor-chip ${hasCount ? "" : "is-unavailable"}" aria-label="Resumo do monitoramento">
+    <span class="flow-search-monitor-label">Monitorando:</span>
+    ${monitoredLabel ? `<strong>${monitoredLabel}</strong>` : ""}
+    <span class="flow-search-monitor-divider" aria-hidden="true"></span>
+    <span class="flow-search-monitor-label">Última verificação às <strong>${checkedTime}</strong></span>
+  </div>`;
+}
+
+function searchFilter(value, label, count, active) {
+  const numericCount = Number(count) || 0;
+  return `<button class="flow-search-filter ${value === active ? "is-active" : ""} ${numericCount === 0 ? "is-empty" : ""}" type="button" data-flow-works-status="${value}" aria-pressed="${value === active}">
+    <span>${label}${numericCount > 0 ? ` (${numericCount})` : ""}</span>
+  </button>`;
 }
 
 function searchPagination(works) {
   const pagination = works?.pagination || {};
   const page = Number(pagination.page || 1);
-  const pages = Number(pagination.pages || 1);
-  if (pages <= 1) return "";
-  return `<div class="flow-pager">
-    <button class="flow-page-link" type="button" ${page <= 1 ? "disabled" : ""} data-flow-works-page="${page - 1}" aria-label="Página anterior">‹</button>
-    ${pageButtons(page, pages)}
-    <button class="flow-page-link" type="button" ${page >= pages ? "disabled" : ""} data-flow-works-page="${page + 1}" aria-label="Próxima página">›</button>
+  const pages = Math.max(1, Number(pagination.pages || 1));
+  return `<div class="flow-search-pagination">
+    <button class="flow-search-page-button" type="button" ${page <= 1 ? "disabled" : ""} data-flow-works-page="${page - 1}" aria-label="Página anterior">&lt;&lt;</button>
+    <span aria-label="Página ${page} de ${pages}">${page} / ${pages}</span>
+    <button class="flow-search-page-button" type="button" ${page >= pages ? "disabled" : ""} data-flow-works-page="${page + 1}" aria-label="Próxima página">&gt;&gt;</button>
   </div>`;
 }
 
-function pageButtons(page, pages) {
-  const start = Math.max(1, Math.min(page - 1, pages - 2));
-  const end = Math.min(pages, start + 2);
-  return Array.from({ length: end - start + 1 }, (_, index) => start + index)
-    .map(number => `<button type="button" class="flow-page-link ${number === page ? "active" : ""}" data-flow-works-page="${number}">${number}</button>`)
-    .join("");
-}
-
-function searchRows(metrics, summary, review, works) {
-  const workItems = works?.items || [];
-  if (workItems.length) return workItems.map(item => ({
-    title: item.localTitle || "Obra sem título",
-    status: statusLabel(item.decisionStatus),
-    tone: statusTone(item.decisionStatus),
-    result: resultLabel(item),
-    action: actionLabel(item.nextAction),
-  }));
-  const items = review?.items || [];
-  if (items.length) return items.map(item => ({
-    title: item.nome || "Obra sem título",
-    status: item.candidates?.length ? "Pendente" : "Crítico",
-    tone: item.candidates?.length ? "amb" : "bad",
-    result: item.candidates?.length ? `${item.candidates.length} encontrado${item.candidates.length === 1 ? "" : "s"}` : "0 candidatos",
-    action: item.candidates?.length ? "Revisar candidatos" : "Informar ID manual",
-  }));
-  return [
-    {
-      title: "Obras sem ID",
-      status: `${unresolvedCount(metrics)} aguardam`,
-      tone: "info",
-      result: "Ainda não consultada",
-      action: "Pesquisar na API",
-    },
-    {
-      title: "Correspondências pendentes",
-      status: `${suggestionCount(metrics, summary)} sugestões`,
-      tone: "amb",
-      result: "Sugestões disponíveis",
-      action: "Revisar candidatos",
-    },
-    {
-      title: "Sem resultado seguro",
-      status: `${criticalCount(metrics)} críticas`,
-      tone: "bad",
-      result: "0 candidatos",
-      action: "Normalizar título ou informar ID",
-    },
-  ];
+function searchRows(works) {
+  return works?.items || [];
 }
 
 function statusLabel(status) {
   return {
-    WITHOUT_ID: "Sem ID",
-    READY_TO_SEARCH: "Pronta",
-    CANDIDATES_FOUND: "Candidatos",
-    PENDING_REVIEW: "Pendente",
-    MANUAL_ID_REQUIRED: "Sem resultado",
-    ERROR: "Erro",
-  }[status] || status || "Pendente";
+    WITHOUT_ID: "Sem ID confirmado",
+    READY_TO_SEARCH: "Não pesquisada",
+    CANDIDATES_FOUND: "Revisão",
+    PENDING_REVIEW: "Revisão",
+    MANUAL_ID_REQUIRED: "Sem correspondência",
+    ERROR: "Falha",
+  }[status] || status || "Revisão";
 }
 
 function statusTone(status) {
@@ -166,6 +169,8 @@ function statusTone(status) {
 }
 
 function resultLabel(item) {
+  if (item?.decisionStatus === "READY_TO_SEARCH") return "—";
+  if (item?.decisionStatus === "ERROR") return "Falha na consulta";
   const arrayCount = Array.isArray(item?.candidates) ? item.candidates.length : null;
   const explicitCount = Number.isFinite(Number(item?.candidateCount))
     ? Number(item.candidateCount)
@@ -176,43 +181,19 @@ function resultLabel(item) {
     return `${explicitCount} encontrado${explicitCount === 1 ? "" : "s"}`;
   }
   return {
-    WITHOUT_ID: "Ainda não consultada",
-    READY_TO_SEARCH: "Ainda não consultada",
+    WITHOUT_ID: "—",
     CANDIDATES_FOUND: "Disponíveis para revisão",
     PENDING_REVIEW: "Disponíveis para revisão",
-    MANUAL_ID_REQUIRED: "0 candidatos",
-    ERROR: "Falha na consulta",
+    MANUAL_ID_REQUIRED: "0 encontrados",
   }[item?.decisionStatus] || "Aguardando";
 }
 
 function actionLabel(action) {
   return {
-    SEARCH_API: "Pesquisar na API",
-    NORMALIZE_TITLE: "Normalizar título",
+    SEARCH_API: "Executar busca",
+    NORMALIZE_TITLE: "Ajustar título",
     REVIEW_CANDIDATES: "Revisar candidatos",
-    MANUAL_SEARCH: "Informar ID manual",
-    RETRY_FAILED: "Tentar novamente",
-  }[action] || action || "Pesquisar na API";
-}
-
-function metricCard(label, value) {
-  return `<article class="flow-metric-card">
-    <strong>${escapeHtml(String(value))}</strong>
-    <span>${escapeHtml(label)}</span>
-  </article>`;
-}
-
-function suggestionCount(metrics, summary) {
-  return Number(metrics.pending || summary.review || 0);
-}
-
-function criticalCount(metrics) {
-  return Number(metrics.notFound || metrics.errors || 0);
-}
-
-function unresolvedCount(metrics) {
-  return Math.max(
-    0,
-    Number(metrics.catalogWorks || 0) - Number(metrics.alreadyResolved || 0),
-  );
+    MANUAL_SEARCH: "Ajustar busca",
+    RETRY_FAILED: "Repetir tentativa",
+  }[action] || action || "Executar busca";
 }

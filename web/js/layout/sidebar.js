@@ -4,6 +4,7 @@ export function initSidebar() {
   const menuToggle = document.getElementById("menuToggle");
   const backButton = document.getElementById("backButton");
   const menuLabel = document.getElementById("menuLabel");
+  const shutdownButton = document.querySelector("[data-app-shutdown]");
   const organizationPageButton = document.querySelector('[data-page="organization-v2"]');
   let openingOrganizationSubtab = false;
 
@@ -73,6 +74,31 @@ export function initSidebar() {
   menuToggle?.addEventListener("click", () =>
     sidebar?.classList.toggle("open")
   );
+
+  shutdownButton?.addEventListener("click", async () => {
+    shutdownButton.disabled = true;
+    try {
+      const response = await fetch("/api/shutdown", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!response.ok) throw new Error("Não foi possível encerrar a aplicação.");
+      window.close();
+      window.setTimeout(() => {
+        if (window.closed) return;
+        document.title = "Manhwateca encerrada";
+        document.body.innerHTML = `
+          <main style="min-height:100vh;display:grid;place-content:center;padding:24px;text-align:center;font-family:system-ui,sans-serif;color:#43383b">
+            <h1 style="margin:0 0 8px">Manhwateca encerrada</h1>
+            <p style="margin:0;color:#827277">Pode fechar esta aba.</p>
+          </main>`;
+      }, 120);
+    } catch {
+      shutdownButton.disabled = false;
+      window.alert("Não foi possível encerrar a aplicação. Verifique se o servidor ainda está ativo.");
+    }
+  });
 
   sidebarToggle?.addEventListener("click", () =>
     setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"))

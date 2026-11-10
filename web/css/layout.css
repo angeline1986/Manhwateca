@@ -69,6 +69,31 @@
 .nav-link.active { color: var(--rose); background: #fff; box-shadow: 0 10px 25px rgba(113,55,74,.08); }
 .nav-icon { width: 22px; color: currentColor; font-size: 19px; text-align: center; }
 .sidebar-footer { display: grid; gap: 15px; margin-top: auto; padding-top: 22px; border-top: 1px solid rgba(169,77,107,.12); }
+.sidebar-footer-actions { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.sidebar-icon-action {
+  display: grid;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  box-sizing: border-box;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--rose-border);
+  border-radius: 10px;
+  background: #f6e7eb;
+  color: var(--rose-dark);
+}
+.sidebar-icon-action .nav-icon { width: 22px; height: 22px; margin: 0; font-size: 22px; }
+.sidebar-gear-icon {
+  display: block;
+  background: currentColor;
+  -webkit-mask: url("/assets/icons/gear-solid-full.svg") center / contain no-repeat;
+  mask: url("/assets/icons/gear-solid-full.svg") center / contain no-repeat;
+}
+.sidebar-icon-action svg.nav-icon { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.sidebar-icon-action:hover { color: var(--rose-dark); background: #efd9e0; }
+.sidebar-shutdown-action:hover { color: #a33a3a; background: #fff1f1; }
 .local-badge { padding: 7px 12px; color: var(--rose); font-size: 12px; font-weight: 800; text-align: center; }
 .app-shell, .sidebar, .brand-copy, .nav-link span:not(.nav-icon), .local-badge {
   transition: .25s ease;
@@ -88,6 +113,7 @@
 .sidebar-collapsed .menu-head,
 .sidebar-collapsed .flow-menu,
 .sidebar-collapsed .organization-menu { display: none; }
+.sidebar-collapsed .sidebar-footer-actions { flex-direction: column; }
 .sidebar-collapsed .main-menu { position: static; opacity: 1; transform: none; filter: none; }
 .sidebar-collapsed .menu-stage { min-height: auto; margin-top: 58px; overflow: visible; }
 .sidebar-collapsed .nav-link { justify-content: center; padding-left: 10px; padding-right: 10px; }
@@ -144,12 +170,12 @@
 .topbar > div { min-width: 0; }
 .topbar p { margin: 0; color: var(--muted); }
 .eyebrow { color: var(--rose); font-size: 11px; font-weight: 850; letter-spacing: .17em; }
-button:not(.nav-link):not(.menu-toggle):not(.flow-page-link):not(.flow-candidate):not(.flow-queue-item):not(.confirmed-id-candidate):not(.back-button) {
+button:not(.nav-link):not(.menu-toggle):not(.flow-page-link):not(.flow-candidate):not(.flow-queue-item):not(.confirmed-id-candidate):not(.back-button):not(.secondary-action):not(.flow-search-filter):not(.flow-search-detail-button):not(.flow-search-page-button) {
   border: 0; border-radius: 13px; padding: 11px 16px;
   color: #fff; background: var(--rose); font-weight: 800;
   transition: .2s ease;
 }
-button:not(.nav-link):not(.menu-toggle):not(.flow-page-link):not(.flow-candidate):not(.flow-queue-item):not(.confirmed-id-candidate):not(.back-button):hover { background: var(--rose-dark); transform: translateY(-1px); }
+button:not(.nav-link):not(.menu-toggle):not(.flow-page-link):not(.flow-candidate):not(.flow-queue-item):not(.confirmed-id-candidate):not(.back-button):not(.secondary-action):not(.flow-search-filter):not(.flow-search-detail-button):not(.flow-search-page-button):hover { background: var(--rose-dark); transform: translateY(-1px); }
 .menu-toggle { display: none; border: 0; background: transparent; color: var(--text); font-size: 24px; }
 
 .page-container { width: min(1480px, 100%); margin: 0 auto; padding: 34px clamp(22px, 4vw, 52px) 70px; }

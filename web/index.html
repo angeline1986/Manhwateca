@@ -102,9 +102,14 @@
       </div>
 
       <div class="sidebar-footer">
-        <button class="nav-link legacy-nav" data-page="settings">
-          <span class="nav-icon">⚙</span><span>Configurações</span>
-        </button>
+        <div class="sidebar-footer-actions">
+          <button class="nav-link legacy-nav sidebar-icon-action" type="button" data-page="settings" aria-label="Configurações" title="Configurações">
+            <span class="nav-icon sidebar-gear-icon" aria-hidden="true"></span>
+          </button>
+          <button class="nav-link sidebar-icon-action sidebar-shutdown-action" type="button" data-app-shutdown aria-label="Desligar aplicação" title="Desligar aplicação">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v10M6.2 5.8a8 8 0 1 0 11.6 0" /></svg>
+          </button>
+        </div>
         <span class="local-badge">Somente local</span>
       </div>
     </aside>

@@ -18,6 +18,7 @@ VALID_STATUS = {
     "PENDING_REVIEW",
     "MANUAL_ID_REQUIRED",
     "ERROR",
+    "REVIEW",
 }
 
 
@@ -75,9 +76,10 @@ def _fetch_rows(connection):
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            WITH latest_candidates AS (
+            WITH latest_candidate_execution AS (
                 SELECT DISTINCT ON (work_id)
                     work_id,
+                    execution_id,
                     status,
                     searched_title,
                     created_at AS last_search_at
@@ -87,14 +89,17 @@ def _fetch_rows(connection):
             ),
             candidate_counts AS (
                 SELECT
-                    work_id,
-                    COUNT(*) FILTER (WHERE status = 'pending_review') AS pending_count,
-                    COUNT(*) FILTER (WHERE status = 'not_found') AS not_found_count,
-                    COUNT(*) FILTER (WHERE status = 'error') AS error_count,
-                    COUNT(*) FILTER (WHERE candidate_external_id IS NOT NULL) AS candidates_count
-                FROM manhwateca.flow_id_candidates
-                WHERE work_id IS NOT NULL
-                GROUP BY work_id
+                    c.work_id,
+                    COUNT(*) FILTER (WHERE c.status = 'pending_review') AS pending_count,
+                    COUNT(*) FILTER (WHERE c.status = 'not_found') AS not_found_count,
+                    COUNT(*) FILTER (WHERE c.status = 'error') AS error_count,
+                    COUNT(*) FILTER (WHERE c.candidate_external_id IS NOT NULL) AS candidates_count
+                FROM manhwateca.flow_id_candidates c
+                JOIN latest_candidate_execution latest
+                  ON latest.work_id = c.work_id
+                 AND latest.execution_id = c.execution_id
+                WHERE c.work_id IS NOT NULL
+                GROUP BY c.work_id
             )
             SELECT
                 m.id,
@@ -105,15 +110,15 @@ def _fetch_rows(connection):
                 m.cover_url,                -- ADICIONADO: m.cover_url
                 m.created_at,
                 m.updated_at,
-                lc.status AS latest_candidate_status,
-                lc.searched_title,
-                lc.last_search_at,
+                latest.status AS latest_candidate_status,
+                latest.searched_title,
+                latest.last_search_at,
                 COALESCE(cc.pending_count, 0) AS pending_count,
                 COALESCE(cc.not_found_count, 0) AS not_found_count,
                 COALESCE(cc.error_count, 0) AS error_count,
                 COALESCE(cc.candidates_count, 0) AS candidates_count
             FROM manhwateca.vw_mangas m
-            LEFT JOIN latest_candidates lc ON lc.work_id = m.id
+            LEFT JOIN latest_candidate_execution latest ON latest.work_id = m.id
             LEFT JOIN candidate_counts cc ON cc.work_id = m.id
             ORDER BY m.title
             """
@@ -211,6 +216,11 @@ def _filter_items(items, status, search, only_failed):
             filtered = [
                 item for item in filtered 
                 if item["mangaupdatesId"] and len(item.get("pendingMetadata", [])) > 0
+            ]
+        elif status == "REVIEW":
+            filtered = [
+                item for item in filtered
+                if item["decisionStatus"] in {"CANDIDATES_FOUND", "PENDING_REVIEW"}
             ]
         else:
             filtered = [item for item in filtered if item["decisionStatus"] == status]

@@ -20,6 +20,7 @@
   .sidebar-collapsed .local-badge { display: initial; }
   .sidebar-collapsed .main-nav { margin-top: 0; }
   .sidebar-collapsed .nav-link { justify-content: flex-start; padding: 12px 14px; }
+  .sidebar-collapsed .sidebar-footer-actions { flex-direction: row; }
   .sidebar.open { transform: translateX(0); }
   .menu-toggle { display: block; }
   .topbar { padding: 18px 20px; }

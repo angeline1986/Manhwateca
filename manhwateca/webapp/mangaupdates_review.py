@@ -44,6 +44,14 @@ def _fetch_rows(connection):
     with connection.cursor() as cursor:
         cursor.execute(
             """
+            WITH latest_candidate_execution AS (
+                SELECT DISTINCT ON (work_id)
+                    work_id,
+                    execution_id
+                FROM manhwateca.flow_id_candidates
+                WHERE work_id IS NOT NULL
+                ORDER BY work_id, created_at DESC, id DESC
+            )
             SELECT
                 c.id, c.work_id, c.searched_title,
                 c.candidate_external_id, c.candidate_title,
@@ -51,6 +59,9 @@ def _fetch_rows(connection):
                 m.title AS local_title,
                 m.alternative_title
             FROM manhwateca.flow_id_candidates c
+            JOIN latest_candidate_execution latest
+              ON latest.work_id = c.work_id
+             AND latest.execution_id = c.execution_id
             LEFT JOIN manhwateca.vw_mangas m ON m.id = c.work_id
             WHERE c.status IN ('pending_review', 'not_found')
               AND NOT EXISTS (

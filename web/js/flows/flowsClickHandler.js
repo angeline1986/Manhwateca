@@ -30,7 +30,16 @@ export function handleFlowsClick(event, context) {
   const worksPageAction = event.target.closest("[data-flow-works-page]");
   if (worksPageAction) {
     context.setWorksPage(Number(worksPageAction.dataset.flowWorksPage || 1));
-    context.loadWorkflow();
+    return;
+  }
+  const worksStatusFilter = event.target.closest("[data-flow-works-status]");
+  if (worksStatusFilter) {
+    context.setWorksFilter(worksStatusFilter.dataset.flowWorksStatus);
+    return;
+  }
+  const workDetailsButton = event.target.closest("[data-flow-work-view]");
+  if (workDetailsButton) {
+    context.showWorkDetails(Number(workDetailsButton.dataset.flowWorkView));
     return;
   }
   const selectedCandidate = event.target.closest("[data-flow-select-id]");
@@ -172,6 +181,23 @@ export function handleFlowsClick(event, context) {
 }
 
 export function handleFlowsChange(event, area, context = {}) {
+  if (event.target.matches("[data-flow-works-select]")) {
+    context.setWorksSelection(
+      Number(event.target.dataset.flowWorksSelect),
+      event.target.checked,
+    );
+    syncWorksSelectAll(area);
+  }
+  if (event.target.matches("[data-flow-works-select-all]")) {
+    context.selectVisibleWorks(event.target.checked);
+    area.querySelectorAll("[data-flow-works-select]").forEach(input => {
+      input.checked = event.target.checked;
+    });
+    syncWorksSelectAll(area);
+  }
+  if (event.target.matches("[data-flow-works-page-size]")) {
+    context.setWorksPageSize(event.target.value);
+  }
   if (event.target.matches("[data-flow-apply-choice]")) updateApplySummary(area);
   if (event.target.matches("[data-metadata-select-all]")) {
     setMetadataChecks(area, event.target.checked);
@@ -204,6 +230,15 @@ export function handleFlowsChange(event, area, context = {}) {
     applyMetadataPagination(area);
     updateMetadataSummary(area);
   }
+}
+
+function syncWorksSelectAll(area) {
+  const selectAll = area.querySelector("[data-flow-works-select-all]");
+  if (!selectAll) return;
+  const choices = [...area.querySelectorAll("[data-flow-works-select]")];
+  const selected = choices.filter(input => input.checked).length;
+  selectAll.checked = Boolean(choices.length && selected === choices.length);
+  selectAll.indeterminate = selected > 0 && selected < choices.length;
 }
 
 export function handleFlowsInput(event, area, context = {}) {

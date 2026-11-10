@@ -1,5 +1,6 @@
 import json
 import mimetypes
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -194,6 +195,13 @@ def create_handler(project_root, task_manager, workflow_manager=None):
             path = urlparse(self.path).path
             payload = self._read_json()
             if payload is None:
+                return
+            if path == "/api/shutdown":
+                if self.client_address[0] not in {"127.0.0.1", "::1"}:
+                    self._send_json({"error": "Ação disponível apenas localmente."}, status=403)
+                    return
+                self._send_json({"status": "shutting_down"}, status=200)
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
                 return
             if path == "/api/organization/decision":
                 try:
