@@ -181,6 +181,7 @@
 #flowsFeedback:empty {
   display: none;
 }
+body:not(:has(#page-flows.active)) #flowsFeedback { display: none; }
 #flowsFeedback .flow-feedback-message { min-width: 0; }
 #flowsFeedback .flow-feedback-close {
   position: absolute;

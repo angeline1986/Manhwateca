@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from time import perf_counter
 
 from manhwateca.database.manga_repository import MangaRepository
 from manhwateca.flows.domain import FlowMessage, Progress, StageId
@@ -21,6 +22,7 @@ from manhwateca.mangaupdates_service.matching import (
     rank_search_results,
     select_ranked_candidate,
 )
+from manhwateca.operational_log import context_callable, log_event
 
 
 class MangaUpdatesFlowIntegration:
@@ -55,22 +57,33 @@ class MangaUpdatesFlowIntegration:
     def validate(self, stage: StageId | None = None) -> IntegrationValidation:
         return IntegrationValidation(stage=stage, valid=True)
 
-    def search_series(self) -> SeriesSearchResult:
+    def search_series(self, selected_ids=None) -> SeriesSearchResult:
         flow_repository = self.flow_repository_factory()
         execution = flow_repository.latest_execution()
         if execution is None or execution.execution_id is None:
             raise RuntimeError("Nenhum Workflow iniciado para resolver IDs.")
 
         works = flow_repository.list_catalog_works_for_id_resolution()
-        eligible = [work for work in works if not str(work.work_code or "").strip()]
-        already_resolved = len(works) - len(eligible)
+        selected_work_ids = None if selected_ids is None else set(_normalize_work_ids(selected_ids))
+        scoped_works = [
+            work for work in works
+            if selected_work_ids is None or int(work.work_id) in selected_work_ids
+        ]
+        eligible = [work for work in scoped_works if not str(work.work_code or "").strip()]
+        already_resolved = len(scoped_works) - len(eligible)
         manga_repository = self.manga_repository_factory()
         matched = 0
         pending = 0
         not_found = 0
         errors = 0
 
-        flow_repository.clear_id_candidates(execution.execution_id)
+        if selected_work_ids is None:
+            flow_repository.clear_id_candidates(execution.execution_id)
+        elif eligible:
+            flow_repository.clear_id_candidates_for_works(
+                execution.execution_id,
+                [work.work_id for work in eligible],
+            )
         flow_repository.append_message(
             execution.execution_id,
             StageId.RESOLVE_IDS,
@@ -79,6 +92,7 @@ class MangaUpdatesFlowIntegration:
                 "Resolução de IDs iniciada.",
                 details={
                     "eligible": len(eligible),
+                    "selectedWorks": len(scoped_works),
                     "alreadyResolved": already_resolved,
                 },
             ),
@@ -88,7 +102,12 @@ class MangaUpdatesFlowIntegration:
             StageId.RESOLVE_IDS,
             Progress(current=0, total=len(eligible)),
         )
-        for work in eligible:
+        for index, work in enumerate(eligible, start=1):
+            item_started = perf_counter()
+            log_event(
+                "INFO", "item iniciado", item=f"{index}/{len(eligible)}",
+                obra=work.title, work_id=work.work_id,
+            )
             processed = matched + pending
             flow_repository.update_stage_progress(
                 execution.execution_id,
@@ -187,6 +206,7 @@ class MangaUpdatesFlowIntegration:
                     ))
                     pending += 1
                     not_found += 1
+                outcome = "candidatos" if ranked else "sem_resultado"
                 flow_repository.append_log(
                     _log(
                         execution.execution_id,
@@ -200,6 +220,11 @@ class MangaUpdatesFlowIntegration:
                             "candidates": len(ranked),
                         },
                     )
+                )
+                log_event(
+                    "INFO", "item concluído", item=f"{index}/{len(eligible)}",
+                    obra=work.title, resultado=outcome, candidatos=len(ranked),
+                    duração=f"{perf_counter() - item_started:.1f}s",
                 )
             except Exception as error:
                 errors += 1
@@ -221,6 +246,11 @@ class MangaUpdatesFlowIntegration:
                         error_code="MANGAUPDATES_SEARCH_FAILED",
                     )
                 )
+                log_event(
+                    "ERROR", "item falhou", item=f"{index}/{len(eligible)}",
+                    obra=work.title, work_id=work.work_id, erro=str(error),
+                    duração=f"{perf_counter() - item_started:.1f}s",
+                )
             finally:
                 flow_repository.update_stage_progress(
                     execution.execution_id,
@@ -239,6 +269,7 @@ class MangaUpdatesFlowIntegration:
             not_found=not_found,
             metrics={
                 "catalogWorks": len(works),
+                "selectedWorks": len(scoped_works),
                 "alreadyResolved": already_resolved,
                 "errors": errors,
             },
@@ -435,7 +466,7 @@ def _commit_repository(repository) -> None:
 
 def _search_with_deadline(search_function, title: str, timeout: int, kwargs: dict):
     executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(search_function, title, **kwargs)
+    future = executor.submit(context_callable(search_function), title, **kwargs)
     try:
         return future.result(timeout=timeout + 1)
     except TimeoutError as error:

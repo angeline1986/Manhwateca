@@ -2,6 +2,7 @@ from manhwateca.database.connection import (
     DatabaseConfigurationError,
     DatabaseConnectionError,
 )
+from manhwateca.database.manga_repository import MangaRepository
 from manhwateca.webapp.catalog_pending import (
     catalog_single_work,
     reconcile_catalog_aliases,
@@ -44,7 +45,11 @@ def handle_direct_post(path, payload, project_root, workflow_manager=None):
         if not has_decisions and not has_queue_ids:
             return {"error": "Informe ao menos uma decisão."}, 400
         if path == "/api/mangaupdates/decisions/validate":
-            return validate_decisions_payload(decisions or queue_ids), 200
+            try:
+                repository = MangaRepository()
+                return validate_decisions_payload(decisions or queue_ids, repository), 200
+            except (DatabaseConfigurationError, DatabaseConnectionError) as error:
+                return {"error": str(error)}, 503
         if path == "/api/mangaupdates/decisions/apply":
             try:
                 return apply_decisions_payload(

@@ -30,13 +30,8 @@ export const RESOLVE_ID_STEPS = [
   },
   {
     id: "pendencias",
-    title: "Revisar pendências",
-    description: "Valida candidatos ambíguos ou informa IDs manualmente.",
-  },
-  {
-    id: "decisoes",
-    title: "Aplicar decisões",
-    description: "Grava as decisões revisadas no banco de dados.",
+    title: "Central de decisões",
+    description: "Revisa pendências, corrige IDs confirmados e confere o lote antes de aplicar.",
   },
 ];
 

@@ -12,6 +12,7 @@ import {
 } from "../api/mangaupdatesApi.js";
 import { getReleasesSummary } from "../api/releasesApi.js";
 import { ACTIVE_FLOW_STEPS, FLOW_STAGE_GROUPS } from "../flows/flowConstants.js";
+import { createDecisionWorkspaceController } from "../flows/decisionWorkspaceController.js";
 import {
   loadMetadataState as fetchMetadataState,
   loadNotionMetadataState as fetchNotionMetadataState,
@@ -36,6 +37,7 @@ export function initFlowsPage(elements, options = {}) {
   let workflowState;
   let workflowTimer;
   let pendingRequest = false;
+  let awaitingResolveIdsCompletion = false;
   let activeSubtab = "buscar";
   let worksPage = 1;
   let worksPageSize = 10;
@@ -44,6 +46,9 @@ export function initFlowsPage(elements, options = {}) {
   let worksLoadSequence = 0;
   let activeReviewKey = "";
   let reviewSearchQuery = "";
+  let reviewQueueFilter = "all";
+  let reviewQueuePageSize = 5;
+  let selectedReviewQueueKeys = new Set();
   let showResolvedReview = false;
   let confirmedIdCorrection = {
     search: "",
@@ -67,6 +72,17 @@ export function initFlowsPage(elements, options = {}) {
   let recentlySyncedNotionWorkIds = [];
   let flowSectionOpenState = {};
   const showPage = options.showPage || (() => {});
+  const decisionWorkspace = createDecisionWorkspaceController({
+    getDecisions: () => selectedDecisions,
+    setDecisions: value => { selectedDecisions = value; },
+    getSavedKeys: () => savedReviewKeys,
+    getConfirmedCorrection: () => confirmedIdCorrection,
+    render: () => renderWorkflow(workflowState),
+    reload: loadWorkflow,
+    afterApply,
+    errorMessage,
+    setFeedback,
+  });
 
   async function loadWorkflow() {
     const [data] = await Promise.all([
@@ -80,12 +96,21 @@ export function initFlowsPage(elements, options = {}) {
     ]);
     renderWorkflow(data);
     scheduleWorkflowPolling(data);
+    return data;
   }
 
   async function pollWorkflowStatus() {
     const data = await loadFlowsApiState({ includeDetails: false });
     if (flowChanged(data)) renderWorkflow(data);
     else workflowState = data;
+    const resolveIdsStatus = data.run.results?.resolve_ids?.status;
+    if (awaitingResolveIdsCompletion && ["completed", "completed_with_warnings", "failed", "cancelled"].includes(resolveIdsStatus)) {
+      awaitingResolveIdsCompletion = false;
+      await refreshWorksState();
+      renderWorkflow(data);
+      const finalFeedback = stageFinalFeedback("resolve_ids", 0);
+      setFeedback(finalFeedback.message, finalFeedback.tone);
+    }
     scheduleWorkflowPolling(data);
   }
 
@@ -207,8 +232,12 @@ export function initFlowsPage(elements, options = {}) {
       ignoredReviewKeys: [...ignoredReviewKeys],
       review: reviewState,
       reviewSearchQuery,
+      reviewQueueFilter,
+      reviewQueuePageSize,
+      selectedReviewQueueKeys: [...selectedReviewQueueKeys],
+      ...decisionWorkspace.snapshot(),
       confirmedIdCorrection,
-      selectedDecisions: activeSubtab === "decisoes" ? readyDecisions() : selectedDecisions,
+      selectedDecisions,
       savedReviewKeys: [...savedReviewKeys],
       metadata: metadataState,
       notionMetadata: notionMetadataState,
@@ -220,18 +249,45 @@ export function initFlowsPage(elements, options = {}) {
       worksFilter,
       selectedWorkIds: [...selectedWorkIds],
     });
+    syncReviewQueueSelectionState();
     syncWorksSelectionState();
     renderLegacyWorkflow(data);
+    const batchDialog = elements.flowsCurrentCards?.querySelector("[data-flow-batch-dialog]");
+    if (batchDialog && decisionWorkspace.state.batchOpen) {
+      batchDialog.addEventListener("close", () => { decisionWorkspace.state.batchOpen = false; }, { once: true });
+      batchDialog.showModal();
+    }
+    const correctionDialog = elements.flowsCurrentCards?.querySelector("[data-flow-correction-dialog]");
+    if (correctionDialog && decisionWorkspace.state.correctionOpen) {
+      correctionDialog.addEventListener("close", () => { decisionWorkspace.state.correctionOpen = false; }, { once: true });
+      correctionDialog.showModal();
+    }
+  }
+
+  function syncReviewQueueSelectionState() {
+    const selectAll = elements.flowsCurrentCards?.querySelector(
+      "[data-flow-review-select-all]",
+    );
+    if (!selectAll) return;
+    const items = [...elements.flowsCurrentCards.querySelectorAll(
+      "[data-flow-review-item-select]",
+    )];
+    const selected = items.filter(item => item.checked).length;
+    selectAll.checked = Boolean(items.length && selected === items.length);
+    selectAll.indeterminate = selected > 0 && selected < items.length;
   }
 
   function syncWorksSelectionState() {
     const area = elements.flowsCurrentCards;
     const selectAll = area?.querySelector("[data-flow-works-select-all]");
-    if (!selectAll) return;
-    const choices = [...area.querySelectorAll("[data-flow-works-select]")];
-    const selected = choices.filter(input => selectedWorkIds.has(Number(input.dataset.flowWorksSelect))).length;
-    selectAll.checked = Boolean(choices.length && selected === choices.length);
-    selectAll.indeterminate = selected > 0 && selected < choices.length;
+    if (selectAll) {
+      const choices = [...area.querySelectorAll("[data-flow-works-select]")];
+      const selected = choices.filter(input => selectedWorkIds.has(Number(input.dataset.flowWorksSelect))).length;
+      selectAll.checked = Boolean(choices.length && selected === choices.length);
+      selectAll.indeterminate = selected > 0 && selected < choices.length;
+    }
+    const searchButton = area?.querySelector("[data-flow-run-stage]");
+    if (searchButton) searchButton.disabled = selectedWorkIds.size === 0 || pendingRequest;
   }
 
   function captureFlowSectionOpenState() {
@@ -272,6 +328,7 @@ export function initFlowsPage(elements, options = {}) {
 
   async function refreshAfterStage(stageId) {
     const maxAttemptsByStage = {
+      resolve_ids: 220,
       update_metadata: 60,
       sync_notion: 120,
     };
@@ -282,6 +339,7 @@ export function initFlowsPage(elements, options = {}) {
       "cancelled",
     ]);
     const maxAttempts = maxAttemptsByStage[stageId] || 2;
+    let stageCompleted = false;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 800));
       const data = await loadFlowsApiState({ includeDetails: false });
@@ -291,9 +349,17 @@ export function initFlowsPage(elements, options = {}) {
       const completed = stageResult
         ? terminalStatuses.has(stageResult.status)
         : run.status !== "running";
-      if (completed) break;
+      if (completed) {
+        stageCompleted = true;
+        break;
+      }
     }
-    await loadWorkflow();
+    const finalData = await loadWorkflow();
+    if (!stageCompleted) {
+      const finalStageStatus = finalData.run.results?.[stageId]?.status;
+      stageCompleted = terminalStatuses.has(finalStageStatus) || finalData.run.status !== "running";
+    }
+    return stageCompleted;
   }
 
   async function runCurrentFlowStage() {
@@ -318,10 +384,22 @@ export function initFlowsPage(elements, options = {}) {
         setFeedback(stage.id === "update_metadata"
           ? metadataRunningMessage(metadataSelectionCount)
           : `${stage.title} em execução. Aguarde...`, "info");
-        await refreshAfterStage(stage.id);
-        if (stage.id === "sync_notion") {
+        const stageCompleted = await refreshAfterStage(stage.id);
+        if (stageCompleted && stage.id === "resolve_ids") {
+          const status = workflowState?.run?.results?.resolve_ids?.status;
+          if (status === "completed" || status === "completed_with_warnings") {
+            selectedWorkIds.clear();
+            renderWorkflow(workflowState);
+          }
+        }
+        if (stageCompleted && stage.id === "sync_notion") {
           rememberProcessedNotionWorkIds(completedNotionWorkIds(notionScopeIds));
           renderWorkflow(workflowState);
+        }
+        if (!stageCompleted) {
+          if (stage.id === "resolve_ids") awaitingResolveIdsCompletion = true;
+          setFeedback(`${stage.title} continua em execução.`, "info");
+          return;
         }
         const finalFeedback = stageFinalFeedback(stage.id, metadataSelectionCount);
         setFeedback(finalFeedback.message, finalFeedback.tone);
@@ -334,6 +412,7 @@ export function initFlowsPage(elements, options = {}) {
       await loadWorkflow();
     } finally {
       pendingRequest = false;
+      syncWorksSelectionState();
     }
   }
 
@@ -384,7 +463,7 @@ export function initFlowsPage(elements, options = {}) {
       loading: true,
     };
     renderWorkflow(workflowState);
-    focusConfirmedIdSearch();
+    focusCorrectionIdInput();
     try {
       const { response, payload } = await previewConfirmedMangaUpdatesIdCorrection({
         work_id: values.workId,
@@ -393,14 +472,11 @@ export function initFlowsPage(elements, options = {}) {
       confirmedIdCorrection = {
         ...confirmedIdCorrection,
         ...values,
-        preview: response.ok ? payload : null,
-        error: response.ok ? "" : errorMessage(payload),
+        preview: response.ok || payload?.blockers ? payload : null,
+        error: response.ok || payload?.blockers ? "" : errorMessage(payload),
         loading: false,
       };
-      setFeedback(
-        response.ok ? "ID validado. Revise o preview antes de aplicar." : errorMessage(payload),
-        response.ok ? "info" : "error",
-      );
+      setFeedback("");
     } catch (error) {
       confirmedIdCorrection = {
         ...confirmedIdCorrection,
@@ -409,14 +485,14 @@ export function initFlowsPage(elements, options = {}) {
         error: `Falha ao validar ID: ${error.message || "erro desconhecido"}.`,
         loading: false,
       };
-      setFeedback(confirmedIdCorrection.error, "error");
+      setFeedback("");
     }
     renderWorkflow(workflowState);
-    focusConfirmedIdSearch();
+    focusCorrectionIdInput();
   }
 
-  function focusConfirmedIdSearch() {
-    const input = area?.querySelector("[data-confirmed-id-search]");
+  function focusCorrectionIdInput() {
+    const input = area?.querySelector("[data-confirmed-id-new]");
     if (!input) return;
     input.focus();
     const cursor = input.value.length;
@@ -436,6 +512,7 @@ export function initFlowsPage(elements, options = {}) {
         confirmed: true,
       });
       if (!response.ok) {
+        decisionWorkspace.state.correctionOpen = false;
         confirmedIdCorrection = {
           ...confirmedIdCorrection,
           ...values,
@@ -453,6 +530,7 @@ export function initFlowsPage(elements, options = {}) {
         preview: null,
         error: "",
       };
+      decisionWorkspace.state.correctionOpen = false;
       setFeedback(
         "ID MangaUpdates corrigido com sucesso. Os metadados derivados foram invalidados. Siga para Atualizar metadados antes de sincronizar com o Notion.",
         "success",
@@ -462,6 +540,7 @@ export function initFlowsPage(elements, options = {}) {
       await refreshConfirmedIdCandidatesState();
       renderWorkflow(workflowState);
     } catch (error) {
+      decisionWorkspace.state.correctionOpen = false;
       setFeedback(`Falha ao aplicar correção: ${error.message || "erro desconhecido"}.`, "error");
       renderWorkflow(workflowState);
     } finally {
@@ -542,6 +621,7 @@ export function initFlowsPage(elements, options = {}) {
   }
 
   function setConfirmedIdCorrectionNewWorkCode(newWorkCode) {
+    decisionWorkspace.state.correctionOpen = false;
     confirmedIdCorrection = {
       ...confirmedIdCorrection,
       newWorkCode,
@@ -670,6 +750,9 @@ export function initFlowsPage(elements, options = {}) {
   }
 
   function stagePayload(stageId) {
+    if (stageId === "resolve_ids") {
+      return { selected_ids: [...selectedWorkIds] };
+    }
     if (stageId === "update_metadata") {
       return { selected_ids: selectedMetadataWorkIds() };
     }
@@ -745,9 +828,14 @@ export function initFlowsPage(elements, options = {}) {
   function selectedFlowStage(run) { return FLOW_STAGE_GROUPS.find(group => group.id === activeSubtab) || currentFlowStage(run); }
 
   function setActiveSubtab(subtab) {
-    activeSubtab = subtab || "buscar";
+    activeSubtab = subtab === "decisoes" ? "pendencias" : subtab || "buscar";
     setFeedback("");
     if (activeSubtab === "pendencias") showResolvedReview = false;
+    if (subtab === "decisoes") decisionWorkspace.openBatch();
+    else {
+      decisionWorkspace.state.batchOpen = false;
+      decisionWorkspace.state.correctionOpen = false;
+    }
     renderWorkflow(workflowState);
   }
 
@@ -759,6 +847,14 @@ export function initFlowsPage(elements, options = {}) {
     return Object.fromEntries(Object.entries(selectedDecisions).filter(([key]) => savedReviewKeys.has(key)));
   }
 
+  function clearManualReviewDecision(key) {
+    const remaining = { ...selectedDecisions };
+    delete remaining[key];
+    selectedDecisions = remaining;
+    savedReviewKeys.delete(key);
+    decisionWorkspace.resetBatchValidation();
+  }
+
   function nextPendingKey(currentKey) {
     const pending = (reviewState.items || [])
       .map(itemKey)
@@ -766,13 +862,13 @@ export function initFlowsPage(elements, options = {}) {
     return pending[0] || "";
   }
 
-  function saveCurrentReviewDecision() {
-    const key = activeReviewKey || itemKey(reviewState.items?.[0] || {});
+  function saveCurrentReviewDecision(key) {
     if (!selectedDecisions[key]) {
-      setFeedback("Escolha um candidato ou informe um ID antes de salvar.", "error");
+      setFeedback("Escolha um candidato ou informe um ID antes de preparar o lote.", "error");
       return;
     }
     savedReviewKeys.add(key);
+    decisionWorkspace.resetBatchValidation();
     activeReviewKey = nextPendingKey(key);
     showResolvedReview = false;
     setFeedback(activeReviewKey ? "Decisão salva. Próxima pendência selecionada." : "Revisão concluída.", "success");
@@ -796,6 +892,25 @@ export function initFlowsPage(elements, options = {}) {
     }
   }
 
+  function setReviewQueueFilter(value) {
+    reviewQueueFilter = value || "all";
+    activeReviewKey = "";
+    renderWorkflow(workflowState);
+  }
+
+  function setReviewQueuePageSize(value) {
+    reviewQueuePageSize = Math.max(1, Number(value) || 5);
+    renderWorkflow(workflowState);
+  }
+
+  function setReviewQueueSelection(keys, checked) {
+    for (const key of keys) {
+      if (checked) selectedReviewQueueKeys.add(key);
+      else selectedReviewQueueKeys.delete(key);
+    }
+    renderWorkflow(workflowState);
+  }
+
   async function setNotionSyncCandidateStatus(value) {
     notionSyncCandidateStatus = value || "default";
     await refreshNotionMetadataState();
@@ -807,6 +922,8 @@ export function initFlowsPage(elements, options = {}) {
     if (!reviewKey) return;
     ignoredReviewKeys.add(reviewKey);
     delete selectedDecisions[reviewKey];
+    savedReviewKeys.delete(reviewKey);
+    decisionWorkspace.resetBatchValidation();
     activeReviewKey = nextPendingKey(reviewKey);
     setFeedback("Pendência ignorada nesta sessão.", "info");
     renderWorkflow(workflowState);
@@ -837,7 +954,9 @@ export function initFlowsPage(elements, options = {}) {
 
   function afterApply(updatedDecisions) {
     selectedDecisions = updatedDecisions;
-    if (!Object.keys(updatedDecisions).length) savedReviewKeys = new Set(); renderWorkflow(workflowState);
+    savedReviewKeys = new Set([...savedReviewKeys].filter(key => key in updatedDecisions));
+    decisionWorkspace.pruneApplied(updatedDecisions);
+    renderWorkflow(workflowState);
   }
 
   elements.startWorkflow?.addEventListener("click", () => runWorkflow(false));
@@ -857,6 +976,19 @@ export function initFlowsPage(elements, options = {}) {
   area?.addEventListener("click", event => handleFlowsClick(event, {
     area,
     afterApply,
+    openBatch: decisionWorkspace.openBatch,
+    closeBatch: decisionWorkspace.closeBatch,
+    checkBatch: decisionWorkspace.checkBatch,
+    applyBatch: decisionWorkspace.applyBatch,
+    openCorrection: decisionWorkspace.openCorrection,
+    closeCorrection: decisionWorkspace.closeCorrection,
+    setWorkspaceMode: decisionWorkspace.setMode,
+    setReviewDetailTab: decisionWorkspace.setTab,
+    setReviewManualDraft: decisionWorkspace.setManualDraft,
+    validateAndSetReviewDecision: decisionWorkspace.selectDecision,
+    nextReview: () => { activeReviewKey = nextPendingKey(activeReviewKey); decisionWorkspace.state.reviewDetailTab = "manual"; renderWorkflow(workflowState); },
+    editReview: key => { savedReviewKeys.delete(key); activeReviewKey = key; decisionWorkspace.state.reviewDetailTab = "manual"; decisionWorkspace.resetBatchValidation(); renderWorkflow(workflowState); },
+    removeReview: key => { savedReviewKeys.delete(key); delete selectedDecisions[key]; activeReviewKey = key; decisionWorkspace.resetBatchValidation(); renderWorkflow(workflowState); },
     cancelWorkflow,
     errorMessage,
     getSelectedDecisions: () => selectedDecisions,
@@ -883,16 +1015,28 @@ export function initFlowsPage(elements, options = {}) {
     setWorksPageSize,
     setWorksSelection,
     selectVisibleWorks,
+    hasSelectedWorks: () => selectedWorkIds.size > 0,
+    isSearchPending: () => pendingRequest,
     showWorkDetails,
     showPage,
   }));
   area?.addEventListener("change", event => handleFlowsChange(event, area, {
     setNotionSyncCandidateStatus,
+    setBatchChoice: decisionWorkspace.setBatchChoice,
+    setReviewQueueFilter,
+    setReviewQueuePageSize,
+    setReviewQueueSelection,
     setWorksSelection,
     selectVisibleWorks,
+    hasSelectedWorks: () => selectedWorkIds.size > 0,
+    isSearchPending: () => pendingRequest,
     setWorksPageSize,
   }));
   area?.addEventListener("input", event => handleFlowsInput(event, area, {
+    getSelectedDecisions: () => selectedDecisions,
+    clearManualReviewDecision,
+    setReviewManualDraft: decisionWorkspace.setManualDraft,
+    renderWorkflow: () => renderWorkflow(workflowState),
     setReviewSearchQuery,
     searchConfirmedIdCorrectionWorks,
     setConfirmedIdCorrectionNewWorkCode,

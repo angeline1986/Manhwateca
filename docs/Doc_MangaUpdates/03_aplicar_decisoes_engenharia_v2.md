@@ -1,5 +1,7 @@
 # 03 — Aplicar Decisões — Engenharia (RFC-003)
 
+> **Documento histórico.** A confirmação do lote foi incorporada à Central de decisões. Consulte [a jornada atual](00_user_journey.md).
+
 
 > Especificação técnica da etapa **Aplicar Decisões**.
 >

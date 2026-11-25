@@ -1,5 +1,7 @@
 # 03 — Aplicar Decisões — Design System (v3)
 
+> **Documento histórico.** A confirmação do lote foi incorporada à Central de decisões. Consulte [a jornada atual](00_user_journey.md).
+
 > Especificação de UX/UI orientada à implementação. Este documento descreve **como a interface deve ser construída**, reduzindo ao máximo a liberdade de interpretação.
 
 # 1. Objetivo Perceptivo

@@ -1,12 +1,10 @@
 import {
   applySelectedDecisions,
-  selectCandidate,
-  selectCurrentId,
-  selectManualId,
-  selectNoMatch,
 } from "./flowDecisionHandlers.js";
+import { handleDecisionWorkspaceChange, handleDecisionWorkspaceClick } from "./decisionWorkspaceEvents.js";
 
 export function handleFlowsClick(event, context) {
+  if (handleDecisionWorkspaceClick(event, context)) return;
   if (event.target.closest("[data-flow-select-all-decisions]")) {
     event.preventDefault();
     setDecisionChecks(context.area, true);
@@ -23,10 +21,6 @@ export function handleFlowsClick(event, context) {
     context.reviewAgain();
     return;
   }
-  if (event.target.closest("[data-flow-save-review]")) {
-    context.saveCurrentReviewDecision();
-    return;
-  }
   const worksPageAction = event.target.closest("[data-flow-works-page]");
   if (worksPageAction) {
     context.setWorksPage(Number(worksPageAction.dataset.flowWorksPage || 1));
@@ -40,66 +34,6 @@ export function handleFlowsClick(event, context) {
   const workDetailsButton = event.target.closest("[data-flow-work-view]");
   if (workDetailsButton) {
     context.showWorkDetails(Number(workDetailsButton.dataset.flowWorkView));
-    return;
-  }
-  const selectedCandidate = event.target.closest("[data-flow-select-id]");
-  if (selectedCandidate) {
-    context.setSelectedDecisions(selectCandidate(
-      context.getSelectedDecisions(),
-      selectedCandidate,
-    ));
-    context.setFeedback("Decisão marcada para aplicação.", "info");
-    context.renderWorkflow();
-    return;
-  }
-  const reviewWork = event.target.closest("[data-flow-review-work]");
-  if (reviewWork) {
-    context.setActiveReviewKey(reviewWork.dataset.flowReviewWork);
-    context.renderWorkflow();
-    return;
-  }
-  const manualDecision = event.target.closest("[data-flow-manual-work]");
-  if (manualDecision) {
-    const result = selectManualId(
-      context.getSelectedDecisions(),
-      manualDecision,
-      context.area,
-    );
-    if (result.error) context.setFeedback(result.error, "error");
-    else {
-      context.setSelectedDecisions(result.selectedDecisions);
-      context.setFeedback("ID manual marcado para aplicação.", "info");
-      context.renderWorkflow();
-    }
-    return;
-  }
-  const currentIdDecision = event.target.closest("[data-flow-confirm-current-id]");
-  if (currentIdDecision) {
-    const result = selectCurrentId(
-      context.getSelectedDecisions(),
-      currentIdDecision,
-    );
-    if (result.error) context.setFeedback(result.error, "error");
-    else {
-      context.setSelectedDecisions(result.selectedDecisions);
-      context.setFeedback("ID atual marcado para confirmação.", "info");
-      context.renderWorkflow();
-    }
-    return;
-  }
-  const noMatchDecision = event.target.closest("[data-flow-no-match]");
-  if (noMatchDecision) {
-    context.setSelectedDecisions(selectNoMatch(
-      context.getSelectedDecisions(),
-      noMatchDecision,
-    ));
-    context.setFeedback("Sem correspondência marcado para aplicação.", "info");
-    context.renderWorkflow();
-    return;
-  }
-  const ignoreDecision = event.target.closest("[data-flow-ignore-review]");
-  if (ignoreDecision) {
-    context.ignoreCurrentReview?.(ignoreDecision.dataset.flowWork);
     return;
   }
   if (event.target.closest("[data-flow-apply-decisions]")) {
@@ -181,19 +115,37 @@ export function handleFlowsClick(event, context) {
 }
 
 export function handleFlowsChange(event, area, context = {}) {
+  if (handleDecisionWorkspaceChange(event, context)) return;
+  if (event.target.matches("[data-flow-review-filter]")) {
+    context.setReviewQueueFilter?.(event.target.value || "all");
+  }
+  if (event.target.matches("[data-flow-review-page-size]")) {
+    context.setReviewQueuePageSize?.(event.target.value || "5");
+  }
+  if (event.target.matches("[data-flow-review-item-select]")) {
+    context.setReviewQueueSelection?.([
+      event.target.dataset.flowReviewItemSelect || "",
+    ].filter(Boolean), event.target.checked);
+  }
+  if (event.target.matches("[data-flow-review-select-all]")) {
+    const keys = [...area.querySelectorAll("[data-flow-review-item-select]")]
+      .map(input => input.dataset.flowReviewItemSelect || "")
+      .filter(Boolean);
+    context.setReviewQueueSelection?.(keys, event.target.checked);
+  }
   if (event.target.matches("[data-flow-works-select]")) {
     context.setWorksSelection(
       Number(event.target.dataset.flowWorksSelect),
       event.target.checked,
     );
-    syncWorksSelectAll(area);
+    syncWorksSelectAll(area, context);
   }
   if (event.target.matches("[data-flow-works-select-all]")) {
     context.selectVisibleWorks(event.target.checked);
     area.querySelectorAll("[data-flow-works-select]").forEach(input => {
       input.checked = event.target.checked;
     });
-    syncWorksSelectAll(area);
+    syncWorksSelectAll(area, context);
   }
   if (event.target.matches("[data-flow-works-page-size]")) {
     context.setWorksPageSize(event.target.value);
@@ -232,16 +184,46 @@ export function handleFlowsChange(event, area, context = {}) {
   }
 }
 
-function syncWorksSelectAll(area) {
+function syncWorksSelectAll(area, context = {}) {
   const selectAll = area.querySelector("[data-flow-works-select-all]");
-  if (!selectAll) return;
-  const choices = [...area.querySelectorAll("[data-flow-works-select]")];
-  const selected = choices.filter(input => input.checked).length;
-  selectAll.checked = Boolean(choices.length && selected === choices.length);
-  selectAll.indeterminate = selected > 0 && selected < choices.length;
+  if (selectAll) {
+    const choices = [...area.querySelectorAll("[data-flow-works-select]")];
+    const selected = choices.filter(input => input.checked).length;
+    selectAll.checked = Boolean(choices.length && selected === choices.length);
+    selectAll.indeterminate = selected > 0 && selected < choices.length;
+  }
+  const searchButton = area.querySelector("[data-flow-run-stage]");
+  if (searchButton) {
+    searchButton.disabled = !context.hasSelectedWorks?.() || Boolean(context.isSearchPending?.());
+  }
 }
 
 export function handleFlowsInput(event, area, context = {}) {
+  if (event.target.matches("[data-flow-manual-id]")) {
+    const input = event.target;
+    context.setReviewManualDraft?.(input.dataset.flowManualId, input.value);
+    const feedback = input.closest(".flow-manual-row, .decision-workspace-field")?.querySelector("[data-flow-manual-feedback]");
+    if (feedback) {
+      feedback.textContent = "";
+      feedback.className = "flow-manual-feedback";
+    }
+    input.removeAttribute("aria-invalid");
+    const key = input.dataset.flowManualId;
+    const decisions = context.getSelectedDecisions?.() || {};
+    const selected = decisions[key];
+    if (selected?.Origem === "ID informado manualmente" && String(selected.ID) !== input.value.trim()) {
+      const value = input.value;
+      context.clearManualReviewDecision?.(key);
+      context.renderWorkflow?.();
+      const updatedInput = area.querySelector(`[data-flow-manual-id="${CSS.escape(key)}"]`);
+      if (updatedInput) {
+        updatedInput.value = value;
+        updatedInput.focus();
+        updatedInput.setSelectionRange(value.length, value.length);
+      }
+    }
+    return;
+  }
   if (event.target.matches("[data-flow-review-search]")) {
     context.setReviewSearchQuery?.(event.target.value || "");
   }

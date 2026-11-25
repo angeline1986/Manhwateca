@@ -22,11 +22,17 @@ export async function applySelectedDecisions(selectedDecisions, callbacks, queue
     return selectedDecisions;
   }
   const { response, payload } = await applyMangaUpdatesDecisions({ decisions, dryRun: false });
+  const appliedNames = new Set(Array.isArray(payload?.applied) ? payload.applied : []);
+  const appliedCount = appliedNames.size;
+  const rejectedCount = Array.isArray(payload?.rejected) ? payload.rejected.length : 0;
   callbacks.setFeedback(
-    response.ok ? `${payload.accepted} decisão(ões) aplicada(s).` : callbacks.errorMessage(payload),
-    response.ok ? "success" : "error",
+    appliedCount
+      ? `${appliedCount} decisão(ões) aplicada(s).${rejectedCount ? ` ${rejectedCount} bloqueada(s); revise o lote.` : ""}`
+      : response.ok ? `${payload.accepted} decisão(ões) aplicada(s).` : callbacks.errorMessage(payload),
+    rejectedCount ? "warning" : response.ok ? "success" : "error",
   );
-  if (response.ok) await callbacks.reload();
+  if (appliedCount || response.ok) await callbacks.reload();
+  if (appliedCount) return remainingDecisionsByName(selectedDecisions, appliedNames);
   return response.ok ? remainingDecisions(selectedDecisions, selectedIds) : selectedDecisions;
 }
 
@@ -46,8 +52,17 @@ export function selectCandidate(selectedDecisions, button) {
 export function selectManualId(selectedDecisions, button, area) {
   const key = button.dataset.flowManualWork;
   const input = area.querySelector(`[data-flow-manual-id="${CSS.escape(key)}"]`);
-  const value = Number(input?.value || 0);
-  if (!value) return { selectedDecisions, error: "Informe um ID manual válido." };
+  const rawValue = String(input?.value || "").trim();
+  const value = Number(rawValue);
+  if (!/^\d+$/.test(rawValue) || !Number.isSafeInteger(value) || value <= 0) {
+    return { selectedDecisions, error: "Informe um ID numérico positivo válido." };
+  }
+  const repeated = Object.entries(selectedDecisions).some(([otherKey, decision]) =>
+    otherKey !== key && decision.Tipo !== "sem_correspondencia" && Number(decision.ID) === value
+  );
+  if (repeated) {
+    return { selectedDecisions, error: "Este ID já foi selecionado para outra obra nesta revisão." };
+  }
   return {
     selectedDecisions: {
       ...selectedDecisions,
@@ -99,6 +114,14 @@ function remainingDecisions(selectedDecisions, appliedIds) {
   return Object.fromEntries(
     Object.entries(selectedDecisions).filter(([, decision]) =>
       !appliedIds.has(decision.queueId || decision.Nome)
+    )
+  );
+}
+
+function remainingDecisionsByName(selectedDecisions, appliedNames) {
+  return Object.fromEntries(
+    Object.entries(selectedDecisions).filter(([, decision]) =>
+      !appliedNames.has(decision.Nome)
     )
   );
 }

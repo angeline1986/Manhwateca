@@ -4,10 +4,12 @@ import {
   RESOLVE_ID_STEPS,
 } from "./flowConstants.js";
 import { currentFlowStage, flowStageStatus, visibleFlowStatuses } from "./flowModel.js";
+import { defaultCards, renderMeta, renderTopAction } from "./flowRendererDetails.js";
 import { renderResolveIdsPanel } from "./resolveIdsPanel.js";
 import { renderSyncNotionPanel } from "./syncNotionPanel.js";
 import { renderUpdateMetadataPanel } from "./updateMetadataPanel.js";
 import { escapeHtml } from "../utils/html.js";
+export { primaryLabel } from "./flowRendererDetails.js";
 
 export function renderFlowsOverview(elements, data, options = {}) {
   const run = data.run || { status: "idle", results: {} };
@@ -40,7 +42,19 @@ export function renderFlowsOverview(elements, data, options = {}) {
     visibleStatuses,
     review: options.review,
     reviewSearchQuery: options.reviewSearchQuery || "",
+    reviewQueueFilter: options.reviewQueueFilter || "all",
+    reviewQueuePageSize: options.reviewQueuePageSize || 5,
+    selectedReviewQueueKeys: options.selectedReviewQueueKeys || [],
+    ignoredReviewKeys: options.ignoredReviewKeys || [],
     confirmedIdCorrection: options.confirmedIdCorrection || {},
+    workspaceMode: options.workspaceMode || "review",
+    reviewDetailTab: options.reviewDetailTab || "manual",
+    manualDrafts: options.manualDrafts || {},
+    reviewChoiceFeedback: options.reviewChoiceFeedback || {},
+    reviewValidationPending: Boolean(options.reviewValidationPending),
+    batchSelectedKeys: options.batchSelectedKeys || [],
+    batchValidation: options.batchValidation || null,
+    batchChecking: Boolean(options.batchChecking),
     metadata: options.metadata,
     notionMetadata: options.notionMetadata,
     notionSyncCandidateStatus: options.notionSyncCandidateStatus || "default",
@@ -97,12 +111,17 @@ function renderCurrentPanel(elements, context) {
   ) || activeStage;
   const selectedStatus = flowStageStatus(selectedStage, run);
   const content = elements.flowsCurrentTitle?.closest(".flows-journey-content");
+  const topbar = document.getElementById("topbar");
+  if (context.activeSubtab === "pendencias" && !topbar?.querySelector(".flow-decision-breadcrumb")) {
+    topbar?.querySelector(".topbar-flow-meta")?.insertAdjacentHTML("beforebegin", '<nav class="flow-decision-breadcrumb" aria-label="Localização"><span>Manhwateca</span><span>Fluxo operacional</span><span>Central de decisões</span><strong aria-current="page">Resolver IDs</strong></nav>');
+  }
   document.getElementById("topbar")?.classList.toggle(
     "flows-search-page-active",
     selectedStage.id === "resolve_ids" && context.activeSubtab === "buscar",
   );
+  document.getElementById("topbar")?.classList.toggle("flows-decision-page-active", context.activeSubtab === "pendencias");
   content?.classList.toggle("flows-resolve-mode", selectedStage.id === "resolve_ids");
-  content?.classList.toggle("flows-apply-mode", context.activeSubtab === "decisoes");
+  content?.classList.toggle("flows-apply-mode", false);
   content?.classList.toggle("flows-metadata-mode", selectedStage.id === "update_metadata");
   content?.classList.toggle("flows-review-mode", context.activeSubtab === "pendencias");
   content?.classList.toggle("flows-sync-notion-mode", selectedStage.id === "sync_notion");
@@ -159,99 +178,4 @@ function titleWithTooltip(title, description) {
 function journeyTitle(activeSubtab, selectedStage) {
   return RESOLVE_ID_STEPS.find(step => step.id === activeSubtab)?.title
     || selectedStage.title;
-}
-
-function renderMeta(elements, run, activeStatus) {
-  if (!elements.flowsCurrentMeta) return;
-  const finishedDate = shortDate(run.finished_at || run.started_at);
-  const startedTime = shortTime(run.started_at);
-  const finishedTime = shortTime(run.finished_at);
-  elements.flowsCurrentMeta.innerHTML = `
-    <div class="status-minimalist">
-      <div class="main-status">
-        <span class="pulse-icon"></span>
-        <span>${escapeHtml(FLOW_STATUS_LABELS[activeStatus] || activeStatus)}</span>
-        <b>${escapeHtml(finishedDate)}</b>
-      </div>
-      <div class="dates-row">
-        INÍCIO: <b>${escapeHtml(startedTime)}</b>
-        <span>•</span>
-        FIM: <b>${escapeHtml(finishedTime)}</b>
-      </div>
-    </div>
-  `;
-}
-
-function shortDate(value) {
-  if (!value) return "--/--";
-  return new Date(value).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-  });
-}
-
-function shortTime(value) {
-  if (!value) return "--:--:--";
-  return new Date(value).toLocaleTimeString("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-export function primaryLabel(activeStage, activeStatus) {
-  if (activeStage.id === "resolve_ids" && activeStatus === "completed_with_warnings") {
-    return "Revisar pendências";
-  }
-  return `Executar ${activeStage.title}`;
-}
-
-function renderTopAction(elements, activeStage, activeStatus, visibleRunning) {
-  if (elements.flowsStartWorkflow) {
-    elements.flowsStartWorkflow.hidden = activeStage.id === "sync_notion";
-    elements.flowsStartWorkflow.disabled = visibleRunning;
-    elements.flowsStartWorkflow.textContent = visibleRunning
-      ? "Etapa em execução"
-      : primaryLabel(activeStage, activeStatus);
-  }
-}
-
-function defaultCards(activeStage, data) {
-  const dataCopy = {
-    title: activeStage.title,
-    lead: activeStage.description,
-    cards: [["Status", "Aguardando"], ["Integração", "Disponível"], ["Histórico", "Sem execução"]],
-    action: `Executar ${activeStage.title}`,
-  };
-  return `
-    <p class="lead">${escapeHtml(dataCopy.lead)}</p>
-    <div class="flow-subgrid">
-      ${dataCopy.cards.map(([label, value]) => `
-        <article class="flow-metric-card">
-          <strong>${escapeHtml(value)}</strong>
-          <span>${escapeHtml(label)}</span>
-        </article>
-      `).join("")}
-    </div>
-    <table class="flow-table">
-      <thead><tr><th>Processo</th><th>Status</th><th>Ação</th></tr></thead>
-      <tbody>
-        <tr>
-          <td>${escapeHtml(dataCopy.title)}</td>
-          <td><span class="flow-badge info">Aguardando</span></td>
-          <td>${escapeHtml(dataCopy.action)}</td>
-        </tr>
-      </tbody>
-    </table>
-    <div class="flow-panel-note">
-      Esta etapa será executada pelo backend oficial de Fluxos. Use-a depois
-      que as pendências anteriores estiverem resolvidas.
-    </div>
-    <div class="actions">
-      <button class="primary-action" type="button" data-flow-run-stage>
-        ${escapeHtml(dataCopy.action)}
-      </button>
-      <button class="secondary-action" type="button" data-flow-refresh>Atualizar estado</button>
-    </div>
-  `;
 }

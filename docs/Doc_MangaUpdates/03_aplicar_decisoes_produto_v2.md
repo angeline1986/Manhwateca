@@ -1,5 +1,7 @@
 # 03 — Aplicar Decisões — Documento de Produto
 
+> **Documento histórico.** A confirmação do lote foi incorporada à Central de decisões. Consulte [a jornada atual](00_user_journey.md).
+
 > Especificação funcional e de experiência do usuário.
 
 Este documento descreve **o comportamento esperado da tela**, o valor entregue ao usuário, a percepção desejada da interface e os critérios de sucesso do fluxo.

@@ -738,6 +738,23 @@ class FlowRepository:
         )
         self._connection().commit()
 
+    def clear_id_candidates_for_works(
+        self,
+        execution_id: str,
+        work_ids: list[int],
+    ) -> None:
+        if not work_ids:
+            return
+        self._execute(
+            """
+            DELETE FROM flow_id_candidates
+            WHERE execution_id = %s
+              AND work_id = ANY(%s)
+            """,
+            (execution_id, work_ids),
+        )
+        self._connection().commit()
+
     def append_id_candidate(self, candidate: IdCandidateRecord) -> None:
         self._execute(
             """

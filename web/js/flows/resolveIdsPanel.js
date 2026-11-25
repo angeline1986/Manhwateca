@@ -1,6 +1,6 @@
 import { escapeHtml } from "../utils/html.js";
-import { decisionsTab } from "./applyDecisionsPanel.js";
-import { pendingTab } from "./pendingReviewPanel.js";
+import { decisionWorkspaceTab } from "./decisionWorkspacePanel.js";
+import { actionLabel, resultLabel, statusLabel, statusTone } from "./searchStatusLabels.js";
 
 export function renderResolveIdsPanel({
   activeSubtab,
@@ -8,9 +8,21 @@ export function renderResolveIdsPanel({
   showResolvedReview,
   review,
   reviewSearchQuery,
+  reviewQueueFilter = "all",
+  reviewQueuePageSize = 5,
+  selectedReviewQueueKeys = [],
+  ignoredReviewKeys = [],
   confirmedIdCorrection,
   selectedDecisions,
   savedReviewKeys,
+  workspaceMode = "review",
+  reviewDetailTab = "manual",
+  manualDrafts = {},
+  reviewChoiceFeedback = {},
+  reviewValidationPending = false,
+  batchSelectedKeys = [],
+  batchValidation = null,
+  batchChecking = false,
   flowSectionOpenState,
   works,
   worksFilter = "WITHOUT_ID",
@@ -19,14 +31,25 @@ export function renderResolveIdsPanel({
 }) {
   return `
     ${activeSubtab === "buscar" ? searchTab(review, works, worksFilter, selectedWorkIds, releaseMonitor) : ""}
-    ${activeSubtab === "pendencias" ? pendingTab(review, selectedDecisions, activeReviewKey, {
+    ${activeSubtab === "pendencias" ? decisionWorkspaceTab(review, selectedDecisions, activeReviewKey, {
       savedKeys: savedReviewKeys,
+      ignoredReviewKeys,
       searchQuery: reviewSearchQuery,
+      queueFilter: reviewQueueFilter,
+      queuePageSize: reviewQueuePageSize,
+      selectedQueueKeys: selectedReviewQueueKeys,
       showResolved: showResolvedReview,
       idCorrection: confirmedIdCorrection,
       openSections: flowSectionOpenState,
+      workspaceMode,
+      reviewDetailTab,
+      manualDrafts,
+      reviewChoiceFeedback,
+      reviewValidationPending,
+      batchSelectedKeys,
+      batchValidation,
+      batchChecking,
     }) : ""}
-    ${activeSubtab === "decisoes" ? decisionsTab(review, selectedDecisions) : ""}
   `;
 }
 
@@ -35,6 +58,7 @@ function searchTab(review, works, worksFilter, selectedWorkIds, releaseMonitor) 
   const kpis = works?.kpis || {};
   const pageSize = Number(works?.pagination?.pageSize || 10);
   const selected = new Set(selectedWorkIds.map(Number));
+  const hasSelection = selected.size > 0;
   return `
     <div class="flow-search-page-header">
       <div class="flow-search-page-heading">
@@ -54,7 +78,7 @@ function searchTab(review, works, worksFilter, selectedWorkIds, releaseMonitor) 
             </div>
             <div class="flow-search-actions">
               <button class="secondary-action" type="button" data-flow-subtab="pendencias">Ver pendências</button>
-              <button class="primary-action" type="button" data-flow-run-stage>Buscar candidatos</button>
+              <button class="primary-action" type="button" data-flow-run-stage ${hasSelection ? "" : "disabled"}>Buscar candidatos</button>
             </div>
           </div>
           <div class="flow-search-table-scroll">
@@ -149,51 +173,4 @@ function searchPagination(works) {
 
 function searchRows(works) {
   return works?.items || [];
-}
-
-function statusLabel(status) {
-  return {
-    WITHOUT_ID: "Sem ID confirmado",
-    READY_TO_SEARCH: "Não pesquisada",
-    CANDIDATES_FOUND: "Revisão",
-    PENDING_REVIEW: "Revisão",
-    MANUAL_ID_REQUIRED: "Sem correspondência",
-    ERROR: "Falha",
-  }[status] || status || "Revisão";
-}
-
-function statusTone(status) {
-  if (status === "ERROR" || status === "MANUAL_ID_REQUIRED") return "bad";
-  if (status === "CANDIDATES_FOUND" || status === "PENDING_REVIEW") return "amb";
-  return "info";
-}
-
-function resultLabel(item) {
-  if (item?.decisionStatus === "READY_TO_SEARCH") return "—";
-  if (item?.decisionStatus === "ERROR") return "Falha na consulta";
-  const arrayCount = Array.isArray(item?.candidates) ? item.candidates.length : null;
-  const explicitCount = Number.isFinite(Number(item?.candidateCount))
-    ? Number(item.candidateCount)
-    : Number.isFinite(Number(item?.candidatesCount))
-      ? Number(item.candidatesCount)
-      : arrayCount;
-  if (explicitCount !== null && Number.isFinite(explicitCount)) {
-    return `${explicitCount} encontrado${explicitCount === 1 ? "" : "s"}`;
-  }
-  return {
-    WITHOUT_ID: "—",
-    CANDIDATES_FOUND: "Disponíveis para revisão",
-    PENDING_REVIEW: "Disponíveis para revisão",
-    MANUAL_ID_REQUIRED: "0 encontrados",
-  }[item?.decisionStatus] || "Aguardando";
-}
-
-function actionLabel(action) {
-  return {
-    SEARCH_API: "Executar busca",
-    NORMALIZE_TITLE: "Ajustar título",
-    REVIEW_CANDIDATES: "Revisar candidatos",
-    MANUAL_SEARCH: "Ajustar busca",
-    RETRY_FAILED: "Repetir tentativa",
-  }[action] || action || "Executar busca";
 }

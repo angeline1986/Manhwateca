@@ -1683,6 +1683,15 @@
   color: #fff;
   box-shadow: 0 5px 12px rgba(169, 77, 107, .14);
 }
+#page-flows .flow-search-actions > .primary-action:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+#page-flows .flow-search-actions > .primary-action:disabled:hover {
+  background: var(--rose);
+}
 .flow-search-actions > .secondary-action {
   border: 1px solid var(--rose-border);
   background: transparent;

@@ -116,7 +116,11 @@ class ResolveIdsService(BaseStageService):
         super().__init__(integrations, StageId.RESOLVE_IDS)
 
     def execute(self, **kwargs) -> StageResult:
-        result = self.integrations.mangaupdates.search_series()
+        selected_ids = kwargs.get("selected_ids")
+        if selected_ids is None:
+            result = self.integrations.mangaupdates.search_series()
+        else:
+            result = self.integrations.mangaupdates.search_series(selected_ids=selected_ids)
         warnings = ()
         if result.searched == 0:
             warnings = (
@@ -140,8 +144,8 @@ class ResolveIdsService(BaseStageService):
                 ),
             )
         return StageResult(
-            processed=result.matched,
-            skipped=result.not_found,
+            processed=result.searched,
+            skipped=result.metrics.get("alreadyResolved", 0),
             warnings=warnings,
             metrics={
                 "searched": result.searched,

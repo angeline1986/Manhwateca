@@ -43,10 +43,12 @@ export function initSidebar() {
   function selectFlowSubtab(subtab) {
     setContext("flows");
     document.querySelector('[data-page="flows"]')?.click();
+    const activeSubtab = subtab === "decisoes" ? "pendencias" : subtab;
     document.querySelectorAll("[data-sidebar-flow-subtab]").forEach(button =>
-      button.classList.toggle("active", button.dataset.sidebarFlowSubtab === subtab)
+      button.classList.toggle("active", button.dataset.sidebarFlowSubtab === activeSubtab)
     );
     window.dispatchEvent(new CustomEvent("manhwateca:flow-subtab", { detail: { subtab } }));
+    closeSidebar();
   }
 
   function selectOrganizationSubtab(subtab) {
@@ -137,7 +139,7 @@ export function initSidebar() {
     document.querySelectorAll("[data-sidebar-flow-subtab]").forEach(button =>
       button.classList.toggle(
         "active",
-        button.dataset.sidebarFlowSubtab === subtab.dataset.flowSubtab
+        button.dataset.sidebarFlowSubtab === (subtab.dataset.flowSubtab === "decisoes" ? "pendencias" : subtab.dataset.flowSubtab)
       )
     );
   });
